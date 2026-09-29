@@ -55,6 +55,9 @@ type VectorIndex interface {
 	// Upsert writes vectors to version (0 = live).
 	Upsert(ctx context.Context, version int, vs []ChunkVector) error
 	Delete(ctx context.Context, chunkIDs []string) error
+	// Rekey copies vectors from old to new chunk IDs (a structurally unchanged rename: no re-embedding),
+	// in the live and any pending version. The new chunks must already exist; old vectors are kept.
+	Rekey(ctx context.Context, oldToNew map[string]string) error
 	Search(ctx context.Context, vec []float32, k int, f VectorFilter) ([]VectorHit, error)
 	// BeginReindex creates the pending version for spec and returns its number.
 	BeginReindex(ctx context.Context, spec EmbeddingSpec) (int, error)

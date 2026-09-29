@@ -36,3 +36,23 @@ type Chunk struct {
 
 // Live reports whether the chunk has not been soft-deleted.
 func (c Chunk) Live() bool { return c.DeletedAt == nil }
+
+// ChunkWrite is one transactional manifest update.
+type ChunkWrite struct {
+	Upserts []Chunk
+	Revive  []string
+	Remove  []string
+	// Drop hard-deletes IDs (a pure rename's old IDs, whose content now lives under new IDs).
+	Drop []string
+}
+
+// Empty reports whether the write changes nothing.
+func (w ChunkWrite) Empty() bool {
+	return len(w.Upserts)+len(w.Revive)+len(w.Remove)+len(w.Drop) == 0
+}
+
+// DocSection is one section of a generated doc file, for the docs Tree.
+type DocSection struct {
+	ChunkID string
+	Title   string
+}

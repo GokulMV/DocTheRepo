@@ -81,6 +81,14 @@ func TestVectorIndexParity(t *testing.T) {
 			require.Len(t, hits, 1)
 			assert.Equal(t, "d1", hits[0].ChunkID, "soft-deleted chunks never surface")
 
+			seedChunks(t, st, repo, "b2")
+			require.NoError(t, x.Rekey(ctx, map[string]string{"b": "b2"}))
+			require.NoError(t, x.Rekey(ctx, nil))
+			hits, _ = x.Search(ctx, []float32{0, 1, 0}, 2, ports.VectorFilter{})
+			require.Len(t, hits, 2)
+			assert.ElementsMatch(t, []string{"b", "b2"}, []string{hits[0].ChunkID, hits[1].ChunkID}, "rekeyed vector found under the new ID")
+			require.NoError(t, x.Delete(ctx, []string{"b2"}))
+
 			err = x.Upsert(ctx, 0, []ports.ChunkVector{{ChunkID: "a", Source: ports.SourceCode, Vector: []float32{1, 0}}})
 			var pe *ports.PermanentError
 			assert.ErrorAs(t, err, &pe)

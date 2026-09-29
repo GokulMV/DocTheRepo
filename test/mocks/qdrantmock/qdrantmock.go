@@ -53,6 +53,7 @@ func New() *Server {
 	r.Put("/collections/{name}/points", s.upsert)
 	r.Post("/collections/{name}/points/delete", s.deletePoints)
 	r.Post("/collections/{name}/points/search", s.search)
+	r.Post("/collections/{name}/points", s.retrieve)
 	s.Server = httptest.NewServer(r)
 	return s
 }
@@ -206,6 +207,27 @@ func (s *Server) deletePoints(w http.ResponseWriter, r *http.Request) {
 		delete(c.points, id)
 	}
 	write(w, 200, map[string]any{"result": map[string]any{"status": "completed"}})
+}
+
+func (s *Server) retrieve(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		IDs []string `json:"ids"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	c := s.resolve(chi.URLParam(r, "name"))
+	if c == nil {
+		notFound(w)
+		return
+	}
+	out := []map[string]any{}
+	for _, id := range body.IDs {
+		if p, ok := c.points[id]; ok {
+			out = append(out, map[string]any{"id": id, "vector": p.vec, "payload": p.payload})
+		}
+	}
+	write(w, 200, map[string]any{"result": out})
 }
 
 type condition struct {

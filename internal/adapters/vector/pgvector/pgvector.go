@@ -134,6 +134,34 @@ func (x *Index) Delete(ctx context.Context, ids []string) error {
 	return nil
 }
 
+// Rekey copies vectors to new chunk IDs.
+func (x *Index) Rekey(ctx context.Context, oldToNew map[string]string) error {
+	if len(oldToNew) == 0 {
+		return nil
+	}
+	st, err := x.State(ctx)
+	if err != nil || st.Live == nil {
+		return err
+	}
+	olds, news := make([]string, 0, len(oldToNew)), make([]string, 0, len(oldToNew))
+	for o, n := range oldToNew {
+		olds, news = append(olds, o), append(news, n)
+	}
+	for _, v := range []int{st.Version, st.PendingVersion} {
+		if v == 0 {
+			continue
+		}
+		if _, err := x.pool.Exec(ctx, fmt.Sprintf(`INSERT INTO %[1]s (chunk_id, repo_id, source, embedding)
+			SELECT m.new_id, e.repo_id, e.source, e.embedding FROM unnest($1::text[], $2::text[]) AS m(old_id, new_id)
+			JOIN %[1]s e ON e.chunk_id = m.old_id
+			ON CONFLICT (chunk_id) DO UPDATE SET repo_id = EXCLUDED.repo_id, source = EXCLUDED.source, embedding = EXCLUDED.embedding`, table(v)),
+			olds, news); err != nil {
+			return fmt.Errorf("rekey embeddings: %w", err)
+		}
+	}
+	return nil
+}
+
 // Search returns the k nearest live chunks by cosine similarity.
 func (x *Index) Search(ctx context.Context, vec []float32, k int, f ports.VectorFilter) ([]ports.VectorHit, error) {
 	if k <= 0 {
