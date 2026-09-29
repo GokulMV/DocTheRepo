@@ -208,6 +208,50 @@ func (ns NullConnectorType) Value() (driver.Value, error) {
 	return string(ns.ConnectorType), nil
 }
 
+type DocNodeKind string
+
+const (
+	DocNodeKindRepo    DocNodeKind = "repo"
+	DocNodeKindDir     DocNodeKind = "dir"
+	DocNodeKindFile    DocNodeKind = "file"
+	DocNodeKindSection DocNodeKind = "section"
+)
+
+func (e *DocNodeKind) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = DocNodeKind(s)
+	case string:
+		*e = DocNodeKind(s)
+	default:
+		return fmt.Errorf("unsupported scan type for DocNodeKind: %T", src)
+	}
+	return nil
+}
+
+type NullDocNodeKind struct {
+	DocNodeKind DocNodeKind `json:"doc_node_kind"`
+	Valid       bool        `json:"valid"` // Valid is true if DocNodeKind is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullDocNodeKind) Scan(value interface{}) error {
+	if value == nil {
+		ns.DocNodeKind, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.DocNodeKind.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullDocNodeKind) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.DocNodeKind), nil
+}
+
 type HealthState string
 
 const (
@@ -525,6 +569,50 @@ func (ns NullSavingsKind) Value() (driver.Value, error) {
 	return string(ns.SavingsKind), nil
 }
 
+type ShelfItemType string
+
+const (
+	ShelfItemTypeDocNode        ShelfItemType = "doc_node"
+	ShelfItemTypeEntity         ShelfItemType = "entity"
+	ShelfItemTypeConfluencePage ShelfItemType = "confluence_page"
+	ShelfItemTypeKnownIssue     ShelfItemType = "known_issue"
+)
+
+func (e *ShelfItemType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = ShelfItemType(s)
+	case string:
+		*e = ShelfItemType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for ShelfItemType: %T", src)
+	}
+	return nil
+}
+
+type NullShelfItemType struct {
+	ShelfItemType ShelfItemType `json:"shelf_item_type"`
+	Valid         bool          `json:"valid"` // Valid is true if ShelfItemType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullShelfItemType) Scan(value interface{}) error {
+	if value == nil {
+		ns.ShelfItemType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.ShelfItemType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullShelfItemType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.ShelfItemType), nil
+}
+
 type SpendScope string
 
 const (
@@ -776,13 +864,54 @@ type CostTable struct {
 	VerifiedAt       *time.Time      `json:"verified_at"`
 }
 
+type DocNode struct {
+	ID        string      `json:"id"`
+	RepoID    string      `json:"repo_id"`
+	ParentID  *string     `json:"parent_id"`
+	Kind      DocNodeKind `json:"kind"`
+	Path      string      `json:"path"`
+	Title     string      `json:"title"`
+	Summary   string      `json:"summary"`
+	ChunkID   *string     `json:"chunk_id"`
+	OrderKey  string      `json:"order_key"`
+	UpdatedAt time.Time   `json:"updated_at"`
+}
+
+type Edge struct {
+	SrcID      string          `json:"src_id"`
+	Kind       string          `json:"kind"`
+	DstID      string          `json:"dst_id"`
+	Weight     float32         `json:"weight"`
+	Evidence   json.RawMessage `json:"evidence"`
+	RepoID     *string         `json:"repo_id"`
+	SourcePath string          `json:"source_path"`
+	LastSeen   time.Time       `json:"last_seen"`
+	DeletedAt  *time.Time      `json:"deleted_at"`
+}
+
 type EmbeddingLock struct {
-	IndexName    string          `json:"index_name"`
-	ProviderKind LlmProviderKind `json:"provider_kind"`
-	Model        string          `json:"model"`
-	Dimensions   int32           `json:"dimensions"`
-	Version      int32           `json:"version"`
-	CreatedAt    time.Time       `json:"created_at"`
+	IndexName           string           `json:"index_name"`
+	ProviderKind        LlmProviderKind  `json:"provider_kind"`
+	Model               string           `json:"model"`
+	Dimensions          int32            `json:"dimensions"`
+	Version             int32            `json:"version"`
+	CreatedAt           time.Time        `json:"created_at"`
+	PendingVersion      *int32           `json:"pending_version"`
+	PendingProviderKind *LlmProviderKind `json:"pending_provider_kind"`
+	PendingModel        *string          `json:"pending_model"`
+	PendingDimensions   *int32           `json:"pending_dimensions"`
+}
+
+type Entity struct {
+	ID        string          `json:"id"`
+	Kind      string          `json:"kind"`
+	Key       string          `json:"key"`
+	Name      string          `json:"name"`
+	RepoID    *string         `json:"repo_id"`
+	Attrs     json.RawMessage `json:"attrs"`
+	FirstSeen time.Time       `json:"first_seen"`
+	LastSeen  time.Time       `json:"last_seen"`
+	DeletedAt *time.Time      `json:"deleted_at"`
 }
 
 type Group struct {
@@ -830,6 +959,16 @@ type Job struct {
 	UpdatedAt     time.Time       `json:"updated_at"`
 }
 
+type LibraryShelf struct {
+	ID          string          `json:"id"`
+	Slug        string          `json:"slug"`
+	Title       string          `json:"title"`
+	Description string          `json:"description"`
+	Rule        json.RawMessage `json:"rule"`
+	Curated     bool            `json:"curated"`
+	OrderKey    int32           `json:"order_key"`
+}
+
 type LlmProvider struct {
 	ID            string          `json:"id"`
 	Kind          LlmProviderKind `json:"kind"`
@@ -841,6 +980,14 @@ type LlmProvider struct {
 	Enabled       bool            `json:"enabled"`
 	CreatedAt     time.Time       `json:"created_at"`
 	UpdatedAt     time.Time       `json:"updated_at"`
+}
+
+type ManifestRename struct {
+	RepoID    string    `json:"repo_id"`
+	OldPath   string    `json:"old_path"`
+	NewPath   string    `json:"new_path"`
+	CommitSha string    `json:"commit_sha"`
+	At        time.Time `json:"at"`
 }
 
 type ModelRoute struct {
@@ -856,22 +1003,41 @@ type ModelRoute struct {
 	Effort             string     `json:"effort"`
 }
 
+type Pr struct {
+	RepoID      string    `json:"repo_id"`
+	Number      int32     `json:"number"`
+	Url         string    `json:"url"`
+	Branch      string    `json:"branch"`
+	Base        string    `json:"base"`
+	JobID       *string   `json:"job_id"`
+	Mode        PushMode  `json:"mode"`
+	State       string    `json:"state"`
+	ChunkIds    []string  `json:"chunk_ids"`
+	SourcePaths []string  `json:"source_paths"`
+	Approver    string    `json:"approver"`
+	Note        string    `json:"note"`
+	OpenedAt    time.Time `json:"opened_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 type Repo struct {
-	ID               string    `json:"id"`
-	ConnectorID      string    `json:"connector_id"`
-	FullName         string    `json:"full_name"`
-	DefaultBranch    string    `json:"default_branch"`
-	TrackedBranch    string    `json:"tracked_branch"`
-	DocsPath         string    `json:"docs_path"`
-	PushMode         PushMode  `json:"push_mode"`
-	OnReject         string    `json:"on_reject"`
-	Approver         string    `json:"approver"`
-	LastProcessedSha string    `json:"last_processed_sha"`
-	ServiceName      string    `json:"service_name"`
-	Owners           []string  `json:"owners"`
-	Enabled          bool      `json:"enabled"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	ID                 string          `json:"id"`
+	ConnectorID        string          `json:"connector_id"`
+	FullName           string          `json:"full_name"`
+	DefaultBranch      string          `json:"default_branch"`
+	TrackedBranch      string          `json:"tracked_branch"`
+	DocsPath           string          `json:"docs_path"`
+	PushMode           PushMode        `json:"push_mode"`
+	OnReject           string          `json:"on_reject"`
+	Approver           string          `json:"approver"`
+	LastProcessedSha   string          `json:"last_processed_sha"`
+	ServiceName        string          `json:"service_name"`
+	Owners             []string        `json:"owners"`
+	Enabled            bool            `json:"enabled"`
+	CreatedAt          time.Time       `json:"created_at"`
+	UpdatedAt          time.Time       `json:"updated_at"`
+	PrConflictStrategy string          `json:"pr_conflict_strategy"`
+	PrStaleAfter       pgtype.Interval `json:"pr_stale_after"`
 }
 
 type RepoAccess struct {
@@ -905,6 +1071,14 @@ type Session struct {
 	CreatedAt time.Time `json:"created_at"`
 	Ip        string    `json:"ip"`
 	UserAgent string    `json:"user_agent"`
+}
+
+type ShelfItem struct {
+	ShelfID  string        `json:"shelf_id"`
+	ItemType ShelfItemType `json:"item_type"`
+	ItemID   string        `json:"item_id"`
+	Pinned   bool          `json:"pinned"`
+	Note     string        `json:"note"`
 }
 
 type SpendLimit struct {
