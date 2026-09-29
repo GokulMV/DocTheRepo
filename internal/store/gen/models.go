@@ -767,11 +767,13 @@ type ConnectorCursor struct {
 type CostTable struct {
 	ProviderKind     LlmProviderKind `json:"provider_kind"`
 	Model            string          `json:"model"`
-	InputPerMtokUsd  pgtype.Numeric  `json:"input_per_mtok_usd"`
-	OutputPerMtokUsd pgtype.Numeric  `json:"output_per_mtok_usd"`
-	EmbedPerMtokUsd  pgtype.Numeric  `json:"embed_per_mtok_usd"`
+	InputPerMtokUsd  float64         `json:"input_per_mtok_usd"`
+	OutputPerMtokUsd float64         `json:"output_per_mtok_usd"`
+	EmbedPerMtokUsd  float64         `json:"embed_per_mtok_usd"`
 	UpdatedBy        *string         `json:"updated_by"`
 	UpdatedAt        time.Time       `json:"updated_at"`
+	Source           string          `json:"source"`
+	VerifiedAt       *time.Time      `json:"verified_at"`
 }
 
 type EmbeddingLock struct {
@@ -847,10 +849,11 @@ type ModelRoute struct {
 	Model              string     `json:"model"`
 	MaxOutputTokens    int32      `json:"max_output_tokens"`
 	ContextTokenBudget int32      `json:"context_token_budget"`
-	Temperature        float32    `json:"temperature"`
+	Temperature        *float32   `json:"temperature"`
 	FallbackProviderID *string    `json:"fallback_provider_id"`
 	FallbackModel      string     `json:"fallback_model"`
 	UpdatedAt          time.Time  `json:"updated_at"`
+	Effort             string     `json:"effort"`
 }
 
 type Repo struct {
@@ -878,12 +881,12 @@ type RepoAccess struct {
 }
 
 type SavingsEvent struct {
-	ID                string         `json:"id"`
-	At                time.Time      `json:"at"`
-	Kind              SavingsKind    `json:"kind"`
-	EstTokensAvoided  int64          `json:"est_tokens_avoided"`
-	EstCostAvoidedUsd pgtype.Numeric `json:"est_cost_avoided_usd"`
-	RefID             string         `json:"ref_id"`
+	ID                string      `json:"id"`
+	At                time.Time   `json:"at"`
+	Kind              SavingsKind `json:"kind"`
+	EstTokensAvoided  int64       `json:"est_tokens_avoided"`
+	EstCostAvoidedUsd float64     `json:"est_cost_avoided_usd"`
+	RefID             string      `json:"ref_id"`
 }
 
 type ServiceMap struct {
@@ -905,14 +908,14 @@ type Session struct {
 }
 
 type SpendLimit struct {
-	ID         string         `json:"id"`
-	Scope      SpendScope     `json:"scope"`
-	ScopeKey   string         `json:"scope_key"`
-	TimeWindow SpendWindow    `json:"time_window"`
-	MaxTokens  *int64         `json:"max_tokens"`
-	MaxCostUsd pgtype.Numeric `json:"max_cost_usd"`
-	OnBreach   BreachAction   `json:"on_breach"`
-	AlertUrl   string         `json:"alert_url"`
+	ID         string       `json:"id"`
+	Scope      SpendScope   `json:"scope"`
+	ScopeKey   string       `json:"scope_key"`
+	TimeWindow SpendWindow  `json:"time_window"`
+	MaxTokens  *int64       `json:"max_tokens"`
+	MaxCostUsd *float64     `json:"max_cost_usd"`
+	OnBreach   BreachAction `json:"on_breach"`
+	AlertUrl   string       `json:"alert_url"`
 }
 
 type UsageEvent struct {
@@ -923,7 +926,7 @@ type UsageEvent struct {
 	Model        string          `json:"model"`
 	InputTokens  int64           `json:"input_tokens"`
 	OutputTokens int64           `json:"output_tokens"`
-	CostUsd      pgtype.Numeric  `json:"cost_usd"`
+	CostUsd      float64         `json:"cost_usd"`
 	LatencyMs    int32           `json:"latency_ms"`
 	Cached       bool            `json:"cached"`
 	Estimated    bool            `json:"estimated"`
@@ -932,6 +935,7 @@ type UsageEvent struct {
 	JobID        *string         `json:"job_id"`
 	IssueID      *string         `json:"issue_id"`
 	Outcome      UsageOutcome    `json:"outcome"`
+	ProviderID   *string         `json:"provider_id"`
 }
 
 type UsageRollupsHourly struct {
@@ -944,7 +948,7 @@ type UsageRollupsHourly struct {
 	Calls        int64           `json:"calls"`
 	InputTokens  int64           `json:"input_tokens"`
 	OutputTokens int64           `json:"output_tokens"`
-	CostUsd      pgtype.Numeric  `json:"cost_usd"`
+	CostUsd      float64         `json:"cost_usd"`
 	CachedCalls  int64           `json:"cached_calls"`
 }
 

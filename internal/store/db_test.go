@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -22,7 +23,21 @@ func TestMigrate_IsIdempotent(t *testing.T) {
 	st := storetest.New(t)
 	v, err := st.Migrate(context.Background())
 	require.NoError(t, err)
-	assert.Equal(t, uint(5), v)
+	assert.Equal(t, latestMigration(t), v)
+}
+
+// latestMigration reads the highest NNNN prefix from the embedded migration files.
+func latestMigration(t *testing.T) uint {
+	entries, err := migrations.FS.ReadDir(".")
+	require.NoError(t, err)
+	var max uint
+	for _, e := range entries {
+		var n uint
+		if _, err := fmt.Sscanf(e.Name(), "%04d_", &n); err == nil && n > max {
+			max = n
+		}
+	}
+	return max
 }
 
 func TestMigrations_DownThenUp_RoundTrips(t *testing.T) {
