@@ -4,6 +4,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/GokulMV/DocTheRepo/internal/observability"
@@ -61,3 +62,7 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error) {
 		WriteError(w, r, http.StatusInternalServerError, "INTERNAL_ERROR", "internal error", nil)
 	}
 }
+
+func loggerFor(r *http.Request) *slog.Logger { return observability.Logger(r.Context()) }
+
+func correlationFor(r *http.Request) string { return observability.CorrelationID(r.Context()) }

@@ -482,6 +482,90 @@ func (ns NullPushMode) Value() (driver.Value, error) {
 	return string(ns.PushMode), nil
 }
 
+type QaFeedback string
+
+const (
+	QaFeedbackUp   QaFeedback = "up"
+	QaFeedbackDown QaFeedback = "down"
+)
+
+func (e *QaFeedback) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = QaFeedback(s)
+	case string:
+		*e = QaFeedback(s)
+	default:
+		return fmt.Errorf("unsupported scan type for QaFeedback: %T", src)
+	}
+	return nil
+}
+
+type NullQaFeedback struct {
+	QaFeedback QaFeedback `json:"qa_feedback"`
+	Valid      bool       `json:"valid"` // Valid is true if QaFeedback is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullQaFeedback) Scan(value interface{}) error {
+	if value == nil {
+		ns.QaFeedback, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.QaFeedback.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullQaFeedback) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.QaFeedback), nil
+}
+
+type QaRole string
+
+const (
+	QaRoleUser      QaRole = "user"
+	QaRoleAssistant QaRole = "assistant"
+)
+
+func (e *QaRole) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = QaRole(s)
+	case string:
+		*e = QaRole(s)
+	default:
+		return fmt.Errorf("unsupported scan type for QaRole: %T", src)
+	}
+	return nil
+}
+
+type NullQaRole struct {
+	QaRole QaRole `json:"qa_role"`
+	Valid  bool   `json:"valid"` // Valid is true if QaRole is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullQaRole) Scan(value interface{}) error {
+	if value == nil {
+		ns.QaRole, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.QaRole.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullQaRole) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.QaRole), nil
+}
+
 type RepoAccessLevel string
 
 const (
@@ -786,6 +870,14 @@ func (ns NullUserRole) Value() (driver.Value, error) {
 	return string(ns.UserRole), nil
 }
 
+type AnswerCache struct {
+	Key       string          `json:"key"`
+	Answer    string          `json:"answer"`
+	Citations json.RawMessage `json:"citations"`
+	CreatedAt time.Time       `json:"created_at"`
+	Hits      int64           `json:"hits"`
+}
+
 type ApiToken struct {
 	ID         string     `json:"id"`
 	UserID     string     `json:"user_id"`
@@ -1018,6 +1110,32 @@ type Pr struct {
 	Note        string    `json:"note"`
 	OpenedAt    time.Time `json:"opened_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type QaMessage struct {
+	ID              string          `json:"id"`
+	ThreadID        string          `json:"thread_id"`
+	Role            QaRole          `json:"role"`
+	Content         string          `json:"content"`
+	Citations       json.RawMessage `json:"citations"`
+	Provider        string          `json:"provider"`
+	Model           string          `json:"model"`
+	InputTokens     int64           `json:"input_tokens"`
+	OutputTokens    int64           `json:"output_tokens"`
+	CostUsd         float64         `json:"cost_usd"`
+	Cached          bool            `json:"cached"`
+	Feedback        *QaFeedback     `json:"feedback"`
+	FeedbackComment string          `json:"feedback_comment"`
+	CreatedAt       time.Time       `json:"created_at"`
+}
+
+type QaThread struct {
+	ID        string          `json:"id"`
+	UserID    string          `json:"user_id"`
+	Title     string          `json:"title"`
+	Scope     json.RawMessage `json:"scope"`
+	CreatedAt time.Time       `json:"created_at"`
+	UpdatedAt time.Time       `json:"updated_at"`
 }
 
 type Repo struct {
