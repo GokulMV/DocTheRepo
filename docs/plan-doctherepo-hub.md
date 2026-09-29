@@ -665,9 +665,14 @@ chunk; the server drops citations to chunk IDs that were not supplied (prevents 
 ## 8. Logic & Algorithms
 
 ### 8.1 Triage (carried forward)
-Deterministic first: skip ignored paths, the generated-docs path, and bot-authored pushes; parse old/new
-with Tree-sitter; strip comment nodes, collapse string-literal contents, ignore whitespace; if normalized
-token streams are equal → `ABORT`, else `PROCEED` with a reason listing added/removed/changed signatures.
+Deterministic first: skip ignored paths (default list: lockfiles, vendored/generated output, minified
+assets, CI config), the generated-docs path, and bot-authored pushes; parse old/new with Tree-sitter; strip
+comment nodes and docstring-only statements, collapse string-literal contents, ignore whitespace while
+keeping nesting; if normalized token streams are equal → `ABORT`, else `PROCEED` with a reason listing
+added/removed definitions and type, signature, or body changes. String literals are *not* cosmetic when
+they are route/decorator/annotation arguments, import paths, or environment-variable names (renaming the
+env var an app reads or the path it serves is a structural change). Test files (default `IndexOnly`
+globs) are indexed for search but never get generated documentation.
 Dependency manifests (`go.mod`, `package.json`, `pom.xml`, `Cargo.toml`, `requirements.txt`,
 `pyproject.toml`): `PROCEED` only on a change of the leading semver component of an existing dependency
 (Go `/vN` suffix treated as the major); everything else `ABORT`. Binary → `ABORT`. Deleted file →
@@ -677,7 +682,11 @@ Complexity O(nodes) per file, no network in the common case.
 ### 8.2 Chunking & stable IDs (carried forward, scope added)
 Chunk ID = `sha256(scope + "::" + path + "::" + symbol_or_heading_slug)[:16]` where `scope` is the repo
 full name, `confluence:<space>`, or `issue`. Code: one chunk per function/method/class/type node (node-type
-map per language). Docs: H2/H3 sections, split past ~900 tokens with 50-token overlap. Renames with
+map per language), with directly preceding doc comments and decorators/attributes included; symbols are
+qualified (`Class.method`, `Type.Method` for Go receivers, `impl Trait for Type` in Rust) and overloads are
+disambiguated by parameter list. Class/impl/module chunks are *outlines* (members shown as signatures) so
+member bodies are embedded once and a method edit does not mark its class changed. Top-level code outside
+definitions forms one `__module__` chunk. Files without a grammar become one whole-file text chunk. Docs: H2/H3 sections, split past ~900 tokens with 50-token overlap. Renames with
 similarity ≥ 90 and empty AST diff: re-key chunks (copy vectors to new IDs, delete old) — no re-embedding.
 
 ### 8.3 Manifest diff (carried forward)

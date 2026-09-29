@@ -16,6 +16,12 @@ Under construction, milestone by milestone (plan § 14). Implemented so far:
   Postgres job queue (exactly-once claims, per-repo ordering, retries, dead letter, lease recovery),
   worker pool, leader-elected scheduler, envelope encryption for secrets, health/readiness endpoints,
   structured logging and Prometheus metrics.
+- **Phase 2 — Core code intelligence**: Tree-sitter grammar registry (Go, Java, Python, TypeScript/TSX,
+  JavaScript, Rust built in; more loaded at runtime from shared libraries), per-file syntax analysis,
+  AST-diff triage (cosmetic vs structural, dependency major-bump rule, rename detection), stable chunking of
+  code and Markdown, manifest diff, surgical doc-file assembly preserving hand-written blocks, scoped
+  context with a token budget, multi-scope spend guard, knowledge-graph (Palace) extraction, and Library
+  shelf rules.
 
 ## Develop
 
