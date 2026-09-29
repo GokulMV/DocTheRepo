@@ -165,7 +165,7 @@ func Default() Config {
 		Queue: QueueConfig{
 			Concurrency: map[string]int{
 				"code_push": 4, "decode_issue": 4, "knowledge_sync": 2,
-				"import_docs": 1, "reindex": 1, "signal_batch": 8,
+				"import_docs": 1, "reindex": 1, "signal_batch": 8, "pr_review": 2,
 			},
 			LeaseTTL: 5 * time.Minute, MaxAttempts: 5, PollInterval: time.Second,
 			BackoffBase: time.Second, BackoffMax: 5 * time.Minute,

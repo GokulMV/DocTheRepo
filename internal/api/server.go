@@ -26,6 +26,10 @@ type Deps struct {
 	Metrics *observability.Metrics
 	// Checks are run by /readyz, keyed by the name reported in the response.
 	Checks map[string]ReadinessCheck
+	// Git handles /hooks/github|gitlab/{connector_id}; nil disables git ingress.
+	Git GitIngest
+	// WebhookPerMinute is the per-connector ingress rate (default 6000).
+	WebhookPerMinute int
 }
 
 // NewRouter builds the HTTP handler tree.
@@ -36,6 +40,14 @@ func NewRouter(d Deps) http.Handler {
 		WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	r.Get("/readyz", readyz(d.Checks))
+	if d.Git != nil {
+		perMin := d.WebhookPerMinute
+		if perMin <= 0 {
+			perMin = 6000
+		}
+		lim := &connectorLimiter{perMin: perMin}
+		r.Post("/hooks/{kind:github|gitlab}/{connector_id}", gitHook(d.Git, lim))
+	}
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, http.StatusNotFound, "NOT_FOUND", "no such endpoint", nil)
 	})
