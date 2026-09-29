@@ -165,6 +165,54 @@ func (x *Index) Delete(ctx context.Context, ids []string) error {
 	return nil
 }
 
+// Rekey copies points to new chunk IDs.
+func (x *Index) Rekey(ctx context.Context, oldToNew map[string]string) error {
+	if len(oldToNew) == 0 {
+		return nil
+	}
+	st, err := x.State(ctx)
+	if err != nil || st.Live == nil {
+		return err
+	}
+	ids := make([]string, 0, len(oldToNew))
+	byPoint := map[string]string{}
+	for o, n := range oldToNew {
+		ids = append(ids, PointID(o))
+		byPoint[PointID(o)] = n
+	}
+	for _, v := range []int{st.Version, st.PendingVersion} {
+		if v == 0 {
+			continue
+		}
+		var got struct {
+			Result []struct {
+				ID      string         `json:"id"`
+				Vector  []float32      `json:"vector"`
+				Payload map[string]any `json:"payload"`
+			} `json:"result"`
+		}
+		if err := x.call(ctx, http.MethodPost, "/collections/"+x.collection(v)+"/points", map[string]any{"ids": ids, "with_vector": true, "with_payload": true}, &got); err != nil {
+			return fmt.Errorf("qdrant fetch points: %w", err)
+		}
+		var points []any
+		for _, p := range got.Result {
+			n := byPoint[p.ID]
+			if n == "" {
+				continue
+			}
+			p.Payload["chunk_id"] = n
+			points = append(points, map[string]any{"id": PointID(n), "vector": p.Vector, "payload": p.Payload})
+		}
+		if len(points) == 0 {
+			continue
+		}
+		if err := x.call(ctx, http.MethodPut, "/collections/"+x.collection(v)+"/points?wait=true", map[string]any{"points": points}, nil); err != nil {
+			return fmt.Errorf("qdrant rekey: %w", err)
+		}
+	}
+	return nil
+}
+
 type searchResp struct {
 	Result []struct {
 		Score   float64        `json:"score"`

@@ -243,3 +243,19 @@ func firstLine(s string) string {
 
 // Summary extracts a doc file's summary paragraph (used to build directory indexes).
 func Summary(content []byte) string { return parse(string(content)).summary }
+
+var indexLineRE = regexp.MustCompile("^- \\[`([^`]+)`\\]\\(([^)]*)\\)(?: — (.*))?$")
+
+// ParseIndex reads the entries of an index rendered by RenderIndex, so an update can change only the
+// entries whose files changed without re-reading every child doc.
+func ParseIndex(existing []byte) []IndexEntry {
+	var out []IndexEntry
+	for _, line := range strings.Split(string(existing), "\n") {
+		m := indexLineRE.FindStringSubmatch(strings.TrimRight(line, "\r"))
+		if m == nil {
+			continue
+		}
+		out = append(out, IndexEntry{Name: m[1], Summary: m[3], IsDir: strings.HasSuffix(m[2], "/README.md")})
+	}
+	return out
+}

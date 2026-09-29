@@ -114,3 +114,10 @@ func TestRenderIndex(t *testing.T) {
 	root, _ := RenderIndex(nil, "", nil)
 	assert.Contains(t, string(root), "(repository root)")
 }
+
+func TestParseIndexRoundTrip(t *testing.T) {
+	entries := []IndexEntry{{Name: "api", IsDir: true}, {Name: "main.go", Summary: "Entry point."}, {Name: "util.go"}}
+	out, _ := RenderIndex(nil, "cmd", entries)
+	assert.Equal(t, entries, ParseIndex(out))
+	assert.Empty(t, ParseIndex([]byte("# nothing\n- not an entry\n")))
+}

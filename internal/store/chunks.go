@@ -51,18 +51,7 @@ func (c *Chunks) LiveAfter(ctx context.Context, after string, limit int) ([]port
 }
 
 // ChunkWrite is one transactional manifest update.
-type ChunkWrite struct {
-	Upserts []ports.Chunk
-	Revive  []string
-	Remove  []string
-	// Drop hard-deletes IDs (a pure rename's old IDs, whose content now lives under new IDs).
-	Drop []string
-}
-
-// Empty reports whether the write changes nothing.
-func (w ChunkWrite) Empty() bool {
-	return len(w.Upserts)+len(w.Revive)+len(w.Remove)+len(w.Drop) == 0
-}
+type ChunkWrite = ports.ChunkWrite
 
 // Apply writes a manifest update atomically and bumps the index version (answer-cache invalidation).
 func (c *Chunks) Apply(ctx context.Context, w ChunkWrite) (int64, error) {
@@ -209,10 +198,7 @@ func (g *Graph) Edges(ctx context.Context, r palace.Ref) ([]EdgeView, error) {
 }
 
 // DocSection is one section of a generated doc file for the Tree.
-type DocSection struct {
-	ChunkID string
-	Title   string
-}
+type DocSection = ports.DocSection
 
 // Docs stores the Tree (doc_nodes) and Library placements.
 type Docs struct {
