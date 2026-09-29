@@ -1,0 +1,10 @@
+/bin/
+/dist/
+*.test
+*.out
+coverage.*
+/data/
+dth.yaml
+.env
+web/node_modules/
+web/dist/

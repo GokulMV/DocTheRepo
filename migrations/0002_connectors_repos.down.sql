@@ -1,0 +1,16 @@
+DROP TABLE IF EXISTS embedding_lock;
+DROP TABLE IF EXISTS cost_table;
+DROP TABLE IF EXISTS model_routes;
+DROP TABLE IF EXISTS llm_providers;
+DROP TYPE IF EXISTS llm_feature;
+DROP TYPE IF EXISTS llm_provider_kind;
+DROP TABLE IF EXISTS service_map;
+DROP TABLE IF EXISTS group_repo_access;
+DROP TABLE IF EXISTS repo_access;
+DROP TABLE IF EXISTS repos;
+DROP TYPE IF EXISTS push_mode;
+DROP TABLE IF EXISTS connector_cursors;
+DROP TABLE IF EXISTS connectors;
+DROP TYPE IF EXISTS health_state;
+DROP TYPE IF EXISTS connector_mode;
+DROP TYPE IF EXISTS connector_type;
