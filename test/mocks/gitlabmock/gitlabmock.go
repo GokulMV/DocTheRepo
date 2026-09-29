@@ -932,3 +932,10 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 func notFound(w http.ResponseWriter, what string) {
 	writeJSON(w, 404, map[string]any{"message": "404 " + what + " Not Found"})
 }
+
+// SetConflict marks an MR as conflicting with its target (as GitLab does after a failed rebase).
+func (s *Server) SetConflict(path string, iid int, msg string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.projects[path].MRs[iid].MergeError = msg
+}

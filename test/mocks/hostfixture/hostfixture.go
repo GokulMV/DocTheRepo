@@ -35,6 +35,8 @@ type Fixture struct {
 	// ConflictOnUpdate makes branch updates (update-branch / rebase) fail.
 	ConflictOnUpdate func(bool)
 	AddReviewer      func(user string)
+	// Conflict makes a PR unmergeable against its base and makes branch updates fail.
+	Conflict func(number int)
 	// PRComments returns the comments/notes on a PR.
 	PRComments func(number int) []string
 	// BotLogin is the adapter's bot identity login.
@@ -63,6 +65,10 @@ func GitHub(t testing.TB, files map[string]string) *Fixture {
 		},
 		ConflictOnUpdate: func(v bool) { m.ConflictOnUpdate = v },
 		AddReviewer:      func(u string) { m.AddCollaborator(Repo, u) },
+		Conflict: func(int) {
+			m.ConflictOnUpdate = true
+			m.Push(Repo, "main", map[string]*string{"conflict.txt": S("x")}, "carol")
+		},
 		PRComments: func(n int) []string {
 			for _, p := range m.PRs(Repo) {
 				if p.Number == n {
@@ -96,6 +102,10 @@ func GitLab(t testing.TB, files map[string]string) *Fixture {
 		},
 		ConflictOnUpdate: func(v bool) { m.ConflictOnRebase = v },
 		AddReviewer:      func(u string) { m.AddUser(u) },
+		Conflict: func(n int) {
+			m.ConflictOnRebase = true
+			m.SetConflict(Repo, n, "conflict")
+		},
 		PRComments: func(n int) []string {
 			for _, mr := range m.MRs(Repo) {
 				if mr.IID == n {
