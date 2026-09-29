@@ -25,6 +25,8 @@ type ChunkStore interface {
 	ForPaths(ctx context.Context, repoID string, source ports.ChunkSource, paths []string) ([]ports.Chunk, error)
 	Apply(ctx context.Context, w ports.ChunkWrite) (int64, error)
 	RecordRename(ctx context.Context, repoID, oldPath, newPath, sha string) error
+	// LiveAfter walks live chunks in ID order (reindex).
+	LiveAfter(ctx context.Context, after string, limit int) ([]ports.Chunk, error)
 }
 
 // GraphStore is the Palace.

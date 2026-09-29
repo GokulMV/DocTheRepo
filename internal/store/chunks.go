@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -308,4 +309,10 @@ func (d *Docs) Children(ctx context.Context, repoID, parentID string) ([]gen.Doc
 // RecordRename audits a rename re-key.
 func (c *Chunks) RecordRename(ctx context.Context, repoID, oldPath, newPath, sha string) error {
 	return c.s.Q.InsertRename(ctx, gen.InsertRenameParams{RepoID: repoID, OldPath: oldPath, NewPath: newPath, CommitSha: sha})
+}
+
+// GC hard-deletes chunks soft-deleted before cutoff and returns their IDs (so vector stores without
+// cascading deletes can drop them too).
+func (c *Chunks) GC(ctx context.Context, cutoff time.Time) ([]string, error) {
+	return c.s.Q.GCChunks(ctx, &cutoff)
 }

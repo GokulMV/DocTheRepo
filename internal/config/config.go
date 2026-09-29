@@ -42,6 +42,7 @@ type Config struct {
 	Spend     SpendConfig     `yaml:"spend"`
 	Retention RetentionConfig `yaml:"retention"`
 	Grammars  GrammarsConfig  `yaml:"grammars"`
+	Vector    VectorConfig    `yaml:"vector"`
 }
 
 // ServerConfig controls the HTTP listeners.
@@ -134,6 +135,21 @@ type RetentionConfig struct {
 	ChunkGCDays int `yaml:"chunk_gc_days"`
 }
 
+// VectorConfig selects the vector index adapter (plan § 3: pgvector default, Qdrant alternative).
+type VectorConfig struct {
+	Backend      string `yaml:"backend"` // pgvector | qdrant
+	QdrantURL    string `yaml:"qdrant_url"`
+	QdrantKeyEnv string `yaml:"qdrant_api_key_env"`
+}
+
+// QdrantKey reads the Qdrant API key from the configured env var.
+func (v VectorConfig) QdrantKey() string {
+	if v.QdrantKeyEnv == "" {
+		return ""
+	}
+	return os.Getenv(v.QdrantKeyEnv)
+}
+
 // GrammarsConfig points at runtime-loaded Tree-sitter grammars.
 type GrammarsConfig struct {
 	LoadDir string `yaml:"load_dir"`
@@ -173,6 +189,7 @@ func Default() Config {
 		Logging:   LoggingConfig{Format: "json", Level: "info"},
 		Tracing:   TracingConfig{ServiceName: "dth-hub"},
 		Docs:      DocsConfig{DefaultPath: "docs/generated/"},
+		Vector:    VectorConfig{Backend: "pgvector", QdrantKeyEnv: "DTH_QDRANT_API_KEY"},
 		Retention: RetentionConfig{EventDays: 30, ChunkGCDays: 14},
 		Grammars:  GrammarsConfig{LoadDir: "./grammars"},
 	}
@@ -220,6 +237,8 @@ func applyEnv(cfg *Config) error {
 		"DTH_LOG_LEVEL":         &cfg.Logging.Level,
 		"DTH_OTLP_ENDPOINT":     &cfg.Tracing.OTLPEndpoint,
 		"DTH_GRAMMARS_DIR":      &cfg.Grammars.LoadDir,
+		"DTH_VECTOR_BACKEND":    &cfg.Vector.Backend,
+		"DTH_QDRANT_URL":        &cfg.Vector.QdrantURL,
 	}
 	for k, dst := range str {
 		if v, ok := os.LookupEnv(k); ok {
@@ -322,6 +341,15 @@ func (c Config) Validate() error {
 		if v < 0 { // 0 disables that job type on this node
 			add("queue.concurrency.%s: must be >= 0", k)
 		}
+	}
+	switch c.Vector.Backend {
+	case "pgvector":
+	case "qdrant":
+		if c.Vector.QdrantURL == "" {
+			add("vector.qdrant_url: required when vector.backend is qdrant")
+		}
+	default:
+		add("vector.backend: must be pgvector or qdrant")
 	}
 	if c.Queue.LeaseTTL < 10*time.Second {
 		add("queue.lease_ttl: must be >= 10s")

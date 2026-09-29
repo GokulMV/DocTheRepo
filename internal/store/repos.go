@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"time"
 
 	"github.com/GokulMV/DocTheRepo/internal/ports"
@@ -68,6 +69,9 @@ func (c *Connectors) Create(ctx context.Context, n NewConnector) (string, error)
 
 // Get loads a connector and decrypts its secrets. Missing → ports.ErrNotFound.
 func (c *Connectors) Get(ctx context.Context, id string) (ports.ConnectorConfig, error) {
+	if !uuidRE.MatchString(id) { // e.g. a mistyped webhook URL: unknown, not a database error
+		return ports.ConnectorConfig{}, fmt.Errorf("connector %q: %w", id, ports.ErrNotFound)
+	}
 	r, err := c.s.Q.GetConnector(ctx, id)
 	if IsNoRows(err) {
 		return ports.ConnectorConfig{}, fmt.Errorf("connector %s: %w", id, ports.ErrNotFound)
@@ -131,6 +135,8 @@ func (c *Connectors) decode(ctx context.Context, r gen.ListConnectorsByTypeRow) 
 	}
 	return cc, nil
 }
+
+var uuidRE = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
 
 // Repos stores tracked repositories.
 type Repos struct{ s *Store }

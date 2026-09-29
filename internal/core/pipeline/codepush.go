@@ -788,6 +788,8 @@ func (p *Pipeline) persist(ctx context.Context, repo ports.RepoConfig, head stri
 	switch {
 	case errors.As(err, &sb):
 		res.Notes = append(res.Notes, "embedding blocked by the spend guard; chunks are searchable by text until a reindex: "+sb.Error())
+	case errors.Is(err, ports.ErrEmbeddingMismatch):
+		res.Notes = append(res.Notes, "the embedding model changed; these chunks are embedded by the reindex job: "+err.Error())
 	case err != nil:
 		return fmt.Errorf("embed: %w", err)
 	}
