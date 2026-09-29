@@ -114,3 +114,8 @@ func ProviderKeyAAD(providerID string) []byte { return []byte("llm_provider:" + 
 func ConnectorCredsAAD(connectorID string) []byte {
 	return []byte("connector:" + connectorID + ":creds")
 }
+
+// ConnectorWebhookAAD binds a connector's webhook secret ciphertext to its row.
+func ConnectorWebhookAAD(connectorID string) []byte {
+	return []byte("connector:" + connectorID + ":webhook")
+}
