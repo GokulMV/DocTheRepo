@@ -1,0 +1,39 @@
+{{- if .Values.serviceAccount.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "dth.serviceAccountName" . }}
+  labels:
+    {{- include "dth.labels" . | nindent 4 }}
+  {{- with .Values.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+automountServiceAccountToken: false
+{{- end }}
+{{- if and .Values.database.url (not .Values.database.existingSecret) }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "dth.databaseSecret" . }}
+  labels:
+    {{- include "dth.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  {{ .Values.database.key }}: {{ .Values.database.url | quote }}
+{{- end }}
+{{- if gt (int .Values.api.replicas) 1 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "dth.fullname" . }}-api
+  labels:
+    {{- include "dth.labels" . | nindent 4 }}
+spec:
+  minAvailable: {{ .Values.api.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "dth.selector" (dict "root" . "role" "api") | nindent 6 }}
+{{- end }}

@@ -1,0 +1,9 @@
+apiVersion: v2
+name: dth
+description: DocTheRepo Hub — living docs, Q&A over your repositories, and decoded errors in one place.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/GokulMV/DocTheRepo
+sources:
+  - https://github.com/GokulMV/DocTheRepo

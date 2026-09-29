@@ -1,0 +1,13 @@
+project_id  = "acme-platform"
+region      = "us-central1"
+network     = "projects/acme-platform/global/networks/main"
+subnetwork  = "projects/acme-platform/regions/us-central1/subnetworks/main-us-central1"
+domain_name = "docs-hub.acme.com"
+image       = "us-central1-docker.pkg.dev/acme-platform/ghcr/gokulmv/doctherepo-hub:v1.0.0"
+owner_email = "platform-lead@acme.com"
+
+auth_mode            = "oidc"
+oidc_issuer          = "https://accounts.google.com"
+oidc_client_id       = "1234-abc.apps.googleusercontent.com"
+oidc_allowed_domains = ["acme.com"]
+# oidc_client_secret: pass with TF_VAR_oidc_client_secret, never commit it.

@@ -1,0 +1,15 @@
+region              = "us-east-1"
+vpc_id              = "vpc-0123456789abcdef0"
+public_subnet_ids   = ["subnet-aaa", "subnet-bbb"]
+private_subnet_ids  = ["subnet-ccc", "subnet-ddd"]
+domain_name         = "docs-hub.acme.com"
+acm_certificate_arn = "arn:aws:acm:us-east-1:111122223333:certificate/..."
+route53_zone_id     = "Z0123456789ABC"
+image               = "ghcr.io/gokulmv/doctherepo-hub:v1.0.0"
+owner_email         = "platform-lead@acme.com"
+
+auth_mode            = "oidc"
+oidc_issuer          = "https://acme.okta.com"
+oidc_client_id       = "0oa..."
+oidc_allowed_domains = ["acme.com"]
+# oidc_client_secret: pass with TF_VAR_oidc_client_secret, never commit it.

@@ -1,0 +1,105 @@
+# DocTheRepo Hub. One image runs three roles: api (HTTP), worker (jobs), scheduler (exactly one).
+# Postgres 16 with pgvector is external (RDS, Cloud SQL, or an in-cluster operator).
+
+image:
+  repository: ghcr.io/gokulmv/doctherepo-hub
+  tag: "" # defaults to the chart appVersion
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+# Public URL users and webhooks reach (https in production; secure cookies follow the scheme).
+publicURL: https://docs-hub.example.com
+
+database:
+  # Name of an existing Secret with the PostgreSQL URL (sslmode=require recommended) under `key`.
+  existingSecret: ""
+  key: url
+  # Or let the chart create the Secret (avoid committing values files that contain it).
+  url: ""
+
+secrets:
+  # Envelope-encryption key provider: awskms | gcpkms | localfile.
+  provider: localfile
+  # awskms: key ARN. gcpkms: projects/<p>/locations/<l>/keyRings/<r>/cryptoKeys/<k>.
+  kmsKeyId: ""
+  # localfile: an existing Secret holding a base64 32-byte key (`openssl rand -base64 32`) under `key`.
+  # Every pod must share it; losing it makes stored credentials unreadable, so keep a copy.
+  localKey:
+    existingSecret: ""
+    key: master-key
+
+auth:
+  mode: oidc # oidc | local
+  ownerEmail: ""
+  oidc:
+    issuer: ""
+    clientId: ""
+    # Existing Secret with the client secret under `key`.
+    existingSecret: ""
+    key: client-secret
+    # Required: without it any account at the IdP (any Google account, for Google) could sign in, and
+    # the first sign-in becomes owner.
+    allowedDomains: []
+  local:
+    # Existing Secret with the first owner's password under `key` (used only while no users exist).
+    existingSecret: ""
+    key: owner-password
+
+logLevel: info
+# Extra environment for every role (e.g. DTH_VECTOR_BACKEND, DTH_QDRANT_URL, DTH_OTLP_ENDPOINT).
+extraEnv: []
+extraEnvFrom: []
+
+serviceAccount:
+  create: true
+  name: ""
+  # IRSA (eks.amazonaws.com/role-arn) or GKE Workload Identity (iam.gke.io/gcp-service-account) for KMS
+  # and read-only cloud access.
+  annotations: {}
+
+api:
+  replicas: 2
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { memory: 1Gi }
+  pdb:
+    minAvailable: 1
+
+worker:
+  replicas: 2
+  resources:
+    requests: { cpu: 500m, memory: 1Gi }
+    limits: { memory: 2Gi }
+
+scheduler:
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 512Mi }
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  # Answers stream over SSE; for ingress-nginx also set:
+  #   nginx.ingress.kubernetes.io/proxy-buffering: "off"
+  #   nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+  host: docs-hub.example.com
+  tls:
+    secretName: ""
+
+metrics:
+  serviceMonitor:
+    enabled: false
+    interval: 30s
+    labels: {}
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+terminationGracePeriodSeconds: 60

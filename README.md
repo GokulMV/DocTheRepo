@@ -48,6 +48,84 @@ Under construction, milestone by milestone (plan § 14). Implemented so far:
   with streaming answers and citations, Docs tree, Palace graph explorer, Library, Repositories (settings,
   dry run, import), Connectors, Providers & routing, Spend limits, Analytics, Activity & jobs, Users &
   access, personal access tokens, and a setup checklist. Strict CSP, sanitized Markdown, Mermaid diagrams.
+- **Phase 7 — CLI & packaging**: the `dth` CLI (one-command local install, ask, repos, import, dry run,
+  jobs and retries, usage, tokens, reindex, adapter conformance test, migrations); a distroless container
+  image; Docker Compose for local use; Terraform for AWS (ECS Fargate, RDS, ALB, KMS, Secrets Manager) and
+  GCP (Cloud Run, Cloud SQL, load balancer, Cloud KMS, Secret Manager); least-privilege read-only roles for
+  watched AWS accounts and GCP projects; a Helm chart for any Kubernetes cluster.
+
+## Install
+
+### Local (one command)
+
+Requires Docker. `dth up` writes `~/.dth/compose.yaml`, starts PostgreSQL (pgvector) and the hub, creates
+the owner account (the password is printed once), and signs the CLI in. Re-running it is the health check;
+`dth up --upgrade` pulls newer images.
+
+```sh
+make build                      # or download a dth release binary
+./bin/dth up --owner-email you@acme.com
+./bin/dth status
+./bin/dth ask "how are refunds retried?" --repo acme/payments
+./bin/dth down                  # --wipe also deletes the database and keys
+```
+
+Add `--ollama` to also run Ollama for local models. The UI is at <http://localhost:8080>.
+
+### AWS — `deploy/terraform/aws`
+
+ALB (ACM TLS) → ECS Fargate services `api` (2+), `worker` (1+), `scheduler` (exactly 1) → RDS PostgreSQL 16
+(Multi-AZ, encrypted, TLS enforced). Secrets live in Secrets Manager; connector credentials and LLM keys
+are envelope-encrypted with a customer-managed KMS key. Bring your own VPC (private subnets with NAT).
+
+```sh
+cd deploy/terraform/aws
+cp terraform.tfvars.example terraform.tfvars    # VPC, subnets, domain, certificate, image, IdP
+export TF_VAR_oidc_client_secret=...           # never commit it
+terraform init && terraform apply
+```
+
+Register the `oidc_redirect_url` output with Okta/Google. `oidc_allowed_domains` is required: without it
+any account at the IdP could sign in, and the first sign-in becomes owner.
+
+### GCP — `deploy/terraform/gcp`
+
+HTTPS load balancer (Google-managed certificate) → Cloud Run `api`; Cloud Run `worker` and `scheduler`
+with CPU always allocated; Cloud SQL PostgreSQL 16 on a private IP (regional HA); Secret Manager; Cloud KMS.
+Cloud Run cannot pull from ghcr.io, so mirror the image to Artifact Registry (or use a remote repository).
+
+```sh
+cd deploy/terraform/gcp
+cp terraform.tfvars.example terraform.tfvars
+export TF_VAR_oidc_client_secret=...
+terraform init && terraform apply
+# then point an A record for domain_name at the load_balancer_ip output
+```
+
+### Kubernetes — `deploy/helm/dth`
+
+Deployments for the three roles (read-only root filesystem, non-root, dropped capabilities), a
+PodDisruptionBudget, optional Ingress and ServiceMonitor. PostgreSQL 16 with pgvector is external. Use
+IRSA / GKE Workload Identity with `secrets.provider=awskms|gcpkms`, or `localfile` with a shared key Secret.
+
+```sh
+kubectl create secret generic dth-db --from-literal=url='postgres://…?sslmode=require'
+kubectl create secret generic dth-oidc --from-literal=client-secret=…
+helm install dth deploy/helm/dth \
+  --set publicURL=https://docs-hub.acme.com \
+  --set database.existingSecret=dth-db \
+  --set secrets.provider=awskms --set secrets.kmsKeyId=arn:aws:kms:… \
+  --set serviceAccount.annotations."eks\.amazonaws\.com/role-arn"=arn:aws:iam::…:role/dth \
+  --set auth.oidc.issuer=https://acme.okta.com --set auth.oidc.clientId=… \
+  --set auth.oidc.existingSecret=dth-oidc --set 'auth.oidc.allowedDomains={acme.com}' \
+  --set ingress.enabled=true --set ingress.className=nginx
+```
+
+### Watched accounts — `deploy/terraform/modules/readonly-roles`
+
+Apply `aws/` in each AWS account and `gcp/` in each GCP project the Hub should read from. Everything
+granted is read-only (logs, alarms, metrics, queue/topic/stream metadata); SQS message peeking is opt-in,
+and Pub/Sub dead-letter sampling uses Hub-owned subscriptions only.
 
 ## Develop
 
@@ -57,7 +135,9 @@ testcontainers), and `sqlc` if you change SQL.
 ```sh
 make test        # all tests; integration tests require Docker
 make test-unit   # tests that need no Docker (integration tests are skipped)
-make build       # ./bin/dth-hub (API only unless the UI was staged)
+make build       # ./bin/dth-hub (API only unless the UI was staged) and ./bin/dth
+make image       # container image with the UI embedded (docker/Dockerfile)
+make deploy-lint # terraform fmt/validate + helm lint
 make web         # build the React UI and stage it for embedding (then `make build`)
 make web-test    # UI typecheck + unit tests
 ```

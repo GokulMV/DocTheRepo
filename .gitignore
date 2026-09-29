@@ -12,3 +12,8 @@ web/dist/
 /dth
 /internal/webui/dist/*
 !/internal/webui/dist/.gitkeep
+.terraform/
+.terraform.lock.hcl
+*.tfstate*
+terraform.tfvars
+.proxy-ca.crt

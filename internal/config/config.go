@@ -247,11 +247,12 @@ func applyEnv(cfg *Config) error {
 	}
 	if v, ok := os.LookupEnv("DTH_ROLES"); ok {
 		cfg.Roles = nil
-		for _, r := range strings.Split(v, ",") {
-			if r = strings.TrimSpace(r); r != "" {
-				cfg.Roles = append(cfg.Roles, Role(r))
-			}
+		for _, r := range splitList(v) {
+			cfg.Roles = append(cfg.Roles, Role(r))
 		}
+	}
+	if v, ok := os.LookupEnv("DTH_OIDC_ALLOWED_DOMAINS"); ok {
+		cfg.Auth.OIDC.AllowedDomains = splitList(v)
 	}
 	if v, ok := os.LookupEnv("DTH_TRACING_ENABLED"); ok {
 		b, err := strconv.ParseBool(v)
@@ -261,6 +262,17 @@ func applyEnv(cfg *Config) error {
 		cfg.Tracing.Enabled = b
 	}
 	return nil
+}
+
+// splitList parses a comma-separated env value, dropping blanks.
+func splitList(v string) []string {
+	var out []string
+	for _, x := range strings.Split(v, ",") {
+		if x = strings.TrimSpace(x); x != "" {
+			out = append(out, x)
+		}
+	}
+	return out
 }
 
 func (c *Config) normalize() {
