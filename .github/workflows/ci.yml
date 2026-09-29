@@ -5,6 +5,22 @@ on:
   pull_request:
 
 jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: typecheck and unit tests
+        run: make web-test
+      - name: build
+        run: cd web && npm run build
+      - name: npm audit (production dependencies)
+        run: cd web && npm audit --omit=dev --audit-level=high
+
   go:
     runs-on: ubuntu-latest
     steps:

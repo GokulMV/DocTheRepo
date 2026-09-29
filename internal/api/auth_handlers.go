@@ -28,6 +28,7 @@ type authHandlers struct {
 }
 
 func (h *authHandlers) routes(r chi.Router) {
+	r.Get("/auth/config", h.config)
 	r.Get("/auth/login", h.login)
 	r.Get("/auth/callback", h.callback)
 	r.Post("/auth/local/login", h.localLogin)
@@ -59,6 +60,11 @@ func safeReturn(p string) string {
 		return "/"
 	}
 	return p
+}
+
+// config tells the login page which sign-in methods exist (public).
+func (h *authHandlers) config(w http.ResponseWriter, _ *http.Request) {
+	WriteJSON(w, http.StatusOK, map[string]any{"mode": h.svc.Config().Mode, "sso": h.oidc != nil, "password": h.svc.Config().Mode == "local"})
 }
 
 func (h *authHandlers) login(w http.ResponseWriter, r *http.Request) {
