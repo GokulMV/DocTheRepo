@@ -37,6 +37,13 @@ Under construction, milestone by milestone (plan § 14). Implemented so far:
   `direct` with fallback, `pr_with_approver`, where the approver reviews under their own account) and a PR
   lifecycle (merge when green, rebase or regenerate on conflict, close stale PRs, supersede older ones);
   pgvector (default) and Qdrant vector indexes with zero-downtime reindex; Markdown import.
+- **Phase 5 — API, auth, and Ask**: Okta/Google/Entra/Keycloak single sign-on (OIDC with PKCE) or a
+  local owner account, sessions with CSRF protection, personal access tokens, four roles, per-repo
+  access (direct or via IdP groups), and an audit log; Ask with hybrid retrieval (vectors + full text +
+  knowledge-graph neighbours), citations that can only point at supplied sources, streaming answers,
+  threads, and an answer cache; the docs Tree, Palace, and Library APIs; repository, connector, BYO LLM
+  provider, routing, and spend-ceiling administration; jobs, activity, and usage/savings analytics;
+  OpenAPI 3.1 at `/api/v1/openapi.json`.
 
 ## Develop
 
