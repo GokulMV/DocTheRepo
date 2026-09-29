@@ -180,6 +180,19 @@ func (l *LLM) Chat(_ context.Context, r ports.ChatRequest) (ports.ChatResponse, 
 		}
 		b, _ := json.Marshal(out)
 		text = string(b)
+	case strings.Contains(prompt, "\nQuestion: "):
+		// Q&A: cite the first source, plus a fabricated [99] the answer contract must drop. A prompt whose
+		// question contains "unanswerable" gets an uncited reply.
+		if strings.Contains(prompt, "unanswerable") {
+			text = "Nothing relevant here."
+		} else {
+			text = "The answer is in the first source [1]. A made-up claim [99]."
+		}
+		if r.OnDelta != nil {
+			for _, part := range strings.SplitAfter(text, " ") {
+				r.OnDelta(part)
+			}
+		}
 	default:
 		b, _ := json.Marshal(contract.TriageVerdict{Cosmetic: false, Confident: true, Reason: "fake"})
 		text = string(b)

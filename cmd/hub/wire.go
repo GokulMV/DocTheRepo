@@ -16,6 +16,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/adapters/push/lifecycle"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/vector/pgvector"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/vector/qdrant"
+	"github.com/GokulMV/DocTheRepo/internal/api"
 	"github.com/GokulMV/DocTheRepo/internal/auth"
 	"github.com/GokulMV/DocTheRepo/internal/config"
 	"github.com/GokulMV/DocTheRepo/internal/core/docgen"
@@ -24,6 +25,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/core/llmgateway"
 	"github.com/GokulMV/DocTheRepo/internal/core/manifest"
 	"github.com/GokulMV/DocTheRepo/internal/core/pipeline"
+	"github.com/GokulMV/DocTheRepo/internal/core/rag"
 	"github.com/GokulMV/DocTheRepo/internal/core/spendguard"
 	"github.com/GokulMV/DocTheRepo/internal/ingest"
 	"github.com/GokulMV/DocTheRepo/internal/observability"
@@ -50,6 +52,8 @@ type app struct {
 	ingest   *ingest.Service
 	auth     *auth.Service
 	oidc     *auth.OIDC
+	qa       *store.QA
+	rag      *rag.Engine
 }
 
 func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.Box, q *queue.Queue, log *slog.Logger, m *observability.Metrics) (*app, error) {
@@ -106,6 +110,11 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 	if err := bootstrapOwner(ctx, cfg, st, a.auth, log); err != nil {
 		return nil, err
 	}
+	a.qa = store.NewQA(st)
+	a.rag = &rag.Engine{Store: a.qa, Index: a.index, GW: gw, Savings: store.NewSavings(st),
+		Cost: func(kind, model, feature string, in, out int64) (float64, bool) {
+			return a.enforcer.Guard().Cost(kind, model, feature, in, out)
+		}}
 	a.pipe = &pipeline.Pipeline{Repos: repos, Chunks: a.chunks, Graph: store.NewGraph(st), Docs: a.docs, Savings: store.NewSavings(st),
 		Hosts: a.hosts.Host, Lander: &push.Dispatcher{PRs: prs, Lifecycle: a.sweeper}, GW: gw, DocGen: &docgen.Generator{GW: gw},
 		Indexer: &pipeline.Indexer{GW: gw, Index: a.index}, Grammars: reg, Log: log.With("component", "pipeline")}
@@ -143,6 +152,7 @@ func (a *app) tasks() []scheduler.Task {
 		}},
 		{Name: "pr_lifecycle_sweep", Every: 5 * time.Minute, Fn: a.sweeper.Sweep},
 		{Name: "session_gc", Every: time.Hour, Fn: a.auth.GCSessions},
+		{Name: "answer_cache_gc", Every: time.Hour, Fn: a.qa.GCCache},
 		{Name: "reload_spend_guard", Every: time.Minute, Fn: a.reloadGuard},
 		{Name: "chunk_gc", Every: 24 * time.Hour, Fn: func(ctx context.Context) error {
 			ids, err := a.chunks.GC(ctx, manifest.GCCutoff(time.Now(), a.cfg.Retention.ChunkGCDays))
@@ -185,4 +195,6 @@ func bootstrapOwner(ctx context.Context, cfg config.Config, st *store.Store, svc
 }
 
 // v1Routes mounts the authenticated resource APIs (added as each area is built).
-func (a *app) v1Routes() []func(chi.Router) { return nil }
+func (a *app) v1Routes() []func(chi.Router) {
+	return []func(chi.Router){api.AskRoutes(a.rag, a.qa, a.auth)}
+}

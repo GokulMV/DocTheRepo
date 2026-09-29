@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS answer_cache;
+DROP TABLE IF EXISTS qa_messages;
+DROP TYPE IF EXISTS qa_feedback;
+DROP TYPE IF EXISTS qa_role;
+DROP TABLE IF EXISTS qa_threads;
