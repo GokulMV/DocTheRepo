@@ -5,7 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
+
+	"github.com/go-chi/chi/v5"
 
 	"github.com/GokulMV/DocTheRepo/internal/adapters/codehost"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/llm"
@@ -13,6 +16,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/adapters/push/lifecycle"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/vector/pgvector"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/vector/qdrant"
+	"github.com/GokulMV/DocTheRepo/internal/auth"
 	"github.com/GokulMV/DocTheRepo/internal/config"
 	"github.com/GokulMV/DocTheRepo/internal/core/docgen"
 	"github.com/GokulMV/DocTheRepo/internal/core/grammars"
@@ -44,6 +48,8 @@ type app struct {
 	pipe     *pipeline.Pipeline
 	sweeper  *lifecycle.Sweeper
 	ingest   *ingest.Service
+	auth     *auth.Service
+	oidc     *auth.OIDC
 }
 
 func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.Box, q *queue.Queue, log *slog.Logger, m *observability.Metrics) (*app, error) {
@@ -90,6 +96,16 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 			h, err := a.hosts.Host(ctx, repo.ConnectorID)
 			return h, repo, err
 		}}
+	a.auth = auth.New(st, cfg.Auth)
+	if cfg.Auth.Mode == "oidc" {
+		secret := os.Getenv(cfg.Auth.OIDC.ClientSecretEnv)
+		if a.oidc, err = auth.NewOIDC(ctx, cfg.Auth.OIDC, secret); err != nil {
+			return nil, err
+		}
+	}
+	if err := bootstrapOwner(ctx, cfg, st, a.auth, log); err != nil {
+		return nil, err
+	}
 	a.pipe = &pipeline.Pipeline{Repos: repos, Chunks: a.chunks, Graph: store.NewGraph(st), Docs: a.docs, Savings: store.NewSavings(st),
 		Hosts: a.hosts.Host, Lander: &push.Dispatcher{PRs: prs, Lifecycle: a.sweeper}, GW: gw, DocGen: &docgen.Generator{GW: gw},
 		Indexer: &pipeline.Indexer{GW: gw, Index: a.index}, Grammars: reg, Log: log.With("component", "pipeline")}
@@ -126,6 +142,7 @@ func (a *app) tasks() []scheduler.Task {
 			return err
 		}},
 		{Name: "pr_lifecycle_sweep", Every: 5 * time.Minute, Fn: a.sweeper.Sweep},
+		{Name: "session_gc", Every: time.Hour, Fn: a.auth.GCSessions},
 		{Name: "reload_spend_guard", Every: time.Minute, Fn: a.reloadGuard},
 		{Name: "chunk_gc", Every: 24 * time.Hour, Fn: func(ctx context.Context) error {
 			ids, err := a.chunks.GC(ctx, manifest.GCCutoff(time.Now(), a.cfg.Retention.ChunkGCDays))
@@ -148,3 +165,24 @@ func (a *app) reloadGuard(ctx context.Context) error {
 	a.enforcer.SetGuard(g)
 	return nil
 }
+
+// bootstrapOwner creates the local-mode owner on first start from DTH_OWNER_EMAIL / DTH_OWNER_PASSWORD
+// (`dth up` sets them); it never touches an existing user base.
+func bootstrapOwner(ctx context.Context, cfg config.Config, st *store.Store, svc *auth.Service, log *slog.Logger) error {
+	email, pw := os.Getenv("DTH_OWNER_EMAIL"), os.Getenv("DTH_OWNER_PASSWORD")
+	if cfg.Auth.Mode != "local" || email == "" || pw == "" {
+		return nil
+	}
+	n, err := st.Q.CountUsers(ctx)
+	if err != nil || n > 0 {
+		return err
+	}
+	if _, err := svc.BootstrapOwner(ctx, email, pw); err != nil {
+		return fmt.Errorf("create owner account: %w", err)
+	}
+	log.Info("created the owner account", "email", email)
+	return nil
+}
+
+// v1Routes mounts the authenticated resource APIs (added as each area is built).
+func (a *app) v1Routes() []func(chi.Router) { return nil }
