@@ -76,6 +76,11 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	body := map[string]any{}
 	_ = json.Unmarshal(raw, &body)
 	req := Request{Path: r.URL.Path, Body: body, Header: r.Header.Clone()}
+	if r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/models") { // OpenAI-protocol health probe
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, `{"object":"list","data":[{"id":"`+OK+`","object":"model"}]}`)
+		return
+	}
 	switch {
 	case r.URL.Path == "/v1/messages":
 		req.Dialect, req.Model = "anthropic", str(body["model"])

@@ -36,6 +36,8 @@ type CodePushPayload struct {
 	Reason     string   `json:"reason,omitempty"`
 	// DryRun stops before any paid call or write and reports what would be generated.
 	DryRun bool `json:"dry_run,omitempty"`
+	// OverrideCeiling lets an operator's retry of a spend-blocked job exceed the ceiling once (audited).
+	OverrideCeiling bool `json:"override_ceiling,omitempty"`
 }
 
 // CodePushResult is stored on the job.
@@ -96,7 +98,7 @@ func (p *Pipeline) CodePush(ctx context.Context, job ports.Job) (ports.Outcome, 
 		return ports.Outcome{}, err
 	}
 	log := p.log().With("job_id", job.ID, "repo", repo.FullName, "correlation_id", job.CorrelationID)
-	meta := llmgateway.CallMeta{RepoID: repo.ID, JobID: job.ID}
+	meta := llmgateway.CallMeta{RepoID: repo.ID, JobID: job.ID, Override: pl.OverrideCeiling}
 
 	head := pl.After
 	if head == "" || len(pl.ForcePaths) > 0 {
@@ -822,7 +824,8 @@ func (p *Pipeline) persist(ctx context.Context, repo ports.RepoConfig, head stri
 		if strings.HasSuffix(docPath, "/README.md") && len(d.sections) == 0 {
 			continue
 		}
-		if err := p.Docs.ReplaceFile(ctx, repo.ID, repo.FullName, docPath, d.summary, d.sections); err != nil {
+		if err := p.Docs.ReplaceFile(ctx, repo.ID, repo.FullName, ports.DocFile{Path: docPath, Summary: d.summary, Content: string(d.content),
+			CommitSHA: head, Sections: d.sections}); err != nil {
 			return err
 		}
 	}

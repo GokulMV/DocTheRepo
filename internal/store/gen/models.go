@@ -967,6 +967,8 @@ type DocNode struct {
 	ChunkID   *string     `json:"chunk_id"`
 	OrderKey  string      `json:"order_key"`
 	UpdatedAt time.Time   `json:"updated_at"`
+	Content   string      `json:"content"`
+	CommitSha string      `json:"commit_sha"`
 }
 
 type Edge struct {

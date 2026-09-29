@@ -1,0 +1,667 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"slices"
+	"strings"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+
+	"github.com/GokulMV/DocTheRepo/internal/auth"
+	"github.com/GokulMV/DocTheRepo/internal/core/llmgateway"
+	"github.com/GokulMV/DocTheRepo/internal/core/pipeline"
+	"github.com/GokulMV/DocTheRepo/internal/ports"
+	"github.com/GokulMV/DocTheRepo/internal/store"
+)
+
+// Enqueuer inserts jobs.
+type Enqueuer interface {
+	Enqueue(ctx context.Context, nj ports.NewJob) (ports.Job, bool, error)
+}
+
+// AdminDeps are the collaborators of the repository, connector, provider, routing, and spend APIs.
+type AdminDeps struct {
+	Auth       *auth.Service
+	Repos      *store.Repos
+	Connectors *store.Connectors
+	Providers  *store.Providers
+	Routes     *store.Routes
+	Browse     *store.Browse
+	Queue      Enqueuer
+	// Seal encrypts a secret bound to aad (secrets.Box.Seal); ProviderAAD binds provider keys.
+	Seal        func(ctx context.Context, plaintext, aad []byte) ([]byte, error)
+	ProviderAAD func(id string) []byte
+	// ProviderKinds lists the registered LLM provider kinds.
+	ProviderKinds []string
+	// TestProvider pings a stored provider with a model.
+	TestProvider func(ctx context.Context, id, model string) (time.Duration, error)
+	// InvalidateProvider drops a cached provider adapter after an edit.
+	InvalidateProvider func(id string)
+	// Host returns a git connector's adapter; InvalidateHost drops it after an edit.
+	Host           func(ctx context.Context, connectorID string) (ports.CodeHost, error)
+	InvalidateHost func(id string)
+	// DryRun runs code_push in dry-run mode synchronously.
+	DryRun func(ctx context.Context, job ports.Job) (ports.Outcome, error)
+	// ReloadSpend applies edited ceilings immediately on this replica.
+	ReloadSpend func(ctx context.Context) error
+}
+
+// AdminRoutes mounts § 7.6.
+func AdminRoutes(d AdminDeps) func(chi.Router) {
+	h := &adminHandlers{d: d}
+	return func(r chi.Router) {
+		r.Group(func(r chi.Router) {
+			r.Use(requireRole(auth.RoleViewer))
+			r.Get("/repos", h.listRepos)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(requireRole(auth.RoleEditor))
+			r.Post("/repos/{id}/dry-run", h.dryRun)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(requireRole(auth.RoleAdmin))
+			r.Post("/repos", h.createRepo)
+			r.Patch("/repos/{id}", h.patchRepo)
+			r.Post("/repos/{id}/import", h.importDocs)
+			r.Get("/connectors", h.listConnectors)
+			r.Post("/connectors", h.createConnector)
+			r.Patch("/connectors/{id}", h.patchConnector)
+			r.Delete("/connectors/{id}", h.deleteConnector)
+			r.Post("/connectors/{id}/test", h.testConnector)
+			r.Post("/connectors/{id}/sync", h.syncConnector)
+			r.Get("/providers", h.listProviders)
+			r.Post("/providers", h.createProvider)
+			r.Patch("/providers/{id}", h.patchProvider)
+			r.Delete("/providers/{id}", h.deleteProvider)
+			r.Post("/providers/{id}/test", h.testProvider)
+			r.Get("/routes", h.listRoutes)
+			r.Put("/routes/{feature}", h.putRoute)
+			r.Get("/spend/limits", h.getLimits)
+			r.Put("/spend/limits", h.putLimits)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(requireRole(auth.RoleOwner))
+			r.Post("/reindex", h.reindex)
+		})
+	}
+}
+
+type adminHandlers struct{ d AdminDeps }
+
+func (h *adminHandlers) audit(r *http.Request, action, typ, id string, details any) {
+	_ = h.d.Auth.Audit(r.Context(), auth.FromContext(r.Context()), action, typ, id, details, clientIP(r))
+}
+
+// --- repos ---
+
+func (h *adminHandlers) listRepos(w http.ResponseWriter, r *http.Request) {
+	sc, err := scopeOf(r, h.d.Auth)
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	all, err := h.d.Repos.ListAll(r.Context())
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	out := []ports.RepoConfig{}
+	for _, rc := range all {
+		if allows(sc, rc.ID) {
+			out = append(out, rc)
+		}
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"items": out})
+}
+
+func (h *adminHandlers) createRepo(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		ConnectorID   string `json:"connector_id"`
+		FullName      string `json:"full_name"`
+		DefaultBranch string `json:"default_branch"`
+		TrackedBranch string `json:"tracked_branch"`
+		DocsPath      string `json:"docs_path"`
+		PushMode      string `json:"push_mode"`
+		Approver      string `json:"approver"`
+		ServiceName   string `json:"service_name"`
+	}
+	if err := decodeJSON(w, r, &in); err != nil {
+		fail(w, r, err)
+		return
+	}
+	if in.ConnectorID == "" || in.FullName == "" {
+		fail(w, r, errBadParam("connector_id and full_name are required"))
+		return
+	}
+	if in.DocsPath != "" && (!strings.HasSuffix(in.DocsPath, "/") || strings.Contains(in.DocsPath, "..") || strings.HasPrefix(in.DocsPath, "/")) {
+		fail(w, r, errBadParam("docs_path must be a relative directory ending in / (e.g. docs/generated/)"))
+		return
+	}
+	if in.DefaultBranch == "" && h.d.Host != nil {
+		if host, err := h.d.Host(r.Context(), in.ConnectorID); err == nil {
+			in.DefaultBranch, _ = host.DefaultBranch(r.Context(), in.FullName)
+		}
+	}
+	id, err := h.d.Repos.Upsert(r.Context(), ports.RepoConfig{ConnectorID: in.ConnectorID, FullName: in.FullName, DefaultBranch: in.DefaultBranch,
+		TrackedBranch: in.TrackedBranch, DocsPath: in.DocsPath, ServiceName: in.ServiceName,
+		Push: ports.PushConfig{Mode: ports.PushMode(in.PushMode), Approver: in.Approver}})
+	if err != nil {
+		fail(w, r, &ports.ValidationError{Code: "VALIDATION_FAILED", Message: "could not add repository (unknown connector?)"})
+		return
+	}
+	h.audit(r, "repo.create", "repo", id, in)
+	WriteJSON(w, http.StatusCreated, map[string]string{"id": id})
+}
+
+func (h *adminHandlers) patchRepo(w http.ResponseWriter, r *http.Request) {
+	var in store.RepoPatch
+	if err := decodeJSON(w, r, &in); err != nil {
+		fail(w, r, err)
+		return
+	}
+	if in.DocsPath != nil && (!strings.HasSuffix(*in.DocsPath, "/") || strings.Contains(*in.DocsPath, "..") || strings.HasPrefix(*in.DocsPath, "/")) {
+		fail(w, r, errBadParam("docs_path must be a relative directory ending in /"))
+		return
+	}
+	id := chi.URLParam(r, "id")
+	if err := h.d.Repos.UpdateRepo(r.Context(), id, in); err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	h.audit(r, "repo.update", "repo", id, in)
+	rc, err := h.d.Repos.Get(r.Context(), id)
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, rc)
+}
+
+func (h *adminHandlers) dryRun(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	sc, err := scopeOf(r, h.d.Auth)
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	if !allows(sc, id) {
+		WriteErr(w, r, ports.ErrNotFound)
+		return
+	}
+	var in struct {
+		Before string `json:"before"`
+	}
+	if r.ContentLength > 0 {
+		if err := decodeJSON(w, r, &in); err != nil {
+			fail(w, r, err)
+			return
+		}
+	}
+	b, _ := json.Marshal(pipeline.CodePushPayload{RepoID: id, Before: in.Before, DryRun: true})
+	out, err := h.d.DryRun(r.Context(), ports.Job{ID: ports.NewID(), RepoID: id, Payload: b, CorrelationID: correlationFor(r)})
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"status": out.Status, "message": out.Message, "result": out.Result})
+}
+
+func (h *adminHandlers) importDocs(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		SourcePaths []string `json:"source_paths"`
+	}
+	if r.ContentLength > 0 {
+		if err := decodeJSON(w, r, &in); err != nil {
+			fail(w, r, err)
+			return
+		}
+	}
+	id := chi.URLParam(r, "id")
+	if _, err := h.d.Repos.Get(r.Context(), id); err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	job, _, err := h.d.Queue.Enqueue(r.Context(), ports.NewJob{Type: ports.JobImportDocs, RepoID: id, DedupeKey: "import:" + id,
+		CorrelationID: correlationFor(r), Payload: pipeline.ImportPayload{RepoID: id, Prefixes: in.SourcePaths}})
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	h.audit(r, "repo.import", "repo", id, in)
+	WriteJSON(w, http.StatusAccepted, map[string]string{"job_id": job.ID})
+}
+
+// --- connectors ---
+
+var connectorTypes = []string{"github", "gitlab", "cloudwatch", "firehose", "gcp", "pubsub", "datadog", "grafana", "alertmanager", "sentry",
+	"pagerduty", "opsgenie", "wiz", "splunk", "generic", "kafka", "sqs", "sns", "eventbridge", "kinesis", "pubsub_bus", "rabbitmq", "confluence", "jira"}
+
+func (h *adminHandlers) listConnectors(w http.ResponseWriter, r *http.Request) {
+	cs, err := h.d.Connectors.ListPublic(r.Context())
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"items": cs})
+}
+
+func (h *adminHandlers) createConnector(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Type          string            `json:"type"`
+		Name          string            `json:"name"`
+		Mode          string            `json:"mode"`
+		PollSeconds   int64             `json:"poll_seconds"`
+		Config        map[string]string `json:"config"`
+		Credentials   string            `json:"credentials"`
+		WebhookSecret string            `json:"webhook_secret"`
+	}
+	if err := decodeJSON(w, r, &in); err != nil {
+		fail(w, r, err)
+		return
+	}
+	if !slices.Contains(connectorTypes, in.Type) || strings.TrimSpace(in.Name) == "" {
+		fail(w, r, errBadParam("type must be a known connector type and name is required"))
+		return
+	}
+	if in.Mode != "" && in.Mode != "webhook" && in.Mode != "poll" && in.Mode != "both" {
+		fail(w, r, errBadParam("mode must be webhook, poll or both"))
+		return
+	}
+	id, err := h.d.Connectors.Create(r.Context(), store.NewConnector{Type: in.Type, Name: in.Name, Mode: in.Mode, PollSeconds: in.PollSeconds,
+		Config: in.Config, Credentials: in.Credentials, WebhookSecret: in.WebhookSecret})
+	if err != nil {
+		WriteError(w, r, http.StatusConflict, "CONFLICT", "could not create connector (is the name taken?)", nil)
+		return
+	}
+	h.audit(r, "connector.create", "connector", id, map[string]any{"type": in.Type, "name": in.Name, "mode": in.Mode})
+	WriteJSON(w, http.StatusCreated, map[string]string{"id": id, "webhook_path": "/hooks/" + in.Type + "/" + id})
+}
+
+func (h *adminHandlers) patchConnector(w http.ResponseWriter, r *http.Request) {
+	var in store.ConnectorPatch
+	if err := decodeJSON(w, r, &in); err != nil {
+		fail(w, r, err)
+		return
+	}
+	id := chi.URLParam(r, "id")
+	if err := h.d.Connectors.Update(r.Context(), id, in); err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	if h.d.InvalidateHost != nil {
+		h.d.InvalidateHost(id)
+	}
+	h.audit(r, "connector.update", "connector", id, map[string]any{"name": in.Name, "mode": in.Mode, "enabled": in.Enabled,
+		"credentials_changed": in.Credentials != nil, "webhook_secret_changed": in.WebhookSecret != nil})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *adminHandlers) deleteConnector(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.d.Connectors.Delete(r.Context(), id); err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	if h.d.InvalidateHost != nil {
+		h.d.InvalidateHost(id)
+	}
+	h.audit(r, "connector.delete", "connector", id, nil)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type check struct {
+	Name   string `json:"name"`
+	OK     bool   `json:"ok"`
+	Detail string `json:"detail,omitempty"`
+}
+
+// testConnector runs read-only probes (git hosts: identity and repository listing).
+func (h *adminHandlers) testConnector(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if h.d.InvalidateHost != nil {
+		h.d.InvalidateHost(id)
+	}
+	host, err := h.d.Host(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, ports.ErrNotFound) {
+			WriteErr(w, r, err)
+			return
+		}
+		WriteJSON(w, http.StatusOK, map[string]any{"ok": false, "checks": []check{{Name: "configuration", OK: false, Detail: err.Error()}}})
+		return
+	}
+	var checks []check
+	ok := true
+	if id, err := host.BotIdentity(r.Context()); err != nil {
+		checks, ok = append(checks, check{Name: "authenticate", Detail: err.Error()}), false
+	} else {
+		checks = append(checks, check{Name: "authenticate", OK: true, Detail: "signed in as " + id.Login})
+	}
+	if repos, err := host.ListRepos(r.Context()); err != nil {
+		checks, ok = append(checks, check{Name: "list_repositories", Detail: err.Error()}), false
+	} else {
+		checks = append(checks, check{Name: "list_repositories", OK: true, Detail: strings.Join(firstN(repos, 20), ", ")})
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"ok": ok, "checks": checks})
+}
+
+func firstN(xs []string, n int) []string {
+	if len(xs) > n {
+		return append(xs[:n:n], "…")
+	}
+	return xs
+}
+
+// syncConnector enqueues a push for every tracked repo of the connector whose branch moved.
+func (h *adminHandlers) syncConnector(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	host, err := h.d.Host(r.Context(), id)
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	repos, err := h.d.Repos.ListAll(r.Context())
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	var jobs []string
+	for _, rc := range repos {
+		if rc.ConnectorID != id || !rc.Enabled {
+			continue
+		}
+		head, err := host.BranchHead(r.Context(), rc.FullName, rc.Branch())
+		if err != nil || head == rc.LastProcessedSHA {
+			continue
+		}
+		job, _, err := h.d.Queue.Enqueue(r.Context(), ports.NewJob{Type: ports.JobCodePush, RepoID: rc.ID, SerialKey: "repo:" + rc.ID,
+			DedupeKey: "push:" + rc.ID + ":" + head, CorrelationID: correlationFor(r),
+			Payload: pipeline.CodePushPayload{RepoID: rc.ID, Before: rc.LastProcessedSHA, After: head}})
+		if err != nil {
+			WriteErr(w, r, err)
+			return
+		}
+		jobs = append(jobs, job.ID)
+	}
+	h.audit(r, "connector.sync", "connector", id, map[string]int{"jobs": len(jobs)})
+	if jobs == nil {
+		jobs = []string{}
+	}
+	WriteJSON(w, http.StatusAccepted, map[string]any{"job_ids": jobs})
+}
+
+// --- providers & routes ---
+
+type providerView struct {
+	ID        string            `json:"id"`
+	Kind      string            `json:"kind"`
+	Name      string            `json:"name"`
+	BaseURL   string            `json:"base_url,omitempty"`
+	Extra     map[string]string `json:"extra"`
+	HasKey    bool              `json:"has_key"`
+	RedactPII bool              `json:"redact_pii"`
+	Enabled   bool              `json:"enabled"`
+}
+
+func (h *adminHandlers) listProviders(w http.ResponseWriter, r *http.Request) {
+	ps, err := h.d.Providers.List(r.Context())
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	out := make([]providerView, len(ps))
+	for i, p := range ps {
+		out[i] = providerView{ID: p.ID, Kind: p.Kind, Name: p.Name, BaseURL: p.BaseURL, Extra: p.Extra, HasKey: len(p.KeyCiphertext) > 0,
+			RedactPII: p.RedactPII, Enabled: p.Enabled}
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"items": out, "kinds": h.d.ProviderKinds})
+}
+
+type providerInput struct {
+	Kind      string            `json:"kind"`
+	Name      *string           `json:"name"`
+	BaseURL   *string           `json:"base_url"`
+	APIKey    *string           `json:"api_key"`
+	Extra     map[string]string `json:"extra"`
+	RedactPII *bool             `json:"redact_pii"`
+	Enabled   *bool             `json:"enabled"`
+}
+
+func (h *adminHandlers) createProvider(w http.ResponseWriter, r *http.Request) {
+	var in providerInput
+	if err := decodeJSON(w, r, &in); err != nil {
+		fail(w, r, err)
+		return
+	}
+	if !slices.Contains(h.d.ProviderKinds, in.Kind) || in.Name == nil || strings.TrimSpace(*in.Name) == "" {
+		fail(w, r, errBadParam("kind must be one of "+strings.Join(h.d.ProviderKinds, ", ")+" and name is required"))
+		return
+	}
+	rec := store.ProviderRecord{ID: ports.NewID(), Kind: in.Kind, Name: *in.Name, Extra: in.Extra, Enabled: true}
+	if in.BaseURL != nil {
+		rec.BaseURL = *in.BaseURL
+	}
+	if in.RedactPII != nil {
+		rec.RedactPII = *in.RedactPII
+	}
+	if in.Enabled != nil {
+		rec.Enabled = *in.Enabled
+	}
+	if in.APIKey != nil && *in.APIKey != "" {
+		ct, err := h.d.Seal(r.Context(), []byte(*in.APIKey), h.d.ProviderAAD(rec.ID))
+		if err != nil {
+			WriteErr(w, r, err)
+			return
+		}
+		rec.KeyCiphertext = ct
+	}
+	id, err := h.d.Providers.Create(r.Context(), rec)
+	if err != nil {
+		WriteError(w, r, http.StatusConflict, "CONFLICT", "could not create provider (is the name taken?)", nil)
+		return
+	}
+	h.audit(r, "provider.create", "llm_provider", id, map[string]any{"kind": in.Kind, "name": rec.Name})
+	WriteJSON(w, http.StatusCreated, map[string]string{"id": id})
+}
+
+func (h *adminHandlers) patchProvider(w http.ResponseWriter, r *http.Request) {
+	var in providerInput
+	if err := decodeJSON(w, r, &in); err != nil {
+		fail(w, r, err)
+		return
+	}
+	id := chi.URLParam(r, "id")
+	rec, err := h.d.Providers.Get(r.Context(), id)
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	if in.Name != nil {
+		rec.Name = *in.Name
+	}
+	if in.BaseURL != nil {
+		rec.BaseURL = *in.BaseURL
+	}
+	if in.Extra != nil {
+		rec.Extra = in.Extra
+	}
+	if in.RedactPII != nil {
+		rec.RedactPII = *in.RedactPII
+	}
+	if in.Enabled != nil {
+		rec.Enabled = *in.Enabled
+	}
+	rec.KeyCiphertext = nil
+	if in.APIKey != nil {
+		if rec.KeyCiphertext, err = h.d.Seal(r.Context(), []byte(*in.APIKey), h.d.ProviderAAD(id)); err != nil {
+			WriteErr(w, r, err)
+			return
+		}
+	}
+	if err := h.d.Providers.Update(r.Context(), rec); err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	if h.d.InvalidateProvider != nil {
+		h.d.InvalidateProvider(id)
+	}
+	h.audit(r, "provider.update", "llm_provider", id, map[string]any{"name": rec.Name, "key_changed": in.APIKey != nil, "enabled": rec.Enabled})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *adminHandlers) deleteProvider(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.d.Providers.Delete(r.Context(), id); err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	if h.d.InvalidateProvider != nil {
+		h.d.InvalidateProvider(id)
+	}
+	h.audit(r, "provider.delete", "llm_provider", id, nil)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *adminHandlers) testProvider(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Model string `json:"model"`
+	}
+	if err := decodeJSON(w, r, &in); err != nil {
+		fail(w, r, err)
+		return
+	}
+	id := chi.URLParam(r, "id")
+	if _, err := h.d.Providers.Get(r.Context(), id); err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	lat, err := h.d.TestProvider(r.Context(), id, in.Model)
+	if err != nil {
+		WriteJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error(), "latency_ms": lat.Milliseconds()})
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "latency_ms": lat.Milliseconds()})
+}
+
+var features = []string{llmgateway.FeatureDocGen, llmgateway.FeatureQA, llmgateway.FeatureDecode, llmgateway.FeatureTriage,
+	llmgateway.FeatureEmbedding, llmgateway.FeatureSuggest}
+
+func (h *adminHandlers) listRoutes(w http.ResponseWriter, r *http.Request) {
+	rs, err := h.d.Routes.ListRoutes(r.Context())
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"items": rs, "features": features})
+}
+
+func (h *adminHandlers) putRoute(w http.ResponseWriter, r *http.Request) {
+	feature := chi.URLParam(r, "feature")
+	if !slices.Contains(features, feature) {
+		WriteErr(w, r, ports.ErrNotFound)
+		return
+	}
+	var in struct {
+		ProviderID         string   `json:"provider_id"`
+		Model              string   `json:"model"`
+		MaxOutputTokens    int      `json:"max_output_tokens"`
+		ContextTokenBudget int      `json:"context_token_budget"`
+		Effort             string   `json:"effort"`
+		Temperature        *float64 `json:"temperature"`
+		FallbackProviderID string   `json:"fallback_provider_id"`
+		FallbackModel      string   `json:"fallback_model"`
+	}
+	if err := decodeJSON(w, r, &in); err != nil {
+		fail(w, r, err)
+		return
+	}
+	if in.ProviderID == "" || in.Model == "" {
+		fail(w, r, errBadParam("provider_id and model are required"))
+		return
+	}
+	if in.Effort != "" && !slices.Contains([]string{"low", "medium", "high", "xhigh", "max"}, in.Effort) {
+		fail(w, r, errBadParam("effort must be low, medium, high, xhigh or max"))
+		return
+	}
+	if in.MaxOutputTokens == 0 {
+		in.MaxOutputTokens = 8000
+	}
+	if in.ContextTokenBudget == 0 {
+		in.ContextTokenBudget = 16000
+	}
+	rt := llmgateway.Route{Feature: feature, ProviderID: in.ProviderID, Model: in.Model, MaxOutputTokens: in.MaxOutputTokens,
+		ContextBudget: in.ContextTokenBudget, Effort: in.Effort, Temperature: in.Temperature}
+	if in.FallbackProviderID != "" {
+		rt.Fallback = &llmgateway.Route{ProviderID: in.FallbackProviderID, Model: in.FallbackModel}
+	}
+	if err := h.d.Routes.SetRoute(r.Context(), rt); err != nil {
+		fail(w, r, &ports.ValidationError{Code: "VALIDATION_FAILED", Message: "unknown provider_id or fallback_provider_id"})
+		return
+	}
+	h.audit(r, "route.set", "model_route", feature, in)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// --- spend ---
+
+func (h *adminHandlers) getLimits(w http.ResponseWriter, r *http.Request) {
+	ls, err := h.d.Browse.SpendLimits(r.Context())
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"items": ls})
+}
+
+func (h *adminHandlers) putLimits(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Items []store.SpendLimit `json:"items"`
+	}
+	if err := decodeJSON(w, r, &in); err != nil {
+		fail(w, r, err)
+		return
+	}
+	if err := h.d.Browse.ReplaceSpendLimits(r.Context(), in.Items); err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	if h.d.ReloadSpend != nil {
+		if err := h.d.ReloadSpend(r.Context()); err != nil {
+			WriteErr(w, r, &ports.ValidationError{Code: "VALIDATION_FAILED", Message: err.Error()})
+			return
+		}
+	}
+	h.audit(r, "spend.limits", "spend_limits", "", in.Items)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *adminHandlers) reindex(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		AcknowledgeDestructive bool `json:"acknowledge_destructive"`
+	}
+	if err := decodeJSON(w, r, &in); err != nil {
+		fail(w, r, err)
+		return
+	}
+	if !in.AcknowledgeDestructive {
+		fail(w, r, errBadParam("set acknowledge_destructive: true; every chunk is re-embedded on the embedding route's current model"))
+		return
+	}
+	n, tokens, err := h.d.Browse.ReindexEstimate(r.Context())
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	job, _, err := h.d.Queue.Enqueue(r.Context(), ports.NewJob{Type: ports.JobReindex, DedupeKey: "reindex", CorrelationID: correlationFor(r),
+		Payload: pipeline.ReindexPayload{}})
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	h.audit(r, "index.reindex", "job", job.ID, map[string]int64{"chunks": n})
+	WriteJSON(w, http.StatusAccepted, map[string]any{"job_id": job.ID, "chunks_to_reembed": n, "estimated_tokens": tokens})
+}

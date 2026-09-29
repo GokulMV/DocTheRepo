@@ -60,11 +60,14 @@ func NewRouter(d Deps) http.Handler {
 	if d.Auth != nil {
 		ah := &authHandlers{svc: d.Auth, oidc: d.OIDC, secure: d.SecureCookies}
 		r.Route("/api/v1", func(r chi.Router) {
-			r.Use(authenticate(d.Auth))
-			ah.routes(r)
-			for _, mount := range d.V1 {
-				mount(r)
-			}
+			r.Get("/openapi.json", openapiHandler)
+			r.Group(func(r chi.Router) {
+				r.Use(authenticate(d.Auth))
+				ah.routes(r)
+				for _, mount := range d.V1 {
+					mount(r)
+				}
+			})
 		})
 	}
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {

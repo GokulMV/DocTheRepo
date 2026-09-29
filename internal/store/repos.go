@@ -335,3 +335,16 @@ func truncate(s string, n int) string {
 }
 
 var _ ports.PRStore = (*PRs)(nil)
+
+// ListAll lists every repository (enabled or not).
+func (r *Repos) ListAll(ctx context.Context) ([]ports.RepoConfig, error) {
+	rows, err := r.s.Q.ListAllRepos(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list repos: %w", err)
+	}
+	out := make([]ports.RepoConfig, len(rows))
+	for i, row := range rows {
+		out[i] = repoConfig(gen.ListEnabledReposRow(row))
+	}
+	return out, nil
+}

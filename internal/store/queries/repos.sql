@@ -81,3 +81,7 @@ SELECT * FROM prs WHERE state IN ('open', 'awaiting_review') ORDER BY repo_id, n
 -- name: SetPRState :execrows
 UPDATE prs SET state = sqlc.arg(state), note = sqlc.arg(note), updated_at = now()
 WHERE repo_id = sqlc.arg(repo_id) AND number = sqlc.arg(number);
+
+-- name: ListAllRepos :many
+SELECT r.*, extract(epoch FROM r.pr_stale_after)::bigint AS stale_seconds, c.type AS connector_type
+FROM repos r JOIN connectors c ON c.id = r.connector_id ORDER BY r.full_name;

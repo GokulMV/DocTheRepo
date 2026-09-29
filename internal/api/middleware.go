@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -175,3 +176,9 @@ func clientIP(r *http.Request) string {
 	}
 	return host
 }
+
+func encodeCursor(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
+
+var uuidPattern = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+func uuidLike(s string) bool { return uuidPattern.MatchString(s) }

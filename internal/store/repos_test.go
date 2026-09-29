@@ -174,8 +174,9 @@ func TestDocsTreeAndShelves(t *testing.T) {
 	d := store.NewDocs(st, cls)
 	require.NoError(t, d.SeedShelves(ctx))
 	require.NoError(t, d.SeedShelves(ctx), "seeding is idempotent")
-	require.NoError(t, d.ReplaceFile(ctx, rid, "acme/shop", "docs/adr/0001-postgres.md", "Use Postgres", []store.DocSection{{ChunkID: "c1", Title: "Decision"}}))
-	require.NoError(t, d.ReplaceFile(ctx, rid, "acme/shop", "docs/adr/0001-postgres.md", "Use Postgres", []store.DocSection{{ChunkID: "c2", Title: "Context"}, {ChunkID: "c1", Title: "Decision"}}))
+	require.NoError(t, d.ReplaceFile(ctx, rid, "acme/shop", ports.DocFile{Path: "docs/adr/0001-postgres.md", Summary: "Use Postgres", Sections: []store.DocSection{{ChunkID: "c1", Title: "Decision"}}}))
+	require.NoError(t, d.ReplaceFile(ctx, rid, "acme/shop", ports.DocFile{Path: "docs/adr/0001-postgres.md", Summary: "Use Postgres", Content: "# ADR",
+		Sections: []store.DocSection{{ChunkID: "c2", Title: "Context"}, {ChunkID: "c1", Title: "Decision"}}}))
 	roots, err := d.Children(ctx, rid, "")
 	require.NoError(t, err)
 	require.Len(t, roots, 1)
