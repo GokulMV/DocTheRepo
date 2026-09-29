@@ -29,6 +29,14 @@ Under construction, milestone by milestone (plan § 14). Implemented so far:
   a conformance suite; an LLM gateway that enforces the spend guard on every call, falls back on
   transient failures, repairs invalid JSON once, and records usage; encrypted provider keys; parity
   suites across all adapters.
+- **Phase 4 — Git hosts, ingest, push, pipeline**: GitHub (token or App) and GitLab (SaaS or
+  self-managed) adapters with a shared parity suite; webhook ingress at `/hooks/{github,gitlab}/{id}`
+  with signature checks, a bot-loop guard, and per-connector rate limits; polling for hosts that cannot
+  reach the Hub; the `code_push` pipeline end to end (triage → chunk → scoped context → docgen → doc
+  assembly → landing → index → knowledge graph → docs tree); three push modes (`pr_auto_merge` default,
+  `direct` with fallback, `pr_with_approver`, where the approver reviews under their own account) and a PR
+  lifecycle (merge when green, rebase or regenerate on conflict, close stale PRs, supersede older ones);
+  pgvector (default) and Qdrant vector indexes with zero-downtime reindex; Markdown import.
 
 ## Develop
 

@@ -8,3 +8,5 @@ dth.yaml
 .env
 web/node_modules/
 web/dist/
+/hub
+/dth

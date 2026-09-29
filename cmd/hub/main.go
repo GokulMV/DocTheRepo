@@ -73,7 +73,8 @@ func run(cfgPath string) error {
 	}
 
 	// Loaded eagerly so a missing or unreadable master key fails at startup, not on first use.
-	if _, err := openSecrets(cfg.Secrets); err != nil {
+	box, err := openSecrets(cfg.Secrets)
+	if err != nil {
 		return err
 	}
 
@@ -81,6 +82,10 @@ func run(cfgPath string) error {
 	q := queue.New(st, queue.Options{
 		MaxAttempts: cfg.Queue.MaxAttempts, BackoffBase: cfg.Queue.BackoffBase, BackoffMax: cfg.Queue.BackoffMax,
 	})
+	a, err := wire(ctx, cfg, st, box, q, log, metrics)
+	if err != nil {
+		return err
+	}
 
 	var wg sync.WaitGroup
 	errc := make(chan error, 4)
@@ -93,9 +98,27 @@ func run(cfgPath string) error {
 		pool := queue.NewPool(q, st.Pool, queue.PoolOptions{
 			Concurrency: conc, LeaseTTL: cfg.Queue.LeaseTTL, PollInterval: cfg.Queue.PollInterval,
 		}, log.With("component", "worker"), metrics)
-		// Job handlers are registered here as the pipelines that own them are built (plan § 14).
+		a.registerHandlers(pool)
 		wg.Add(1)
 		go func() { defer wg.Done(); pool.Run(ctx) }()
+		if !cfg.HasRole(config.RoleScheduler) {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				t := time.NewTicker(time.Minute)
+				defer t.Stop()
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case <-t.C:
+						if err := a.reloadGuard(ctx); err != nil {
+							log.Warn("reload spend limits failed", "err", err)
+						}
+					}
+				}
+			}()
+		}
 	}
 
 	if cfg.HasRole(config.RoleScheduler) {
@@ -121,6 +144,9 @@ func run(cfgPath string) error {
 			}
 			return nil
 		}})
+		for _, t := range a.tasks() {
+			sch.Add(t)
+		}
 		wg.Add(1)
 		go func() { defer wg.Done(); sch.Run(ctx) }()
 	}
@@ -129,7 +155,7 @@ func run(cfgPath string) error {
 	if cfg.HasRole(config.RoleAPI) {
 		h := api.NewRouter(api.Deps{Log: log, Metrics: metrics, Checks: map[string]api.ReadinessCheck{
 			"db": st.Ping,
-		}})
+		}, Git: a.ingest})
 		servers = append(servers, &http.Server{
 			Addr: cfg.Server.Listen, Handler: h,
 			ReadHeaderTimeout: 10 * time.Second, ReadTimeout: cfg.Server.ReadTimeout, WriteTimeout: cfg.Server.WriteTimeout,
