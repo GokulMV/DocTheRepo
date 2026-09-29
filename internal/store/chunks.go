@@ -218,7 +218,8 @@ func NodeID(repoID, p, chunkID string) string {
 
 // ReplaceFile writes one doc file and its sections into the Tree, creating directory nodes as needed,
 // and places the file on Library shelves.
-func (d *Docs) ReplaceFile(ctx context.Context, repoID, repoName, docPath, summary string, sections []DocSection) error {
+func (d *Docs) ReplaceFile(ctx context.Context, repoID, repoName string, f ports.DocFile) error {
+	docPath, summary, sections := f.Path, f.Summary, f.Sections
 	return d.s.InTx(ctx, func(q *gen.Queries, _ pgx.Tx) error {
 		parent := NodeID(repoID, "", "")
 		if err := q.UpsertDocNode(ctx, gen.UpsertDocNodeParams{ID: parent, RepoID: repoID, Kind: gen.DocNodeKindRepo, Path: "", Title: repoName}); err != nil {
@@ -240,7 +241,7 @@ func (d *Docs) ReplaceFile(ctx context.Context, repoID, repoName, docPath, summa
 		fileID := NodeID(repoID, docPath, "")
 		title := strings.TrimSuffix(path.Base(docPath), ".md")
 		if err := q.UpsertDocNode(ctx, gen.UpsertDocNodeParams{ID: fileID, RepoID: repoID, ParentID: &parent, Kind: gen.DocNodeKindFile,
-			Path: docPath, Title: title, Summary: summary, OrderKey: title}); err != nil {
+			Path: docPath, Title: title, Summary: summary, OrderKey: title, Content: f.Content, CommitSha: f.CommitSHA}); err != nil {
 			return err
 		}
 		if err := q.DeleteFileSections(ctx, gen.DeleteFileSectionsParams{RepoID: repoID, Path: docPath}); err != nil {

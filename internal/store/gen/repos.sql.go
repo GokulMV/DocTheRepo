@@ -359,6 +359,73 @@ func (q *Queries) InsertSavings(ctx context.Context, arg InsertSavingsParams) er
 	return err
 }
 
+const listAllRepos = `-- name: ListAllRepos :many
+SELECT r.id, r.connector_id, r.full_name, r.default_branch, r.tracked_branch, r.docs_path, r.push_mode, r.on_reject, r.approver, r.last_processed_sha, r.service_name, r.owners, r.enabled, r.created_at, r.updated_at, r.pr_conflict_strategy, r.pr_stale_after, extract(epoch FROM r.pr_stale_after)::bigint AS stale_seconds, c.type AS connector_type
+FROM repos r JOIN connectors c ON c.id = r.connector_id ORDER BY r.full_name
+`
+
+type ListAllReposRow struct {
+	ID                 string          `json:"id"`
+	ConnectorID        string          `json:"connector_id"`
+	FullName           string          `json:"full_name"`
+	DefaultBranch      string          `json:"default_branch"`
+	TrackedBranch      string          `json:"tracked_branch"`
+	DocsPath           string          `json:"docs_path"`
+	PushMode           PushMode        `json:"push_mode"`
+	OnReject           string          `json:"on_reject"`
+	Approver           string          `json:"approver"`
+	LastProcessedSha   string          `json:"last_processed_sha"`
+	ServiceName        string          `json:"service_name"`
+	Owners             []string        `json:"owners"`
+	Enabled            bool            `json:"enabled"`
+	CreatedAt          time.Time       `json:"created_at"`
+	UpdatedAt          time.Time       `json:"updated_at"`
+	PrConflictStrategy string          `json:"pr_conflict_strategy"`
+	PrStaleAfter       pgtype.Interval `json:"pr_stale_after"`
+	StaleSeconds       int64           `json:"stale_seconds"`
+	ConnectorType      ConnectorType   `json:"connector_type"`
+}
+
+func (q *Queries) ListAllRepos(ctx context.Context) ([]ListAllReposRow, error) {
+	rows, err := q.db.Query(ctx, listAllRepos)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListAllReposRow{}
+	for rows.Next() {
+		var i ListAllReposRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.ConnectorID,
+			&i.FullName,
+			&i.DefaultBranch,
+			&i.TrackedBranch,
+			&i.DocsPath,
+			&i.PushMode,
+			&i.OnReject,
+			&i.Approver,
+			&i.LastProcessedSha,
+			&i.ServiceName,
+			&i.Owners,
+			&i.Enabled,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PrConflictStrategy,
+			&i.PrStaleAfter,
+			&i.StaleSeconds,
+			&i.ConnectorType,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listConnectorsByType = `-- name: ListConnectorsByType :many
 SELECT id, type, name, config, creds_ciphertext, webhook_secret_ct, mode,
        extract(epoch FROM poll_interval)::bigint AS poll_seconds, enabled, health, last_error, last_sync_at

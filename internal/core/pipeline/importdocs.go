@@ -71,8 +71,8 @@ func (p *Pipeline) ImportDocs(ctx context.Context, job ports.Job) (ports.Outcome
 	var embed []ports.Chunk
 	var w ports.ChunkWrite
 	type treeDoc struct {
-		path, summary string
-		sections      []ports.DocSection
+		path, summary, content string
+		sections               []ports.DocSection
 	}
 	var tree []treeDoc
 	for _, f := range files {
@@ -104,7 +104,7 @@ func (p *Pipeline) ImportDocs(ctx context.Context, job ports.Job) (ports.Outcome
 		w.Revive = append(w.Revive, d.Revived...)
 		w.Remove = append(w.Remove, d.Removed...)
 		embed = append(embed, d.NeedsEmbedding()...)
-		td := treeDoc{path: f, summary: firstParagraph(b)}
+		td := treeDoc{path: f, summary: firstParagraph(b), content: string(b)}
 		for _, ch := range fresh {
 			td.sections = append(td.sections, ports.DocSection{ChunkID: ch.ID, Title: ch.Symbol})
 		}
@@ -123,7 +123,8 @@ func (p *Pipeline) ImportDocs(ctx context.Context, job ports.Job) (ports.Outcome
 	}
 	res.Embedded = n
 	for _, td := range tree {
-		if err := p.Docs.ReplaceFile(ctx, repo.ID, repo.FullName, td.path, td.summary, td.sections); err != nil {
+		if err := p.Docs.ReplaceFile(ctx, repo.ID, repo.FullName, ports.DocFile{Path: td.path, Summary: td.summary, Content: td.content,
+			CommitSHA: ref, Sections: td.sections}); err != nil {
 			return ports.Outcome{}, err
 		}
 	}

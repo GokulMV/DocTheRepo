@@ -72,7 +72,7 @@ func (q *Queries) DeleteFileSections(ctx context.Context, arg DeleteFileSections
 }
 
 const docChildren = `-- name: DocChildren :many
-SELECT id, repo_id, parent_id, kind, path, title, summary, chunk_id, order_key, updated_at FROM doc_nodes WHERE repo_id = $1 AND parent_id IS NOT DISTINCT FROM $2
+SELECT id, repo_id, parent_id, kind, path, title, summary, chunk_id, order_key, updated_at, content, commit_sha FROM doc_nodes WHERE repo_id = $1 AND parent_id IS NOT DISTINCT FROM $2
 ORDER BY kind, order_key, title
 `
 
@@ -101,6 +101,8 @@ func (q *Queries) DocChildren(ctx context.Context, arg DocChildrenParams) ([]Doc
 			&i.ChunkID,
 			&i.OrderKey,
 			&i.UpdatedAt,
+			&i.Content,
+			&i.CommitSha,
 		); err != nil {
 			return nil, err
 		}
@@ -273,23 +275,26 @@ func (q *Queries) ShelfItems(ctx context.Context, slug string) ([]ShelfItem, err
 }
 
 const upsertDocNode = `-- name: UpsertDocNode :exec
-INSERT INTO doc_nodes (id, repo_id, parent_id, kind, path, title, summary, chunk_id, order_key, updated_at)
+INSERT INTO doc_nodes (id, repo_id, parent_id, kind, path, title, summary, chunk_id, order_key, content, commit_sha, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6,
-        $7, $8, $9, now())
+        $7, $8, $9, $10, $11, now())
 ON CONFLICT (id) DO UPDATE SET parent_id = EXCLUDED.parent_id, title = EXCLUDED.title, summary = EXCLUDED.summary,
-    chunk_id = EXCLUDED.chunk_id, order_key = EXCLUDED.order_key, updated_at = now()
+    chunk_id = EXCLUDED.chunk_id, order_key = EXCLUDED.order_key, content = EXCLUDED.content, commit_sha = EXCLUDED.commit_sha,
+    updated_at = now()
 `
 
 type UpsertDocNodeParams struct {
-	ID       string      `json:"id"`
-	RepoID   string      `json:"repo_id"`
-	ParentID *string     `json:"parent_id"`
-	Kind     DocNodeKind `json:"kind"`
-	Path     string      `json:"path"`
-	Title    string      `json:"title"`
-	Summary  string      `json:"summary"`
-	ChunkID  *string     `json:"chunk_id"`
-	OrderKey string      `json:"order_key"`
+	ID        string      `json:"id"`
+	RepoID    string      `json:"repo_id"`
+	ParentID  *string     `json:"parent_id"`
+	Kind      DocNodeKind `json:"kind"`
+	Path      string      `json:"path"`
+	Title     string      `json:"title"`
+	Summary   string      `json:"summary"`
+	ChunkID   *string     `json:"chunk_id"`
+	OrderKey  string      `json:"order_key"`
+	Content   string      `json:"content"`
+	CommitSha string      `json:"commit_sha"`
 }
 
 func (q *Queries) UpsertDocNode(ctx context.Context, arg UpsertDocNodeParams) error {
@@ -303,6 +308,8 @@ func (q *Queries) UpsertDocNode(ctx context.Context, arg UpsertDocNodeParams) er
 		arg.Summary,
 		arg.ChunkID,
 		arg.OrderKey,
+		arg.Content,
+		arg.CommitSha,
 	)
 	return err
 }

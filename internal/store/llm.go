@@ -253,3 +253,8 @@ func (ps *ProviderSource) ProviderConfig(ctx context.Context, id string) (ports.
 	}
 	return cfg, r.Enabled, nil
 }
+
+// ListRoutes lists every configured feature route.
+func (r *Routes) ListRoutes(ctx context.Context) ([]gen.ListRoutesRow, error) {
+	return r.s.Q.ListRoutes(ctx)
+}

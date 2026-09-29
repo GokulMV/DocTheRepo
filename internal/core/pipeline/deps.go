@@ -36,7 +36,7 @@ type GraphStore interface {
 
 // DocsStore is the docs Tree.
 type DocsStore interface {
-	ReplaceFile(ctx context.Context, repoID, repoName, docPath, summary string, sections []ports.DocSection) error
+	ReplaceFile(ctx context.Context, repoID, repoName string, f ports.DocFile) error
 	RemoveFile(ctx context.Context, repoID, docPath string) error
 }
 

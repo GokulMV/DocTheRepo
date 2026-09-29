@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -54,12 +55,20 @@ type app struct {
 	oidc     *auth.OIDC
 	qa       *store.QA
 	rag      *rag.Engine
+	box      *secrets.Box
+	llmPool  *llm.Pool
+	provSrc  *store.ProviderSource
+	routes   *store.Routes
+	repos    *store.Repos
+	conns    *store.Connectors
+	browse   *store.Browse
 }
 
 func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.Box, q *queue.Queue, log *slog.Logger, m *observability.Metrics) (*app, error) {
-	a := &app{cfg: cfg, log: log, st: st, q: q}
+	a := &app{cfg: cfg, log: log, st: st, q: q, box: box}
 	conns := store.NewConnectors(st, box, secrets.ConnectorCredsAAD, secrets.ConnectorWebhookAAD)
 	repos := store.NewRepos(st)
+	a.conns, a.repos, a.browse = conns, repos, store.NewBrowse(st)
 	prs := store.NewPRs(st)
 	a.hosts = &codehost.Factory{Load: conns.Get}
 
@@ -68,8 +77,10 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 		return nil, fmt.Errorf("load spend limits: %w", err)
 	}
 	a.enforcer = spendguard.NewEnforcer(guard, store.NewLedger(st), nil)
-	providers := llm.NewPool(&store.ProviderSource{Providers: store.NewProviders(st), Box: box, AAD: secrets.ProviderKeyAAD}, 5*time.Minute)
-	gw := llmgateway.New(a.enforcer, store.NewRoutes(st), providers, cfg.Spend.AllowUnreportedUsage)
+	a.provSrc = &store.ProviderSource{Providers: store.NewProviders(st), Box: box, AAD: secrets.ProviderKeyAAD}
+	a.llmPool = llm.NewPool(a.provSrc, 5*time.Minute)
+	a.routes = store.NewRoutes(st)
+	gw := llmgateway.New(a.enforcer, a.routes, a.llmPool, cfg.Spend.AllowUnreportedUsage)
 
 	switch cfg.Vector.Backend {
 	case "qdrant":
@@ -196,5 +207,41 @@ func bootstrapOwner(ctx context.Context, cfg config.Config, st *store.Store, svc
 
 // v1Routes mounts the authenticated resource APIs (added as each area is built).
 func (a *app) v1Routes() []func(chi.Router) {
-	return []func(chi.Router){api.AskRoutes(a.rag, a.qa, a.auth)}
+	admin := api.AdminDeps{Auth: a.auth, Repos: a.repos, Connectors: a.conns, Providers: a.provSrc.Providers, Routes: a.routes,
+		Browse: a.browse, Queue: a.q, Seal: a.box.Seal, ProviderAAD: secrets.ProviderKeyAAD, ProviderKinds: llm.Kinds(),
+		InvalidateProvider: a.llmPool.Invalidate, Host: a.hosts.Host, InvalidateHost: a.hosts.Invalidate, DryRun: a.pipe.CodePush,
+		ReloadSpend: a.reloadGuard,
+		TestProvider: func(ctx context.Context, id, model string) (time.Duration, error) {
+			cfg, _, err := a.provSrc.ProviderConfig(ctx, id)
+			if err != nil {
+				return 0, err
+			}
+			return llm.Test(ctx, cfg, model)
+		}}
+	return []func(chi.Router){
+		api.AskRoutes(a.rag, a.qa, a.auth),
+		api.BrowseRoutes(a.browse, a.auth),
+		api.AdminRoutes(admin),
+		api.OpsRoutes(a.q, a.browse, a.auth),
+	}
+}
+
+// readiness are the /readyz checks beyond the database.
+func (a *app) readiness() map[string]api.ReadinessCheck {
+	return map[string]api.ReadinessCheck{
+		"db": a.st.Ping,
+		// A fresh install has no routes yet and must still be ready (the setup UI configures them); only
+		// failures to read routing are fatal.
+		"llm_routes": func(ctx context.Context) error {
+			_, err := a.routes.Route(ctx, llmgateway.FeatureQA)
+			if errors.Is(err, llmgateway.ErrNoRoute) {
+				return nil
+			}
+			return err
+		},
+		"vector": func(ctx context.Context) error {
+			_, err := a.index.State(ctx)
+			return err
+		},
+	}
 }

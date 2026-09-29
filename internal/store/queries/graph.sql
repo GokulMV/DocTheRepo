@@ -29,11 +29,12 @@ FROM edges x JOIN entities s ON s.id = x.src_id JOIN entities d ON d.id = x.dst_
 WHERE x.src_id = sqlc.arg(id) AND x.deleted_at IS NULL ORDER BY x.kind, d.key;
 
 -- name: UpsertDocNode :exec
-INSERT INTO doc_nodes (id, repo_id, parent_id, kind, path, title, summary, chunk_id, order_key, updated_at)
+INSERT INTO doc_nodes (id, repo_id, parent_id, kind, path, title, summary, chunk_id, order_key, content, commit_sha, updated_at)
 VALUES (sqlc.arg(id), sqlc.arg(repo_id), sqlc.narg(parent_id), sqlc.arg(kind), sqlc.arg(path), sqlc.arg(title),
-        sqlc.arg(summary), sqlc.narg(chunk_id), sqlc.arg(order_key), now())
+        sqlc.arg(summary), sqlc.narg(chunk_id), sqlc.arg(order_key), sqlc.arg(content), sqlc.arg(commit_sha), now())
 ON CONFLICT (id) DO UPDATE SET parent_id = EXCLUDED.parent_id, title = EXCLUDED.title, summary = EXCLUDED.summary,
-    chunk_id = EXCLUDED.chunk_id, order_key = EXCLUDED.order_key, updated_at = now();
+    chunk_id = EXCLUDED.chunk_id, order_key = EXCLUDED.order_key, content = EXCLUDED.content, commit_sha = EXCLUDED.commit_sha,
+    updated_at = now();
 
 -- name: DeleteFileSections :exec
 DELETE FROM doc_nodes WHERE repo_id = sqlc.arg(repo_id) AND path = sqlc.arg(path) AND kind = 'section';

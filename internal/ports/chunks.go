@@ -56,3 +56,12 @@ type DocSection struct {
 	ChunkID string
 	Title   string
 }
+
+// DocFile is a doc file as the Tree stores it.
+type DocFile struct {
+	Path      string
+	Summary   string
+	Content   string
+	CommitSHA string
+	Sections  []DocSection
+}
