@@ -1,0 +1,10 @@
+DROP TABLE IF EXISTS spend_limits;
+DROP TYPE IF EXISTS breach_action;
+DROP TYPE IF EXISTS spend_window;
+DROP TYPE IF EXISTS spend_scope;
+DROP TABLE IF EXISTS savings_events;
+DROP TYPE IF EXISTS savings_kind;
+DROP TABLE IF EXISTS usage_rollups_hourly;
+DROP TABLE IF EXISTS usage_events;
+DROP FUNCTION IF EXISTS ensure_month_partitions(text, integer);
+DROP TYPE IF EXISTS usage_outcome;

@@ -10,7 +10,7 @@
 | # | Decision | Assumed choice | Source |
 |---|---|---|---|
 | D1 | Users | Internal teams (not customer-facing), Okta + Google Workspace SSO via OIDC, roles Owner/Admin/Editor/Viewer, per-repo access | You confirmed |
-| D2 | Backend language | Go 1.23 — reasons and rejected alternatives in § 3.1 | You delegated → chosen |
+| D2 | Backend language | Go 1.25 (current supported release; 1.23 reached end of support in 2025 and current pgx/migrate releases require 1.25) — reasons and rejected alternatives in § 3.1 | You delegated → chosen |
 | D3 | Web UI | React 18 + TypeScript + Vite, embedded in the Go binary (§ 3.1) | You delegated → chosen |
 | D4 | System of record | PostgreSQL 16 + pgvector (relational + graph + vectors + job queue in one store) | **Suggested — confirm** |
 | D5 | Sensitive data | Customers bring their own LLM/keys, so PII policy is theirs: **credential/secret scrubbing always on** (a leaked AWS key in a prompt is never acceptable); **PII redaction is a per-provider toggle, default OFF** | You answered → adjusted (see § 8.8) |
@@ -117,7 +117,7 @@ where, and what was saved.
 
 | Layer | Technology | Why chosen |
 |---|---|---|
-| Backend language | Go 1.23 | Carried from the original plan (required by you): one static binary, low memory, strong concurrency for connector polling |
+| Backend language | Go 1.25 | Carried from the original plan (required by you): one static binary, low memory, strong concurrency for connector polling |
 | HTTP router | `net/http` + `go-chi/chi/v5` | Standard-library-first; chi adds routing/middleware only |
 | Web UI | React 18 + TypeScript 5 + Vite 5 | Largest ecosystem for data-heavy UIs; Vite gives fast builds; output is static files embedded into the Go binary via `embed` so there is still one artifact |
 | UI components | Tailwind CSS 3 + shadcn/ui (Radix primitives) | Accessible primitives, no runtime theming library, easy dark mode |
@@ -170,7 +170,7 @@ local one-command install and cloud deploy, must be easy to extend):
 
 | # | Option | Fit | Why it fits THIS project | Watch out for |
 |---|---|---|---|---|
-| 1 | **Go 1.23** | ★★★★★ | Goroutines make 15+ concurrent pollers/stream consumers and 20k events/s aggregation simple and cheap; one static binary (~40 MB image) for `dth up`, ECS, Cloud Run, Helm; ~50 MB RAM per replica and < 1s startup (Cloud Run friendly); official Tree-sitter bindings; official AWS, GCP, GitHub, GitLab SDKs; the infra ecosystem the Hub sits next to (Kubernetes, Terraform, Prometheus, Grafana) is Go | More boilerplate than Java/Kotlin; no heavyweight AI framework (not needed — LLM calls are plain HTTP) |
+| 1 | **Go 1.25** | ★★★★★ | Goroutines make 15+ concurrent pollers/stream consumers and 20k events/s aggregation simple and cheap; one static binary (~40 MB image) for `dth up`, ECS, Cloud Run, Helm; ~50 MB RAM per replica and < 1s startup (Cloud Run friendly); official Tree-sitter bindings; official AWS, GCP, GitHub, GitLab SDKs; the infra ecosystem the Hub sits next to (Kubernetes, Terraform, Prometheus, Grafana) is Go | More boilerplate than Java/Kotlin; no heavyweight AI framework (not needed — LLM calls are plain HTTP) |
 | 2 | Java 17 + Spring Boot 3 | ★★★★☆ | Excellent Spring Security OIDC (Okta/Google), mature enterprise integrations, your team's interview language | Official Tree-sitter Java bindings (`jtreesitter`) need Java 22+ (Foreign Function & Memory API) — conflicts with Java 17; 300–500 MB RAM per replica and slow cold starts raise Fargate/Cloud Run cost |
 | 3 | Kotlin + Ktor/Spring | ★★★☆☆ | Concise, coroutines for concurrency | Same JVM Tree-sitter and memory issues; smaller hiring pool |
 | 4 | Python + FastAPI | ★★★☆☆ | Richest AI/RAG libraries | GIL limits CPU-bound fingerprinting/AST work at 20k events/s; packaging a one-command local install is heavier; dynamic typing hurts a 15-connector codebase |
@@ -477,7 +477,7 @@ Three rules keep this cheap at your volume:
 
 ## 6. Data Design
 
-All tables in schema `dth`. `id` columns are UUIDv7 (time-ordered, index-friendly) unless stated.
+All tables live in the `public` schema of a dedicated `dth` database. `id` columns are UUIDv7 (time-ordered, index-friendly) unless stated.
 Timestamps are `timestamptz`. JSON is `jsonb`.
 
 ### 6.1 Identity & access
@@ -1037,7 +1037,8 @@ DocTheRepo/
 │   ├── config/                          # Bootstrap YAML + env loading and validation
 │   ├── store/                           # pgx pool, migrations runner, repositories
 │   │   ├── queries/                     # sqlc .sql query files
-│   │   └── gen/                         # sqlc generated code (committed)
+│   │   ├── gen/                         # sqlc generated code (committed)
+│   │   └── storetest/                   # Test helper: real Postgres+pgvector via testcontainers, DB per test
 │   ├── queue/                           # Postgres job queue, worker pool, per-repo ordering
 │   ├── scheduler/                       # Leader-elected periodic tasks
 │   ├── auth/                            # OIDC, sessions, PATs, RBAC, repo ACL

@@ -1,0 +1,3 @@
+DROP TABLE IF EXISTS index_version;
+DROP TABLE IF EXISTS chunks;
+DROP TYPE IF EXISTS chunk_source;

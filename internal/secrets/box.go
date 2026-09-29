@@ -1,0 +1,108 @@
+// Package secrets implements envelope encryption for connector credentials and LLM keys: each secret is
+// encrypted with a fresh AES-256-GCM data key, and that data key is wrapped by a KeyEncrypter.
+package secrets
+
+import (
+	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"encoding/binary"
+	"errors"
+	"fmt"
+
+	"github.com/GokulMV/DocTheRepo/internal/ports"
+)
+
+const formatV1 byte = 1
+
+// Box seals and opens secrets.
+type Box struct{ kek ports.KeyEncrypter }
+
+// NewBox returns a Box using kek to wrap data keys.
+func NewBox(kek ports.KeyEncrypter) *Box { return &Box{kek: kek} }
+
+// ErrCorrupt is returned for ciphertexts that are malformed or fail authentication.
+var ErrCorrupt = errors.New("secret ciphertext is corrupt or was bound to a different record")
+
+// Seal encrypts plaintext. aad binds the ciphertext to its owner (e.g. "connector:<id>:creds") so a
+// ciphertext copied onto another row fails to open.
+//
+// Layout: version(1) | keyIDLen(1) | keyID | wrappedLen(2, BE) | wrappedDEK | nonce(12) | ciphertext+tag
+func (b *Box) Seal(ctx context.Context, plaintext, aad []byte) ([]byte, error) {
+	dek := make([]byte, 32)
+	if _, err := rand.Read(dek); err != nil {
+		return nil, fmt.Errorf("generate data key: %w", err)
+	}
+	defer clear(dek)
+	wrapped, err := b.kek.WrapKey(ctx, dek)
+	if err != nil {
+		return nil, fmt.Errorf("wrap data key: %w", err)
+	}
+	gcm, err := newGCM(dek)
+	if err != nil {
+		return nil, err
+	}
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, fmt.Errorf("generate nonce: %w", err)
+	}
+	keyID := b.kek.KeyID()
+	if len(keyID) > 255 || len(wrapped) > 65535 {
+		return nil, errors.New("key id or wrapped key too long")
+	}
+	out := make([]byte, 0, 4+len(keyID)+len(wrapped)+len(nonce)+len(plaintext)+gcm.Overhead())
+	out = append(out, formatV1, byte(len(keyID)))
+	out = append(out, keyID...)
+	out = binary.BigEndian.AppendUint16(out, uint16(len(wrapped)))
+	out = append(out, wrapped...)
+	out = append(out, nonce...)
+	return gcm.Seal(out, nonce, plaintext, aad), nil
+}
+
+// Open decrypts a ciphertext produced by Seal with the same aad.
+func (b *Box) Open(ctx context.Context, blob, aad []byte) ([]byte, error) {
+	if len(blob) < 2 || blob[0] != formatV1 {
+		return nil, ErrCorrupt
+	}
+	p := 1
+	kl := int(blob[p])
+	p++
+	if len(blob) < p+kl+2 {
+		return nil, ErrCorrupt
+	}
+	keyID := string(blob[p : p+kl])
+	p += kl
+	if keyID != b.kek.KeyID() {
+		return nil, fmt.Errorf("secret was sealed with key %q but the configured key is %q", keyID, b.kek.KeyID())
+	}
+	wl := int(binary.BigEndian.Uint16(blob[p:]))
+	p += 2
+	if len(blob) < p+wl+12 {
+		return nil, ErrCorrupt
+	}
+	dek, err := b.kek.UnwrapKey(ctx, blob[p:p+wl])
+	if err != nil {
+		return nil, fmt.Errorf("unwrap data key: %w", err)
+	}
+	defer clear(dek)
+	p += wl
+	gcm, err := newGCM(dek)
+	if err != nil {
+		return nil, err
+	}
+	nonce := blob[p : p+gcm.NonceSize()]
+	pt, err := gcm.Open(nil, nonce, blob[p+gcm.NonceSize():], aad)
+	if err != nil {
+		return nil, ErrCorrupt
+	}
+	return pt, nil
+}
+
+func newGCM(key []byte) (cipher.AEAD, error) {
+	blk, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, fmt.Errorf("init cipher: %w", err)
+	}
+	return cipher.NewGCM(blk)
+}

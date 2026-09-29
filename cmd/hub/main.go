@@ -1,0 +1,204 @@
+// Command hub runs the DocTheRepo Hub server. One binary serves three roles, selected with --roles or
+// DTH_ROLES: api (HTTP + UI), worker (job handlers), scheduler (leader-elected maintenance). Locally all
+// three run in one process; in the cloud they run as separate services from the same image.
+package main
+
+import (
+	"context"
+	"errors"
+	"flag"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+
+	"github.com/GokulMV/DocTheRepo/internal/adapters/secrets/localfile"
+	"github.com/GokulMV/DocTheRepo/internal/api"
+	"github.com/GokulMV/DocTheRepo/internal/config"
+	"github.com/GokulMV/DocTheRepo/internal/observability"
+	"github.com/GokulMV/DocTheRepo/internal/ports"
+	"github.com/GokulMV/DocTheRepo/internal/queue"
+	"github.com/GokulMV/DocTheRepo/internal/scheduler"
+	"github.com/GokulMV/DocTheRepo/internal/secrets"
+	"github.com/GokulMV/DocTheRepo/internal/store"
+)
+
+// version is set at build time with -ldflags "-X main.version=...".
+var version = "dev"
+
+func main() {
+	cfgPath := flag.String("config", envOr("DTH_CONFIG", "dth.yaml"), "path to the bootstrap config file (optional)")
+	roles := flag.String("roles", "", "comma-separated roles to run (api,worker,scheduler); overrides config")
+	flag.Parse()
+	if *roles != "" {
+		os.Setenv("DTH_ROLES", *roles)
+	}
+	if err := run(*cfgPath); err != nil {
+		fmt.Fprintln(os.Stderr, "dth-hub:", err)
+		os.Exit(1)
+	}
+}
+
+func run(cfgPath string) error {
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		return err
+	}
+	log := observability.NewLogger(os.Stderr, cfg.Logging.Format, cfg.Logging.Level)
+	slog.SetDefault(log)
+	log.Info("starting", "version", version, "roles", cfg.Roles)
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	st, err := store.Open(ctx, store.Options{
+		URL: cfg.Database.URL(), MaxConns: cfg.Database.MaxConns,
+		ConnectTimeout: cfg.Database.ConnectTimeout, StatementTimeout: cfg.Database.StatementTimeout,
+	})
+	if err != nil {
+		return err
+	}
+	defer st.Close()
+	if cfg.Database.MigrateOnStart {
+		v, err := st.Migrate(ctx)
+		if err != nil {
+			return err
+		}
+		log.Info("database migrated", "version", v)
+	}
+
+	// Loaded eagerly so a missing or unreadable master key fails at startup, not on first use.
+	if _, err := openSecrets(cfg.Secrets); err != nil {
+		return err
+	}
+
+	metrics := observability.NewMetrics()
+	q := queue.New(st, queue.Options{
+		MaxAttempts: cfg.Queue.MaxAttempts, BackoffBase: cfg.Queue.BackoffBase, BackoffMax: cfg.Queue.BackoffMax,
+	})
+
+	var wg sync.WaitGroup
+	errc := make(chan error, 4)
+
+	if cfg.HasRole(config.RoleWorker) {
+		conc := map[ports.JobType]int{}
+		for k, v := range cfg.Queue.Concurrency {
+			conc[ports.JobType(k)] = v
+		}
+		pool := queue.NewPool(q, st.Pool, queue.PoolOptions{
+			Concurrency: conc, LeaseTTL: cfg.Queue.LeaseTTL, PollInterval: cfg.Queue.PollInterval,
+		}, log.With("component", "worker"), metrics)
+		// Job handlers are registered here as the pipelines that own them are built (plan § 14).
+		wg.Add(1)
+		go func() { defer wg.Done(); pool.Run(ctx) }()
+	}
+
+	if cfg.HasRole(config.RoleScheduler) {
+		sch := scheduler.New(st.Pool, log, 10*time.Second)
+		sch.Add(scheduler.Task{Name: "reclaim_expired_leases", Every: 30 * time.Second, RunFirst: true, Fn: func(ctx context.Context) error {
+			rows, err := q.ReclaimExpired(ctx)
+			for _, r := range rows {
+				log.Warn("reclaimed job with expired lease", "job_id", r.ID, "job_type", r.Type, "new_status", r.Status)
+			}
+			return err
+		}})
+		sch.Add(scheduler.Task{Name: "ensure_partitions", Every: 24 * time.Hour, RunFirst: true, Fn: func(ctx context.Context) error {
+			_, err := st.Pool.Exec(ctx, "SELECT ensure_month_partitions('usage_events', 3)")
+			return err
+		}})
+		sch.Add(scheduler.Task{Name: "queue_depth_metric", Every: 15 * time.Second, RunFirst: true, Fn: func(ctx context.Context) error {
+			d, err := q.Depth(ctx)
+			if err != nil {
+				return err
+			}
+			for _, t := range ports.AllJobTypes {
+				metrics.QueueDepth.WithLabelValues(string(t)).Set(float64(d[t]))
+			}
+			return nil
+		}})
+		wg.Add(1)
+		go func() { defer wg.Done(); sch.Run(ctx) }()
+	}
+
+	var servers []*http.Server
+	if cfg.HasRole(config.RoleAPI) {
+		h := api.NewRouter(api.Deps{Log: log, Metrics: metrics, Checks: map[string]api.ReadinessCheck{
+			"db": st.Ping,
+		}})
+		servers = append(servers, &http.Server{
+			Addr: cfg.Server.Listen, Handler: h,
+			ReadHeaderTimeout: 10 * time.Second, ReadTimeout: cfg.Server.ReadTimeout, WriteTimeout: cfg.Server.WriteTimeout,
+		})
+	}
+	if cfg.Server.MetricsListen != "" {
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", metrics.Handler())
+		servers = append(servers, &http.Server{Addr: cfg.Server.MetricsListen, Handler: mux, ReadHeaderTimeout: 10 * time.Second})
+	}
+	for _, s := range servers {
+		wg.Add(1)
+		go func(s *http.Server) {
+			defer wg.Done()
+			log.Info("listening", "addr", s.Addr)
+			if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				errc <- fmt.Errorf("listen %s: %w", s.Addr, err)
+			}
+		}(s)
+	}
+
+	var runErr error
+	select {
+	case <-ctx.Done():
+		log.Info("shutting down")
+	case runErr = <-errc:
+		log.Error("fatal server error; shutting down", "err", runErr)
+		stop()
+	}
+	sctx, cancel := context.WithTimeout(context.Background(), cfg.Server.ShutdownGrace)
+	defer cancel()
+	for _, s := range servers {
+		_ = s.Shutdown(sctx)
+	}
+	done := make(chan struct{})
+	go func() { wg.Wait(); close(done) }()
+	select {
+	case <-done:
+	case <-sctx.Done():
+		log.Warn("shutdown grace period elapsed; exiting with work in flight (leases will be reclaimed)")
+	}
+	return runErr
+}
+
+func openSecrets(c config.SecretsConfig) (*secrets.Box, error) {
+	switch c.Provider {
+	case "localfile":
+		kek, err := localfile.Open(expandHome(c.LocalKeyFile))
+		if err != nil {
+			return nil, err
+		}
+		return secrets.NewBox(kek), nil
+	default:
+		return nil, fmt.Errorf("secrets.provider %q is not available in this build yet; use localfile", c.Provider)
+	}
+}
+
+func expandHome(p string) string {
+	if strings.HasPrefix(p, "~/") {
+		if h, err := os.UserHomeDir(); err == nil {
+			return h + p[1:]
+		}
+	}
+	return p
+}
+
+func envOr(k, def string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
+	}
+	return def
+}
