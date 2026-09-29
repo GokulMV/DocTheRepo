@@ -17,6 +17,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/GokulMV/DocTheRepo/internal/adapters/secrets/awskms"
+	"github.com/GokulMV/DocTheRepo/internal/adapters/secrets/gcpkms"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/secrets/localfile"
 	"github.com/GokulMV/DocTheRepo/internal/api"
 	"github.com/GokulMV/DocTheRepo/internal/config"
@@ -33,6 +35,10 @@ import (
 var version = "dev"
 
 func main() {
+	// `dth-hub healthcheck` probes /readyz on the local listener (container healthchecks; the image has no curl).
+	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
+		os.Exit(healthcheck())
+	}
 	cfgPath := flag.String("config", envOr("DTH_CONFIG", "dth.yaml"), "path to the bootstrap config file (optional)")
 	roles := flag.String("roles", "", "comma-separated roles to run (api,worker,scheduler); overrides config")
 	flag.Parse()
@@ -74,7 +80,7 @@ func run(cfgPath string) error {
 	}
 
 	// Loaded eagerly so a missing or unreadable master key fails at startup, not on first use.
-	box, err := openSecrets(cfg.Secrets)
+	box, err := openSecrets(ctx, cfg.Secrets)
 	if err != nil {
 		return err
 	}
@@ -164,6 +170,8 @@ func run(cfgPath string) error {
 	if cfg.Server.MetricsListen != "" {
 		mux := http.NewServeMux()
 		mux.Handle("/metrics", metrics.Handler())
+		// Liveness for roles without the API listener (Cloud Run and Kubernetes probe worker/scheduler here).
+		mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok")) })
 		servers = append(servers, &http.Server{Addr: cfg.Server.MetricsListen, Handler: mux, ReadHeaderTimeout: 10 * time.Second})
 	}
 	for _, s := range servers {
@@ -200,17 +208,62 @@ func run(cfgPath string) error {
 	return runErr
 }
 
-func openSecrets(c config.SecretsConfig) (*secrets.Box, error) {
+func openSecrets(ctx context.Context, c config.SecretsConfig) (*secrets.Box, error) {
+	var (
+		kek ports.KeyEncrypter
+		err error
+	)
 	switch c.Provider {
 	case "localfile":
-		kek, err := localfile.Open(expandHome(c.LocalKeyFile))
-		if err != nil {
-			return nil, err
+		if v := os.Getenv("DTH_LOCAL_KEY"); v != "" {
+			kek, err = localfile.FromBase64(v)
+		} else {
+			kek, err = localfile.Open(expandHome(c.LocalKeyFile))
 		}
-		return secrets.NewBox(kek), nil
+	case "awskms":
+		kek, err = awskms.New(ctx, c.KMSKeyID)
+	case "gcpkms":
+		kek, err = gcpkms.New(ctx, c.KMSKeyID)
 	default:
-		return nil, fmt.Errorf("secrets.provider %q is not available in this build yet; use localfile", c.Provider)
+		return nil, fmt.Errorf("secrets.provider %q: use localfile, awskms, or gcpkms", c.Provider)
 	}
+	if err != nil {
+		return nil, err
+	}
+	box := secrets.NewBox(kek)
+	// Prove the key works at startup (a missing KMS permission fails here, not on the first secret).
+	probe, err := box.Seal(ctx, []byte("probe"), []byte("startup"))
+	if err == nil {
+		_, err = box.Open(ctx, probe, []byte("startup"))
+	}
+	if err != nil {
+		return nil, fmt.Errorf("secrets provider %s is not usable: %w", c.Provider, err)
+	}
+	return box, nil
+}
+
+// healthcheck probes the local process: /readyz on the API listener, or /healthz on the metrics listener
+// when this container runs only worker/scheduler roles (distroless images have no curl).
+func healthcheck() int {
+	addr, path := envOr("DTH_LISTEN", "127.0.0.1:8080"), "/readyz"
+	if roles := os.Getenv("DTH_ROLES"); roles != "" && !strings.Contains(roles, "api") {
+		addr, path = envOr("DTH_METRICS_LISTEN", "127.0.0.1:9090"), "/healthz"
+	}
+	if strings.HasPrefix(addr, "0.0.0.0:") || strings.HasPrefix(addr, ":") {
+		addr = "127.0.0.1:" + addr[strings.LastIndex(addr, ":")+1:]
+	}
+	c := &http.Client{Timeout: 3 * time.Second}
+	resp, err := c.Get("http://" + addr + path)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "healthcheck:", err)
+		return 1
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		fmt.Fprintln(os.Stderr, "healthcheck: status", resp.StatusCode)
+		return 1
+	}
+	return 0
 }
 
 func expandHome(p string) string {

@@ -7,15 +7,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/golang-migrate/migrate/v4"
-	migratepgx "github.com/golang-migrate/migrate/v4/database/pgx/v5"
-	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/jackc/pgx/v5/stdlib"
 
 	"github.com/GokulMV/DocTheRepo/internal/store/gen"
-	"github.com/GokulMV/DocTheRepo/migrations"
+	"github.com/GokulMV/DocTheRepo/internal/store/schema"
 )
 
 // Store bundles the pool and the generated queries.
@@ -71,38 +67,15 @@ func (s *Store) Close() { s.Pool.Close() }
 // Ping checks connectivity; used by /readyz.
 func (s *Store) Ping(ctx context.Context) error { return s.Pool.Ping(ctx) }
 
-// Migrate applies all pending up-migrations. golang-migrate takes a Postgres advisory lock, so several
-// replicas starting at once apply each migration exactly once.
-func (s *Store) Migrate(ctx context.Context) (uint, error) {
-	src, err := iofs.New(migrations.FS, ".")
-	if err != nil {
-		return 0, fmt.Errorf("load embedded migrations: %w", err)
-	}
-	db := stdlib.OpenDBFromPool(s.Pool)
-	drv, err := migratepgx.WithInstance(db, &migratepgx.Config{})
-	if err != nil {
-		_ = db.Close()
-		return 0, fmt.Errorf("init migration driver: %w", err)
-	}
-	m, err := migrate.NewWithInstance("iofs", src, "pgx5", drv)
-	if err != nil {
-		_ = drv.Close()
-		return 0, fmt.Errorf("init migrator: %w", err)
-	}
-	// The driver holds a dedicated connection for its advisory lock; closing the migrator returns it to the
-	// pool (otherwise Pool.Close would wait on it forever).
-	defer m.Close()
-	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		return 0, fmt.Errorf("apply migrations: %w", err)
-	}
-	v, dirty, err := m.Version()
-	if err != nil {
-		return 0, fmt.Errorf("read migration version: %w", err)
-	}
-	if dirty {
-		return v, fmt.Errorf("migration %d is dirty: fix the failed migration, then run `dth migrate force %d`", v, v)
-	}
-	return v, nil
+// Migrate applies all pending up-migrations (see schema.Up).
+func (s *Store) Migrate(ctx context.Context) (uint, error) { return schema.Up(s.Pool) }
+
+// MigrationVersion reports the applied version without changing anything.
+func (s *Store) MigrationVersion(ctx context.Context) (uint, error) { return schema.Version(s.Pool) }
+
+// ForceMigration marks version as applied and clean.
+func (s *Store) ForceMigration(ctx context.Context, version int) (uint, error) {
+	return schema.Force(s.Pool, version)
 }
 
 // InTx runs fn in a transaction, committing on success and rolling back on error or panic.

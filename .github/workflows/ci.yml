@@ -41,3 +41,38 @@ jobs:
         run: make build
       - name: govulncheck
         run: make vuln
+      - name: dth CLI builds for every release platform (pure Go)
+        run: make cli-release
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: build the container image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: false
+          load: true
+          tags: dth-hub:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: binaries run on the distroless base
+        run: |
+          docker run --rm --entrypoint /dth dth-hub:ci --version
+          ! docker run --rm dth-hub:ci healthcheck   # nothing listening: must exit non-zero, not crash
+
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.3
+      - name: terraform fmt/validate + helm lint
+        run: make deploy-lint

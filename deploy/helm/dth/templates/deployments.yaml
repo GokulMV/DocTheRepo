@@ -1,0 +1,117 @@
+{{- include "dth.validate" . -}}
+{{- $roles := list (dict "name" "api" "replicas" .Values.api.replicas "resources" .Values.api.resources) (dict "name" "worker" "replicas" .Values.worker.replicas "resources" .Values.worker.resources) (dict "name" "scheduler" "replicas" 1 "resources" .Values.scheduler.resources) -}}
+{{- range $roles }}
+{{- $role := .name }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "dth.fullname" $ }}-{{ $role }}
+  labels:
+    {{- include "dth.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $role }}
+spec:
+  replicas: {{ .replicas }}
+  {{- if eq $role "scheduler" }}
+  # One scheduler at a time (it also holds a leader lock); stop the old pod before starting the new one.
+  strategy:
+    type: Recreate
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "dth.selector" (dict "root" $ "role" $role) | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "dth.selector" (dict "root" $ "role" $role) | nindent 8 }}
+        {{- with $.Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        {{- if $.Values.database.url }}
+        checksum/database: {{ $.Values.database.url | sha256sum }}
+        {{- end }}
+        {{- with $.Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "dth.serviceAccountName" $ }}
+      automountServiceAccountToken: false
+      {{- with $.Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: {{ $.Values.terminationGracePeriodSeconds }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: hub
+          image: "{{ $.Values.image.repository }}:{{ default $.Chart.AppVersion $.Values.image.tag }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          env:
+            - name: DTH_ROLES
+              value: {{ $role }}
+            {{- include "dth.env" $ | nindent 12 }}
+          {{- with $.Values.extraEnvFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            {{- if eq $role "api" }}
+            - name: http
+              containerPort: 8080
+            {{- end }}
+            - name: metrics
+              containerPort: 9090
+          {{- if eq $role "api" }}
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 15
+          {{- else }}
+          startupProbe:
+            httpGet: { path: /healthz, port: metrics }
+            periodSeconds: 5
+            failureThreshold: 24
+          livenessProbe:
+            httpGet: { path: /healthz, port: metrics }
+            periodSeconds: 15
+          {{- end }}
+          resources:
+            {{- toYaml .resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        # Scratch space (engine work dirs); the root filesystem is read-only.
+        - name: tmp
+          emptyDir: {}
+      {{- with $.Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $.Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

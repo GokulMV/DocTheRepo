@@ -52,12 +52,14 @@ func TestLoad_EnvOverridesFile(t *testing.T) {
 	t.Setenv("DTH_ROLES", "worker, scheduler")
 	t.Setenv("DTH_TRACING_ENABLED", "true")
 	t.Setenv("DTH_OTLP_ENDPOINT", "http://otel:4318")
+	t.Setenv("DTH_OIDC_ALLOWED_DOMAINS", "acme.com, ,acme.io")
 	cfg, err := Load(writeFile(t, "server:\n  listen: \":9999\"\n"))
 	require.NoError(t, err)
 	assert.Equal(t, ":7000", cfg.Server.Listen)
 	assert.Equal(t, []Role{RoleWorker, RoleScheduler}, cfg.Roles)
 	assert.False(t, cfg.HasRole(RoleAPI))
 	assert.True(t, cfg.Tracing.Enabled)
+	assert.Equal(t, []string{"acme.com", "acme.io"}, cfg.Auth.OIDC.AllowedDomains)
 }
 
 func TestLoad_BadBoolEnv_Errors(t *testing.T) {

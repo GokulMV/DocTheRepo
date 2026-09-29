@@ -8,11 +8,13 @@ import (
 	"crypto/cipher"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // Encrypter wraps data keys with AES-256-GCM under the file key.
@@ -59,6 +61,24 @@ func Open(path string) (*Encrypter, error) {
 	if len(key) != 32 {
 		return nil, fmt.Errorf("master key %s must be exactly 32 bytes, got %d", path, len(key))
 	}
+	return fromKey(key)
+}
+
+// FromBase64 builds the encrypter from a base64-encoded 32-byte key held in an environment variable
+// (DTH_LOCAL_KEY). Kubernetes delivers Secrets this way; a mounted Secret file cannot be both readable by
+// the non-root user and private (0600) to it.
+func FromBase64(s string) (*Encrypter, error) {
+	key, err := base64.StdEncoding.DecodeString(strings.TrimSpace(s))
+	if err != nil {
+		return nil, errors.New("DTH_LOCAL_KEY must be base64 (generate with `openssl rand -base64 32`)")
+	}
+	if len(key) != 32 {
+		return nil, fmt.Errorf("DTH_LOCAL_KEY must decode to exactly 32 bytes, got %d", len(key))
+	}
+	return fromKey(key)
+}
+
+func fromKey(key []byte) (*Encrypter, error) {
 	blk, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err

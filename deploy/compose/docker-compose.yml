@@ -1,0 +1,56 @@
+# DocTheRepo Hub — local stack (`dth up` writes this to ~/.dth/compose.yaml; values come from .env there).
+name: dth
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dth
+      POSTGRES_PASSWORD: ${DTH_DB_PASSWORD:?run dth up}
+      POSTGRES_DB: dth
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dth -d dth"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  hub:
+    image: ${DTH_IMAGE:-ghcr.io/gokulmv/doctherepo-hub:latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DTH_DATABASE_URL: postgres://dth:${DTH_DB_PASSWORD}@postgres:5432/dth?sslmode=disable
+      DTH_LISTEN: 0.0.0.0:8080
+      DTH_PUBLIC_URL: ${DTH_PUBLIC_URL:-http://localhost:8080}
+      DTH_AUTH_MODE: ${DTH_AUTH_MODE:-local}
+      DTH_LOCAL_KEY_FILE: /data/master.key
+      DTH_OWNER_EMAIL: ${DTH_OWNER_EMAIL:-}
+      DTH_OWNER_PASSWORD: ${DTH_OWNER_PASSWORD:-}
+      DTH_LOG_FORMAT: text
+    volumes:
+      - hubdata:/data
+    ports:
+      - "${DTH_BIND:-127.0.0.1}:${DTH_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "/dth-hub", "healthcheck"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  # Local embeddings/chat without a cloud key: `dth up --ollama`, then add an ollama provider
+  # (base URL http://ollama:11434/v1) under Providers & routing.
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["ollama"]
+    restart: unless-stopped
+    volumes:
+      - ollama:/root/.ollama
+
+volumes:
+  pgdata:
+  hubdata:
+  ollama:

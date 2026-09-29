@@ -1,0 +1,12 @@
+DocTheRepo Hub is starting ({{ .Values.api.replicas }} api, {{ .Values.worker.replicas }} worker, 1 scheduler).
+
+URL: {{ .Values.publicURL }}
+{{- if eq .Values.auth.mode "oidc" }}
+Register this redirect URI with your IdP: {{ trimSuffix "/" .Values.publicURL }}/api/v1/auth/callback
+The first allowed user to sign in becomes owner.
+{{- else }}
+Sign in as {{ .Values.auth.ownerEmail }} with the password from secret {{ .Values.auth.local.existingSecret }}.
+{{- end }}
+
+Watch rollout:  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "dth.fullname" . }}-api
+CLI:            dth login --server {{ .Values.publicURL }} --token <PAT from Settings → Tokens>
