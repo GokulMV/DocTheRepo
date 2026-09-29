@@ -17,6 +17,7 @@ type op struct {
 // Operations lists every /api/v1 and ingress endpoint (plan § 7).
 var Operations = []op{
 	{"POST", "/hooks/{kind}/{connector_id}", "Ingress", "Git host webhook (GitHub HMAC or GitLab token verified)", "", true, false},
+	{"GET", "/api/v1/auth/config", "Auth", "Available sign-in methods", "", false, false},
 	{"GET", "/api/v1/auth/login", "Auth", "Start single sign-on (redirects to the identity provider)", "", false, false},
 	{"GET", "/api/v1/auth/callback", "Auth", "Single sign-on callback", "", false, false},
 	{"POST", "/api/v1/auth/local/login", "Auth", "Local-mode password login", "", true, false},

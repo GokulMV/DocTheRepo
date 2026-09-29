@@ -30,11 +30,11 @@ const (
 
 // PushConfig is a repository's landing configuration.
 type PushConfig struct {
-	Mode             PushMode
-	OnReject         string
-	Approver         string
-	ConflictStrategy string
-	StaleAfter       time.Duration
+	Mode             PushMode      `json:"mode"`
+	OnReject         string        `json:"on_reject"`
+	Approver         string        `json:"approver,omitempty"`
+	ConflictStrategy string        `json:"conflict_strategy"`
+	StaleAfter       time.Duration `json:"stale_after_ns"`
 }
 
 // DocsLanding is one set of generated doc files to land on a repository's tracked branch.

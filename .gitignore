@@ -10,3 +10,5 @@ web/node_modules/
 web/dist/
 /hub
 /dth
+/internal/webui/dist/*
+!/internal/webui/dist/.gitkeep

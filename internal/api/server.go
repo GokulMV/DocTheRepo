@@ -8,6 +8,7 @@ import (
 	"regexp"
 	"runtime/debug"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -39,12 +40,14 @@ type Deps struct {
 	SecureCookies bool
 	// V1 mounts additional authenticated /api/v1 route groups.
 	V1 []func(r chi.Router)
+	// UI serves the web app for every path the API does not own (nil: API only).
+	UI http.Handler
 }
 
 // NewRouter builds the HTTP handler tree.
 func NewRouter(d Deps) http.Handler {
 	r := chi.NewRouter()
-	r.Use(correlation(d.Log), recoverer, instrument(d.Metrics))
+	r.Use(securityHeaders, correlation(d.Log), recoverer, instrument(d.Metrics))
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
@@ -70,13 +73,36 @@ func NewRouter(d Deps) http.Handler {
 			})
 		})
 	}
-	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+	notFound := func(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, http.StatusNotFound, "NOT_FOUND", "no such endpoint", nil)
-	})
+	}
+	if d.UI != nil {
+		// API and ingress paths keep JSON 404s; everything else is the single-page app.
+		r.NotFound(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasPrefix(r.URL.Path, "/api/") || strings.HasPrefix(r.URL.Path, "/hooks/") {
+				notFound(w, r)
+				return
+			}
+			d.UI.ServeHTTP(w, r)
+		})
+	} else {
+		r.NotFound(notFound)
+	}
 	r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed", nil)
 	})
 	return r
+}
+
+// securityHeaders applies baseline browser protections to every response.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Referrer-Policy", "same-origin")
+		h.Set("X-Frame-Options", "DENY")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func readyz(checks map[string]ReadinessCheck) http.HandlerFunc {

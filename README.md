@@ -44,6 +44,10 @@ Under construction, milestone by milestone (plan § 14). Implemented so far:
   threads, and an answer cache; the docs Tree, Palace, and Library APIs; repository, connector, BYO LLM
   provider, routing, and spend-ceiling administration; jobs, activity, and usage/savings analytics;
   OpenAPI 3.1 at `/api/v1/openapi.json`.
+- **Phase 6 — Web UI**: React + TypeScript app embedded in the hub binary — sign-in (SSO or local), Ask
+  with streaming answers and citations, Docs tree, Palace graph explorer, Library, Repositories (settings,
+  dry run, import), Connectors, Providers & routing, Spend limits, Analytics, Activity & jobs, Users &
+  access, personal access tokens, and a setup checklist. Strict CSP, sanitized Markdown, Mermaid diagrams.
 
 ## Develop
 
@@ -53,7 +57,9 @@ testcontainers), and `sqlc` if you change SQL.
 ```sh
 make test        # all tests; integration tests require Docker
 make test-unit   # tests that need no Docker (integration tests are skipped)
-make build       # ./bin/dth-hub
+make build       # ./bin/dth-hub (API only unless the UI was staged)
+make web         # build the React UI and stage it for embedding (then `make build`)
+make web-test    # UI typecheck + unit tests
 ```
 
 Run the hub against a local database:
