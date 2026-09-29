@@ -137,7 +137,8 @@ where, and what was saved.
 | GCP | `cloud.google.com/go/logging`, `errorreporting/apiv1beta1`, `monitoring/apiv3` | Official clients; Workload Identity Federation / service account auth |
 | Other connectors | Plain `net/http` against documented REST/GraphQL APIs (Datadog, Sentry, PagerDuty, Opsgenie, Wiz GraphQL, Splunk REST, Confluence REST v2) | Their Go SDKs are either unofficial or heavy; the Hub needs a narrow read-only subset |
 | HTML→Markdown (Confluence) | `golang.org/x/net/html` + in-house converter | Confluence storage format is XHTML; a narrow converter keeps headings/tables/code blocks which is all chunking needs |
-| LLM providers | Plain HTTP adapters per provider API; Bedrock via `aws-sdk-go-v2/bedrockruntime`, Vertex via REST + ADC | Keeps the provider layer uniform and avoids 6 SDKs with different retry/streaming semantics |
+| LLM providers — Claude | Official Anthropic Go SDK (`anthropics/anthropic-sdk-go`): Claude API, Bedrock (Mantle client), Vertex AI | Anthropic's recommended integration: typed errors, retries honouring `retry-after`, streaming accumulation, structured outputs, and server-side refusal fallbacks without hand-rolling the wire protocol |
+| LLM providers — others | Plain HTTP for the OpenAI protocol (OpenAI, Azure OpenAI, Ollama, vLLM, LiteLLM, any compatible gateway) and Vertex Gemini; `aws-sdk-go-v2/bedrockruntime` Converse/InvokeModel for non-Claude Bedrock models | One OpenAI-protocol client covers most self-hosted and cloud gateways; Bedrock's Converse API is model-agnostic |
 | Auth (UI) | OIDC via `coreos/go-oidc/v3` + `golang.org/x/oauth2`; server-side sessions in Postgres | Works with Okta, Azure AD/Entra, Google Workspace, Keycloak; sessions are revocable |
 | Auth (API/CLI) | Personal access tokens (random 32 bytes, stored as SHA-256) | Simple, revocable, scoped |
 | Secret encryption | AES-256-GCM envelope encryption; KEK from AWS KMS / GCP KMS / local key file | Connector credentials and LLM keys are stored encrypted; cloud KMS in cloud, file key locally |
@@ -836,7 +837,14 @@ UI; running them requires `allow_unreported_usage`. Limits of 0 require `allow_u
 `dry-run` stops before any paid call and returns the estimate.
 
 ### 8.14 Model routing & BYO keys
-Each feature has one route (provider + model + max tokens) and an optional fallback. On a
+Each feature has one route (provider + model + max output tokens + effort) and an optional fallback. Claude
+routes default to `claude-opus-5-5` with effort set explicitly per feature (triage/suggest `low`, docgen/qa/
+decode `medium`); thinking is left at the model default and sampling parameters are never sent to Claude
+(current models reject both). On the Claude API, server-side refusal fallbacks (`fallbacks: "default"`)
+are enabled by default for models that support them (operators can turn them off per provider); on
+Bedrock/Vertex a refusal surfaces as a typed, permanent error. Output ceilings default to 8,000 tokens
+because current models spend output tokens on thinking. The cost table ships seeded with Anthropic list
+prices marked `seeded`/unverified; other providers' prices are entered by the operator. On a
 `TransientError` (429/5xx/timeout) the call retries with jittered backoff (1s, 2s, 4s; max 3) then tries the
 fallback route once, still through the spend guard. Keys are decrypted just-in-time per call and never
 logged. `POST /providers/{id}/test` performs a 1-token call and reports latency.
@@ -1063,6 +1071,7 @@ DocTheRepo/
 │   │   ├── docassembly/                 # Doc file section assembly, human-block preservation
 │   │   ├── scopedcontext/               # Minimal context assembly + drop order
 │   │   ├── spendguard/                  # Estimates and multi-scope ceilings
+│   │   ├── llmgateway/                  # Route → spend guard → provider → fallback → ledger; JSON repair
 │   │   ├── palace/                      # Entity/edge extraction pattern tables
 │   │   ├── library/                     # Shelf rule evaluation
 │   │   ├── signals/                     # Normalization helpers, scrubbing, redaction, fingerprinting
@@ -1072,24 +1081,24 @@ DocTheRepo/
 │   │   ├── rag/                         # Retrieval fusion, packing, citation contract
 │   │   └── pipeline/                    # Job handlers orchestrating ports
 │   ├── adapters/
+│   │   ├── httpx/                       # Shared REST plumbing: retries, Retry-After, typed errors
 │   │   ├── codehost/github/             # GitHub App adapter
 │   │   ├── codehost/gitlab/             # GitLab adapter (SaaS + self-managed)
 │   │   ├── push/direct/                 # Direct commit landing
 │   │   ├── push/prautomerge/            # Default: PR + auto-merge
 │   │   ├── push/prapprover/             # PR + human approver
 │   │   ├── push/lifecycle/              # Shared PR lifecycle sweep logic
-│   │   ├── llm/anthropic/               # Anthropic Messages API
+│   │   ├── llm/                         # Provider-kind registry + adapter pool (llmgateway.Providers)
+│   │   ├── llm/anthropic/               # Claude via the Anthropic SDK (Claude API, Bedrock Mantle, Vertex)
 │   │   ├── llm/openai/                  # OpenAI API
 │   │   ├── llm/azureopenai/             # Azure OpenAI deployments
 │   │   ├── llm/bedrock/                 # AWS Bedrock Converse API
 │   │   ├── llm/vertex/                  # Google Vertex AI
 │   │   ├── llm/openaicompat/            # Any OpenAI-compatible endpoint incl. Ollama
 │   │   ├── llm/externalcli/             # Headless agent CLI via DocGen contract v2
-│   │   ├── embed/openai/                # OpenAI embeddings
 │   │   ├── embed/bedrock/               # Bedrock Titan/Cohere embeddings
 │   │   ├── embed/vertex/                # Vertex text embeddings
-│   │   ├── embed/ollama/                # Local embeddings
-│   │   ├── embed/openaicompat/          # Any OpenAI-compatible embeddings endpoint
+│   │   │                                # (OpenAI, Azure, Ollama, compatible embeddings: llm/openaicompat)
 │   │   ├── vector/pgvector/             # Default vector index
 │   │   ├── vector/qdrant/               # Alternative vector index
 │   │   ├── signal/cloudwatch/           # CloudWatch Logs + Alarms (poll + EventBridge)
@@ -1143,6 +1152,8 @@ DocTheRepo/
 │   ├── parity/                          # Port parity suites
 │   ├── fixtures/                        # Repo bundles, signal payloads, LLM responses
 │   ├── mocks/                           # HTTP mock servers per external API
+│   │   ├── llmmock/                     # Anthropic/OpenAI/Converse/Gemini dialects, scenario by model
+│   │   └── stubengine/                  # DocGen-contract engine stub (tests, k6 burst runs)
 │   ├── eval/                            # Golden Q&A and decode sets
 │   └── perf/                            # k6 scripts
 ├── deploy/

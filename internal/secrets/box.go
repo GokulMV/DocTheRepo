@@ -106,3 +106,11 @@ func newGCM(key []byte) (cipher.AEAD, error) {
 	}
 	return cipher.NewGCM(blk)
 }
+
+// ProviderKeyAAD binds an LLM provider's key ciphertext to its row.
+func ProviderKeyAAD(providerID string) []byte { return []byte("llm_provider:" + providerID + ":key") }
+
+// ConnectorCredsAAD binds a connector's credential ciphertext to its row.
+func ConnectorCredsAAD(connectorID string) []byte {
+	return []byte("connector:" + connectorID + ":creds")
+}

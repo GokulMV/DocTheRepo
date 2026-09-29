@@ -1,0 +1,11 @@
+DELETE FROM cost_table WHERE source = 'seeded';
+ALTER TABLE cost_table DROP COLUMN verified_at;
+ALTER TABLE cost_table DROP COLUMN source;
+UPDATE model_routes SET temperature = 0.2 WHERE temperature IS NULL;
+ALTER TABLE model_routes ALTER COLUMN temperature SET DEFAULT 0.2;
+ALTER TABLE model_routes ALTER COLUMN temperature SET NOT NULL;
+ALTER TABLE model_routes ALTER COLUMN max_output_tokens SET DEFAULT 2048;
+ALTER TABLE model_routes DROP COLUMN effort;
+DROP INDEX IF EXISTS usage_events_repo_idx;
+DROP INDEX IF EXISTS usage_events_provider_idx;
+ALTER TABLE usage_events DROP COLUMN provider_id;

@@ -128,3 +128,11 @@ func (s *Store) InTx(ctx context.Context, fn func(q *gen.Queries, tx pgx.Tx) err
 
 // IsNoRows reports whether err is pgx's "no rows" error.
 func IsNoRows(err error) bool { return errors.Is(err, pgx.ErrNoRows) }
+
+// strPtr maps "" to NULL for nullable text/uuid parameters.
+func strPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}

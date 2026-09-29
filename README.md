@@ -22,6 +22,13 @@ Under construction, milestone by milestone (plan § 14). Implemented so far:
   code and Markdown, manifest diff, surgical doc-file assembly preserving hand-written blocks, scoped
   context with a token budget, multi-scope spend guard, knowledge-graph (Palace) extraction, and Library
   shelf rules.
+- **Phase 3 — LLM & embeddings (bring your own keys)**: Claude via the official Anthropic SDK (Claude API,
+  Bedrock, Vertex) with server-side refusal fallbacks; OpenAI, Azure OpenAI, and any OpenAI-compatible
+  server (Ollama, vLLM, LiteLLM); Bedrock Converse and Vertex Gemini for other model families; embeddings
+  on OpenAI-protocol, Bedrock, and Vertex; external agent CLIs through the versioned DocGen contract with
+  a conformance suite; an LLM gateway that enforces the spend guard on every call, falls back on
+  transient failures, repairs invalid JSON once, and records usage; encrypted provider keys; parity
+  suites across all adapters.
 
 ## Develop
 
