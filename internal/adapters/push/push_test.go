@@ -193,7 +193,7 @@ func TestApprover_LeavesDuringReview_NeedsHuman(t *testing.T) {
 func TestConflictStrategies(t *testing.T) {
 	for _, tc := range []struct {
 		strategy, want string
-		requeued   bool
+		requeued       bool
 	}{
 		{ports.ConflictAutoRebase, ports.PRStateRequeued, true},
 		{ports.ConflictRequeue, ports.PRStateRequeued, true},
