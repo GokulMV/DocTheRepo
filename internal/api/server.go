@@ -13,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/GokulMV/DocTheRepo/internal/auth"
 	"github.com/GokulMV/DocTheRepo/internal/observability"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
 )
@@ -30,6 +31,14 @@ type Deps struct {
 	Git GitIngest
 	// WebhookPerMinute is the per-connector ingress rate (default 6000).
 	WebhookPerMinute int
+	// Auth enables /api/v1 (nil serves only health and ingress).
+	Auth *auth.Service
+	// OIDC enables single sign-on (nil: local login only).
+	OIDC *auth.OIDC
+	// SecureCookies marks cookies Secure (true whenever the public URL is https).
+	SecureCookies bool
+	// V1 mounts additional authenticated /api/v1 route groups.
+	V1 []func(r chi.Router)
 }
 
 // NewRouter builds the HTTP handler tree.
@@ -47,6 +56,16 @@ func NewRouter(d Deps) http.Handler {
 		}
 		lim := &connectorLimiter{perMin: perMin}
 		r.Post("/hooks/{kind:github|gitlab}/{connector_id}", gitHook(d.Git, lim))
+	}
+	if d.Auth != nil {
+		ah := &authHandlers{svc: d.Auth, oidc: d.OIDC, secure: d.SecureCookies}
+		r.Route("/api/v1", func(r chi.Router) {
+			r.Use(authenticate(d.Auth))
+			ah.routes(r)
+			for _, mount := range d.V1 {
+				mount(r)
+			}
+		})
 	}
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, http.StatusNotFound, "NOT_FOUND", "no such endpoint", nil)

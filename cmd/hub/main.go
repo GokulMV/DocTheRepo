@@ -155,7 +155,8 @@ func run(cfgPath string) error {
 	if cfg.HasRole(config.RoleAPI) {
 		h := api.NewRouter(api.Deps{Log: log, Metrics: metrics, Checks: map[string]api.ReadinessCheck{
 			"db": st.Ping,
-		}, Git: a.ingest})
+		}, Git: a.ingest, Auth: a.auth, OIDC: a.oidc, SecureCookies: strings.HasPrefix(cfg.Server.PublicURL, "https://"),
+			V1: a.v1Routes()})
 		servers = append(servers, &http.Server{
 			Addr: cfg.Server.Listen, Handler: h,
 			ReadHeaderTimeout: 10 * time.Second, ReadTimeout: cfg.Server.ReadTimeout, WriteTimeout: cfg.Server.WriteTimeout,
