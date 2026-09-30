@@ -351,3 +351,25 @@ func TestGenerateDocs_UsageRepairAndUnguardedRule(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, a.ledger.records[0].Estimated)
 }
+
+func TestProtect_ScrubsAlwaysRedactsPIIPerProvider(t *testing.T) {
+	e := newEnv(t, 1e6, false)
+	e.llms["p1"].steps = []step{ok("a", 1, 1), ok("b", 1, 1)}
+	in := msgs("key AKIAIOSFODNN7EXAMPLE failed for jane@example.com")
+	_, err := e.gw.Chat(context.Background(), FeatureQA, CallMeta{}, ports.ChatRequest{Messages: in})
+	require.NoError(t, err)
+	assert.Equal(t, "key <AWS_KEY> failed for jane@example.com", e.llms["p1"].reqs[0].Messages[0].Content,
+		"credentials never reach a provider; personal data does unless the provider asks for redaction")
+	assert.Contains(t, in[0].Content, "AKIA", "the caller's messages are not modified")
+
+	r := e.routes[FeatureQA]
+	r.RedactPII = true
+	e.routes[FeatureQA] = r
+	_, err = e.gw.Chat(context.Background(), FeatureQA, CallMeta{}, ports.ChatRequest{Messages: in})
+	require.NoError(t, err)
+	assert.Equal(t, "key <AWS_KEY> failed for <EMAIL>", e.llms["p1"].reqs[1].Messages[0].Content)
+
+	_, _, err = e.gw.Embed(context.Background(), CallMeta{}, []string{"password=hunter22 in config"})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"password=<PASSWORD> in config"}, e.emb.calls[0])
+}

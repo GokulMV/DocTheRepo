@@ -56,6 +56,12 @@ Under construction, milestone by milestone (plan § 14). Implemented so far:
 - **Phase 8 — End-to-end, load, and quality**: Playwright E2E against the real hub and mocks (cold start
   through the UI to a cited answer; RBAC; spend blocking); k6 push-burst and Q&A load runs; a 50-question
   retrieval eval that gates the build. Measured results: [`docs/perf-results.md`](docs/perf-results.md).
+- **Phase 9 — Signal core** (Milestone 2): one normalized event model for errors, alerts, security
+  findings, and event-bus conditions; secret scrubbing that is always on (and now applied to every LLM
+  call) and per-provider PII redaction; fingerprinting that groups the same error across IDs, customers,
+  deploys, and ingestion paths; a known-issue matcher that suppresses before any model call; a per-replica
+  aggregation hot path (one database write per distinct error per second, bounded samples,
+  backpressure instead of loss); issues, samples, counts, decodes, and known-issue tables with retention.
 
 ## Install
 

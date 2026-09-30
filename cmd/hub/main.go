@@ -128,6 +128,31 @@ func run(cfgPath string) error {
 		}
 	}
 
+	if cfg.HasRole(config.RoleAPI) || cfg.HasRole(config.RoleWorker) {
+		// Signal ingest runs wherever events arrive (webhooks on api, stream consumers and pollers on worker).
+		if err := a.signals.Reload(ctx); err != nil {
+			log.Warn("load known-issue rules failed; ingesting without them until the next reload", "err", err)
+		}
+		wg.Add(2)
+		go func() { defer wg.Done(); a.agg.Run(ctx) }()
+		go func() {
+			defer wg.Done()
+			t := time.NewTicker(30 * time.Second)
+			defer t.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-t.C:
+					if err := a.signals.Reload(ctx); err != nil {
+						log.Warn("reload known-issue rules failed", "err", err)
+					}
+					metrics.SignalPending.Set(float64(a.agg.Pending()))
+				}
+			}
+		}()
+	}
+
 	if cfg.HasRole(config.RoleScheduler) {
 		sch := scheduler.New(st.Pool, log, 10*time.Second)
 		sch.Add(scheduler.Task{Name: "reclaim_expired_leases", Every: 30 * time.Second, RunFirst: true, Fn: func(ctx context.Context) error {

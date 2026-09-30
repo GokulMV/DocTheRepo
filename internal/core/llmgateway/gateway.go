@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GokulMV/DocTheRepo/internal/core/signals"
 	"github.com/GokulMV/DocTheRepo/internal/core/spendguard"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
 	"github.com/GokulMV/DocTheRepo/pkg/contract"
@@ -38,6 +39,8 @@ type Route struct {
 	Effort          string
 	Temperature     *float64
 	Fallback        *Route
+	// RedactPII is the provider's "redact personal data" toggle (plan § 8.8).
+	RedactPII bool
 }
 
 // ErrNoRoute means the operator has not configured a provider for a feature.
@@ -82,6 +85,24 @@ type Gateway struct {
 	now             func() time.Time
 	// OnCall observes every completed or failed call (metrics); optional.
 	OnCall func(CallRecord)
+	// PII redacts personal data for providers with the toggle on; nil uses the built-in patterns.
+	PII *signals.Redactor
+}
+
+var defaultRedactor, _ = signals.NewRedactor(nil)
+
+// protect prepares text for a provider (plan § 8.8): credentials are always scrubbed; personal data is
+// redacted when the route's provider asks for it.
+func (g *Gateway) protect(r Route, s string) string {
+	s = signals.Scrub(s)
+	if r.RedactPII {
+		red := g.PII
+		if red == nil {
+			red = defaultRedactor
+		}
+		s = red.Redact(s)
+	}
+	return s
 }
 
 // New builds a gateway. allowUnreported mirrors spend.allow_unreported_usage.
@@ -124,6 +145,12 @@ func (g *Gateway) chatOn(ctx context.Context, r Route, meta CallMeta, req ports.
 		return ports.ChatResponse{}, err
 	}
 	req.Model = r.Model
+	msgs := make([]ports.ChatMessage, len(req.Messages))
+	for i, m := range req.Messages {
+		m.Content = g.protect(r, m.Content)
+		msgs[i] = m
+	}
+	req.Messages = msgs
 	if req.MaxOutputTokens <= 0 {
 		req.MaxOutputTokens = r.MaxOutputTokens
 	}
@@ -283,7 +310,10 @@ func (g *Gateway) Embed(ctx context.Context, meta CallMeta, texts []string) ([][
 	out := make([][]float32, 0, len(texts))
 	for start := 0; start < len(texts); start += batch {
 		end := min(start+batch, len(texts))
-		part := texts[start:end]
+		part := make([]string, end-start)
+		for i, t := range texts[start:end] {
+			part[i] = g.protect(route, t)
+		}
 		est := spendguard.EstimateTokens(part...)
 		if _, err := g.enforcer.Check(ctx, spendguard.Request{Feature: FeatureEmbedding, ProviderID: route.ProviderID,
 			ProviderKind: route.ProviderKind, Model: route.Model, RepoID: meta.RepoID, InputTokens: est, Override: meta.Override}); err != nil {
@@ -332,6 +362,7 @@ func (g *Gateway) GenerateDocs(ctx context.Context, meta CallMeta, task contract
 		perChunk = 2000
 	}
 	task.MaxOutputTokensPerChunk = perChunk
+	task.Context = g.protect(route, task.Context)
 	inEst := spendguard.EstimateTokens(task.Context)
 	outEst := int64(perChunk * max(1, len(task.ChunksToGenerate)))
 	run := func(t contract.DocGenTask) (contract.DocGenResult, error) {

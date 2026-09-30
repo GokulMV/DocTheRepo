@@ -17,9 +17,9 @@ WHERE at >= sqlc.arg(since)
   AND (sqlc.narg(repo_id)::uuid IS NULL OR repo_id = sqlc.narg(repo_id));
 
 -- name: GetRoute :one
-SELECT r.feature, r.provider_id, p.kind AS provider_kind, p.enabled AS provider_enabled, r.model, r.max_output_tokens,
-       r.context_token_budget, r.temperature, r.effort, r.fallback_provider_id, r.fallback_model,
-       fp.kind AS fallback_kind, fp.enabled AS fallback_enabled
+SELECT r.feature, r.provider_id, p.kind AS provider_kind, p.enabled AS provider_enabled, p.redact_pii AS provider_redact_pii,
+       r.model, r.max_output_tokens, r.context_token_budget, r.temperature, r.effort, r.fallback_provider_id, r.fallback_model,
+       fp.kind AS fallback_kind, fp.enabled AS fallback_enabled, fp.redact_pii AS fallback_redact_pii
 FROM model_routes r
 JOIN llm_providers p ON p.id = r.provider_id
 LEFT JOIN llm_providers fp ON fp.id = r.fallback_provider_id
