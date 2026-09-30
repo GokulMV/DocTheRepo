@@ -426,6 +426,35 @@ func (q *Queries) ListAllRepos(ctx context.Context) ([]ListAllReposRow, error) {
 	return items, nil
 }
 
+const listConnectorCursors = `-- name: ListConnectorCursors :many
+SELECT stream, cursor FROM connector_cursors WHERE connector_id = $1
+`
+
+type ListConnectorCursorsRow struct {
+	Stream string `json:"stream"`
+	Cursor string `json:"cursor"`
+}
+
+func (q *Queries) ListConnectorCursors(ctx context.Context, connectorID string) ([]ListConnectorCursorsRow, error) {
+	rows, err := q.db.Query(ctx, listConnectorCursors, connectorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListConnectorCursorsRow{}
+	for rows.Next() {
+		var i ListConnectorCursorsRow
+		if err := rows.Scan(&i.Stream, &i.Cursor); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listConnectorsByType = `-- name: ListConnectorsByType :many
 SELECT id, type, name, config, creds_ciphertext, webhook_secret_ct, mode,
        extract(epoch FROM poll_interval)::bigint AS poll_seconds, enabled, health, last_error, last_sync_at
@@ -657,6 +686,22 @@ func (q *Queries) SavePR(ctx context.Context, arg SavePRParams) error {
 		arg.Note,
 		arg.OpenedAt,
 	)
+	return err
+}
+
+const setConnectorCursor = `-- name: SetConnectorCursor :exec
+INSERT INTO connector_cursors (connector_id, stream, cursor) VALUES ($1, $2, $3)
+ON CONFLICT (connector_id, stream) DO UPDATE SET cursor = EXCLUDED.cursor, updated_at = now()
+`
+
+type SetConnectorCursorParams struct {
+	ConnectorID string `json:"connector_id"`
+	Stream      string `json:"stream"`
+	Cursor      string `json:"cursor"`
+}
+
+func (q *Queries) SetConnectorCursor(ctx context.Context, arg SetConnectorCursorParams) error {
+	_, err := q.db.Exec(ctx, setConnectorCursor, arg.ConnectorID, arg.Stream, arg.Cursor)
 	return err
 }
 

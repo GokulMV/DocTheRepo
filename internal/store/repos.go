@@ -348,3 +348,24 @@ func (r *Repos) ListAll(ctx context.Context) ([]ports.RepoConfig, error) {
 	}
 	return out, nil
 }
+
+// Cursors returns a connector's incremental sync positions by stream.
+func (c *Connectors) Cursors(ctx context.Context, id string) (map[string]string, error) {
+	rows, err := c.s.Q.ListConnectorCursors(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("list cursors: %w", err)
+	}
+	out := make(map[string]string, len(rows))
+	for _, r := range rows {
+		out[r.Stream] = r.Cursor
+	}
+	return out, nil
+}
+
+// SetCursor records a stream's position after its batch is committed.
+func (c *Connectors) SetCursor(ctx context.Context, id, stream, cursor string) error {
+	if err := c.s.Q.SetConnectorCursor(ctx, gen.SetConnectorCursorParams{ConnectorID: id, Stream: stream, Cursor: cursor}); err != nil {
+		return fmt.Errorf("set cursor: %w", err)
+	}
+	return nil
+}

@@ -19,7 +19,6 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/aws"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/loglines"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/sigutil"
-	"github.com/GokulMV/DocTheRepo/internal/core/signals"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
 )
 
@@ -161,26 +160,9 @@ func cwl(m cwlMessage, cc ports.ConnectorConfig) []ports.SignalEvent {
 	}
 	out := make([]ports.SignalEvent, 0, len(m.LogEvents))
 	for _, le := range m.LogEvents {
-		ev := ports.SignalEvent{ConnectorID: cc.ID, Source: "cloudwatch", ExternalID: le.ID, OccurredAt: millis(le.Timestamp),
-			Attrs: map[string]string{"log_group": m.LogGroup, "log_stream": m.LogStream, "aws.account": m.Owner}}
-		loglines.Fill(&ev, le.Message, "")
-		ev.Attrs[signals.DerivedServiceAttr] = serviceFromLogGroup(m.LogGroup)
-		out = append(out, ev)
+		out = append(out, aws.LogEvent(cc.ID, m.LogGroup, m.LogStream, m.Owner, le.ID, le.Timestamp, le.Message))
 	}
 	return out
-}
-
-// serviceFromLogGroup reads the conventional names: /aws/lambda/<fn>, /ecs/<svc>, /aws/ecs/<cluster>/<svc>,
-// /aws/eks/<cluster>/…, or the last path segment.
-func serviceFromLogGroup(g string) string {
-	parts := strings.FieldsFunc(g, func(r rune) bool { return r == '/' })
-	if len(parts) == 0 {
-		return ""
-	}
-	if len(parts) >= 3 && parts[0] == "aws" && parts[1] == "lambda" {
-		return parts[2]
-	}
-	return parts[len(parts)-1]
 }
 
 func splitLines(s string) []string {
