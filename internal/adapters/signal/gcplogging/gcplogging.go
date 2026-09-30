@@ -16,9 +16,6 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
-
 	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/pubsub"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/sigutil"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
@@ -178,25 +175,9 @@ func (p *Poller) client(ctx context.Context, cc ports.ConnectorConfig) (*http.Cl
 	return hc, nil
 }
 
-// HTTPClient authenticates with a service-account key JSON from the connector, or Application Default
-// Credentials (Workload Identity) when none is set.
+// HTTPClient authenticates with the connector's service-account key or Application Default Credentials.
 func HTTPClient(ctx context.Context, cc ports.ConnectorConfig) (*http.Client, error) {
-	var ts oauth2.TokenSource
-	if strings.TrimSpace(cc.Credentials) != "" {
-		creds, err := google.CredentialsFromJSONWithType(ctx, []byte(cc.Credentials), google.ServiceAccount, Scope)
-		if err != nil {
-			return nil, &ports.ValidationError{Code: "INVALID_CREDENTIALS", Message: "credentials must be a service-account key JSON"}
-		}
-		ts = creds.TokenSource
-	} else {
-		var err error
-		if ts, err = google.DefaultTokenSource(ctx, Scope); err != nil {
-			return nil, fmt.Errorf("cloud logging credentials (Application Default Credentials): %w", err)
-		}
-	}
-	hc := oauth2.NewClient(context.WithoutCancel(ctx), ts)
-	hc.Timeout = time.Minute
-	return hc, nil
+	return sigutil.GoogleClient(ctx, cc.Credentials, Scope)
 }
 
 func projects(cfg map[string]string) []string {

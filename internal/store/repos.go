@@ -45,7 +45,7 @@ func (c *Connectors) Create(ctx context.Context, n NewConnector) (string, error)
 	id := ports.NewID()
 	cfg, _ := json.Marshal(orEmpty(n.Config))
 	p := gen.CreateConnectorParams{ID: id, Type: gen.ConnectorType(n.Type), Name: n.Name, Config: cfg,
-		Mode: gen.ConnectorMode(defaultStr(n.Mode, "webhook")), PollSeconds: float64(defaultInt(n.PollSeconds, 60))}
+		Mode: gen.ConnectorMode(defaultStr(n.Mode, "webhook")), PollSeconds: float64(defaultInt(n.PollSeconds, defaultPollSeconds(n.Type)))}
 	if n.Credentials != "" {
 		ct, err := c.box.Seal(ctx, []byte(n.Credentials), c.CredsAAD(id))
 		if err != nil {
@@ -368,4 +368,13 @@ func (c *Connectors) SetCursor(ctx context.Context, id, stream, cursor string) e
 		return fmt.Errorf("set cursor: %w", err)
 	}
 	return nil
+}
+
+// defaultPollSeconds: event-platform inspectors check lag every 30 s (plan § 8.20), other pollers every 60 s.
+func defaultPollSeconds(connectorType string) int64 {
+	switch connectorType {
+	case "kafka", "sqs", "sns", "eventbridge", "kinesis", "pubsub_bus", "rabbitmq":
+		return 30
+	}
+	return 60
 }

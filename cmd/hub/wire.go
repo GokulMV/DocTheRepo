@@ -16,9 +16,13 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/adapters/llm"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/push"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/push/lifecycle"
+	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/awsbus"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/cloudwatch"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/gcplogging"
+	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/kafka"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/pubsub"
+	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/pubsubbus"
+	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/rabbitmq"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/registry"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/vector/pgvector"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/vector/qdrant"
@@ -134,6 +138,17 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 		Webhooks: registry.Webhooks(), Accepts: registry.Accepts, LoadConnector: conns.Get}
 	a.polls = &ingest.SignalPolls{Sink: a.signals, Store: conns, Queue: q,
 		Pollers: map[string]ports.SignalPoller{"cloudwatch": cloudwatch.New(), "gcp": gcplogging.New()}}
+	resolve := func(ctx context.Context, fps []string) error {
+		n, err := a.signalStore.Resolve(ctx, fps)
+		if n > 0 {
+			log.Info("issues auto-resolved", "component", "signals", "count", n)
+		}
+		return err
+	}
+	for _, in := range []ports.BusInspector{kafka.New(), awsbus.New("sqs"), awsbus.New("sns"), awsbus.New("eventbridge"),
+		awsbus.New("kinesis"), pubsubbus.New(), rabbitmq.New()} {
+		a.polls.Pollers[in.Type()] = &ingest.BusPoller{Inspector: in, Resolve: resolve}
+	}
 	a.ingest = &ingest.Service{Queue: q, Repos: repos, Hosts: a.hosts, Log: log.With("component", "ingest")}
 	a.sweeper = &lifecycle.Sweeper{PRs: prs, Requeue: a.ingest.RequeueDocs, Log: log.With("component", "pr_lifecycle"),
 		Hosts: func(ctx context.Context, repoID string) (ports.CodeHost, ports.RepoConfig, error) {

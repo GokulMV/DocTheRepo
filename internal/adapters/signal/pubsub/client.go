@@ -12,9 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
-
+	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/sigutil"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
 )
 
@@ -51,21 +49,10 @@ func NewClient(ctx context.Context, cc ports.ConnectorConfig) (*Client, error) {
 		c.Endpoint, c.HTTP = "http://"+host+"/v1/", &http.Client{Timeout: 90 * time.Second}
 		return c, nil
 	}
-	var ts oauth2.TokenSource
-	if strings.TrimSpace(cc.Credentials) != "" {
-		creds, err := google.CredentialsFromJSONWithType(ctx, []byte(cc.Credentials), google.ServiceAccount, Scope)
-		if err != nil {
-			return nil, &ports.ValidationError{Code: "INVALID_CREDENTIALS", Message: "credentials must be a service-account key JSON"}
-		}
-		ts = creds.TokenSource
-	} else {
-		var err error
-		if ts, err = google.DefaultTokenSource(ctx, Scope); err != nil {
-			return nil, fmt.Errorf("pubsub credentials (Application Default Credentials): %w", err)
-		}
+	hc, err := sigutil.GoogleClient(ctx, cc.Credentials, Scope)
+	if err != nil {
+		return nil, err
 	}
-	hc := oauth2.NewClient(ctx, ts)
-	hc.Timeout = 90 * time.Second // pull holds the request open while it waits for messages
 	c.HTTP = hc
 	return c, nil
 }

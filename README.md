@@ -62,12 +62,17 @@ Under construction, milestone by milestone (plan § 14). Implemented so far:
   deploys, and ingestion paths; a known-issue matcher that suppresses before any model call; a per-replica
   aggregation hot path (one database write per distinct error per second, bounded samples,
   backpressure instead of loss); issues, samples, counts, decodes, and known-issue tables with retention.
-- **Phase 10 — Signal ingress** (in progress): signed or token-authenticated webhooks for Sentry,
+- **Phase 10 — Signal ingress**: signed or token-authenticated webhooks for Sentry,
   PagerDuty, Opsgenie, Datadog, Grafana, Alertmanager, EventBridge (CloudWatch alarms, GuardDuty), Cloud
   Monitoring, and a generic field-mapping receiver, with a fixture parity suite. Stream receivers
   acknowledge only after events are persisted: an Amazon Data Firehose endpoint (CloudWatch Logs
   subscriptions) and a Pub/Sub pull consumer for Cloud Logging sinks. Log lines are read as JSON or as
-  Python, Java, Node.js, and Go stack traces.
+  Python, Java, Node.js, and Go stack traces. Pollers cover installs without streams (CloudWatch Logs
+  and alarm history with cross-account AssumeRole; Cloud Logging), committing cursors only after events
+  are persisted. Read-only event-platform inspectors (Kafka/MSK/Confluent, SQS, SNS, EventBridge,
+  Kinesis, Pub/Sub, RabbitMQ) open issues for sustained consumer lag (auto-resolving when it clears) and
+  for dead-letter growth, one issue per error class; the Hub never commits offsets or acknowledges an
+  application's messages.
 
 ## Install
 

@@ -140,3 +140,58 @@ type SignalPoller interface {
 	Type() string
 	Poll(ctx context.Context, cc ConnectorConfig, cursors map[string]string, emit func(stream, cursor string, events []SignalEvent) error) error
 }
+
+// BusCondition is what an event-platform reading measures (plan § 8.20).
+type BusCondition string
+
+const (
+	// BusLag is a consumer's backlog: consumer-group lag, queue depth, undelivered messages, iterator age.
+	BusLag BusCondition = "lag"
+	// BusDLQ is a dead-letter queue's depth; growth opens an issue per error class.
+	BusDLQ BusCondition = "dlq"
+	// BusFailures counts delivery failures in the last interval (SNS, EventBridge targets).
+	BusFailures BusCondition = "failures"
+)
+
+// BusSample is one dead-lettered message read without consuming it (or from a Hub-owned subscription).
+type BusSample struct {
+	ErrorClass string            `json:"error_class,omitempty"`
+	Reason     string            `json:"reason,omitempty"`
+	Body       string            `json:"body,omitempty"`
+	Attrs      map[string]string `json:"attrs,omitempty"`
+}
+
+// BusReading is one inspector measurement of one resource (a consumer group, queue, subscription, rule).
+type BusReading struct {
+	Resource  string       `json:"resource"`
+	Condition BusCondition `json:"condition"`
+	// Backlog is messages waiting (lag) or DLQ depth; HasBacklog is false when the platform cannot say.
+	Backlog    int64 `json:"backlog"`
+	HasBacklog bool  `json:"has_backlog"`
+	// OldestAge is the oldest waiting message's age (0 when unknown).
+	OldestAge time.Duration `json:"oldest_age"`
+	// Failures is the failure count in the last interval (BusFailures).
+	Failures int64 `json:"failures"`
+	// Samples are ordered oldest first. SamplesNewest says they are the newest messages (Kafka reads the
+	// partition tails), so on DLQ growth of n only the last n are new; queue peeks read the head instead.
+	Samples       []BusSample `json:"samples,omitempty"`
+	SamplesNewest bool        `json:"samples_newest,omitempty"`
+	// Attrs help map the resource to a service (queue, topic, consumer_group, subscription, rule).
+	Attrs map[string]string `json:"attrs,omitempty"`
+}
+
+// BusInspector reads an event platform's lag, backlog, and dead-letter state. Inspectors are strictly
+// read-only on application resources: they never commit offsets, delete, or acknowledge application
+// messages.
+type BusInspector interface {
+	// Type is the connector type inspected (kafka, sqs, sns, eventbridge, kinesis, pubsub_bus, rabbitmq).
+	Type() string
+	Inspect(ctx context.Context, cc ConnectorConfig) ([]BusReading, error)
+}
+
+// BusCommitter is implemented by inspectors that consume from Hub-owned resources (a Pub/Sub dead-letter
+// subscription created for the Hub): Commit acknowledges what the last Inspect read, and is called only
+// after that inspection's events are persisted.
+type BusCommitter interface {
+	Commit(ctx context.Context, cc ConnectorConfig) error
+}
