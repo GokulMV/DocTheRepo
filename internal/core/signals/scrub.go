@@ -26,6 +26,8 @@ var secretRules = []secretRule{
 	{"github_token", regexp.MustCompile(`\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,})\b`), "<GITHUB_TOKEN>"},
 	{"slack_token", regexp.MustCompile(`\bxox[abposr]-[A-Za-z0-9-]{10,}`), "<SLACK_TOKEN>"},
 	{"stripe_key", regexp.MustCompile(`\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b`), "<STRIPE_KEY>"},
+	// LLM provider keys (OpenAI sk-…/sk-proj-…, Anthropic sk-ant-…): the keys this Hub's users bring.
+	{"llm_api_key", regexp.MustCompile(`\bsk-[A-Za-z0-9][A-Za-z0-9_-]{19,}`), "<API_KEY>"},
 	{"bearer", regexp.MustCompile(`(?i)\b(bearer|token)\s+[A-Za-z0-9._~+/=-]{16,}`), "${1} <TOKEN>"},
 	{"basic_auth", regexp.MustCompile(`(?i)\b(basic)\s+[A-Za-z0-9+/]{12,}={0,2}`), "${1} <CREDENTIALS>"},
 	// scheme://user:password@host — keep the user and host, drop the password.
@@ -33,7 +35,7 @@ var secretRules = []secretRule{
 	// key=value connection strings and config dumps (Password=…; pwd=…).
 	{"conn_password", regexp.MustCompile(`(?i)\b(password|passwd|pwd)(["']?\s*[=:]\s*)("[^"]*"|'[^']*'|[^;\s,&"'}]+)`), "${1}${2}<PASSWORD>"},
 	// Generic secret-looking assignments: api_key=…, client_secret: "…", access_token=….
-	{"assignment", regexp.MustCompile(`(?i)\b(api[_-]?key|apikey|secret|client[_-]?secret|access[_-]?token|refresh[_-]?token|auth[_-]?token|private[_-]?key)(["']?\s*[:=]\s*["']?)([A-Za-z0-9._~+/-]{8,})`), "${1}${2}<SECRET>"},
+	{"assignment", regexp.MustCompile(`(?i)\b(api[_-]?key|apikey|secret|client[_-]?secret|access[_-]?token|refresh[_-]?token|auth[_-]?token|token|private[_-]?key)(["']?\s*[:=]\s*["']?)([A-Za-z0-9._~+/-]{8,})`), "${1}${2}<SECRET>"},
 }
 
 // Scrub removes credentials from s. It is always applied, to every stored sample and every model input,

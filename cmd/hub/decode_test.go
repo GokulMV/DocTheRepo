@@ -7,6 +7,7 @@ import (
 	"net/http/cookiejar"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -28,9 +29,17 @@ import (
 
 // TestDecodeEndToEnd: a new error enqueues a decode that blames the code its stack frame points at; a
 // regression with unchanged code reuses the decode (no model call) and records the saving.
-func TestDecodeEndToEnd(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+// signalEnv is a wired Hub with the stub LLM on the given routes.
+type signalEnv struct {
+	a    *app
+	st   *store.Store
+	q    *queue.Queue
+	stub *stubllm.Server
+}
+
+func newSignalEnv(t *testing.T, routes ...string) *signalEnv {
+	t.Helper()
+	ctx := context.Background()
 	st := storetest.New(t)
 	kek, err := localfile.Open(filepath.Join(t.TempDir(), "k"))
 	require.NoError(t, err)
@@ -45,22 +54,31 @@ func TestDecodeEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, a.signals.Reload(ctx))
 	srv := httptest.NewServer(api.NewRouter(api.Deps{Log: log, Metrics: m, Auth: a.auth, V1: a.v1Routes()}))
-	defer srv.Close()
+	t.Cleanup(srv.Close)
 	jar, _ := cookiejar.New(nil)
 	c := &apiClient{t: t, base: srv.URL + "/api/v1", c: &http.Client{Jar: jar}}
 	_, out := c.call("POST", "/auth/local/login", map[string]string{"email": "owner@acme.com", "password": "correct horse battery staple"})
 	c.csrf = out["csrf_token"].(string)
 	stub := stubllm.New()
-	defer stub.Close()
+	t.Cleanup(stub.Close)
 	code, out := c.call("POST", "/providers", map[string]any{"kind": "openai_compat", "name": "stub", "base_url": stub.URL + "/v1", "api_key": "sk"})
 	require.Equal(t, http.StatusCreated, code, out)
-	for f, mdl := range map[string]string{"decode": "stub", "embedding": "stub-embed"} {
-		code, out = c.call("PUT", "/routes/"+f, map[string]any{"provider_id": out["id"], "model": mdl})
+	provID := out["id"]
+	for _, f := range routes {
+		model := "stub"
+		if f == "embedding" {
+			model = "stub-embed"
+		}
+		code, out = c.call("PUT", "/routes/"+f, map[string]any{"provider_id": provID, "model": model})
 		require.Equal(t, http.StatusNoContent, code, out)
-		_, out = c.call("GET", "/providers", nil) // restore out["id"] for the next iteration
-		out = map[string]any{"id": out["items"].([]any)[0].(map[string]any)["id"]}
 	}
+	return &signalEnv{a: a, st: st, q: q, stub: stub}
+}
 
+func TestDecodeEndToEnd(t *testing.T) {
+	ctx := context.Background()
+	env := newSignalEnv(t, "decode", "embedding")
+	a, st, q, stub := env.a, env.st, env.q, env.stub
 	// A repository with the code the stack trace points at, mapped to the "billing" service.
 	connID, err := a.conns.Create(ctx, store.NewConnector{Type: "github", Name: "gh", Credentials: "x"})
 	require.NoError(t, err)
@@ -113,4 +131,74 @@ func TestDecodeEndToEnd(t *testing.T) {
 	assert.Equal(t, 1, n)
 	require.NoError(t, st.Pool.QueryRow(ctx, `SELECT status::text FROM issues`).Scan(&status))
 	assert.Equal(t, "regressed", status, "a regression stays visible as such")
+}
+
+// TestSuggestionsEndToEnd: recurring health-check noise that the decode calls not actionable becomes an
+// auto-suggestion; accepting it enables a rule that suppresses the next occurrence; pasted text proposes a
+// rule for the same issue and the dry run counts it.
+func TestSuggestionsEndToEnd(t *testing.T) {
+	ctx := context.Background()
+	env := newSignalEnv(t, "decode", "suggest")
+	a, st, q := env.a, env.st, env.q
+
+	var evs []ports.SignalEvent
+	for i := 0; i < 60; i++ {
+		evs = append(evs, ports.SignalEvent{Source: "alertmanager", Kind: ports.KindAlert, ExternalID: "hc-" + strings.Repeat("x", i),
+			Service: "lb", Environment: "prod", RuleID: "LBHealth", Title: "health check failed on lb-1"})
+	}
+	require.NoError(t, a.signals.Ingest(ctx, evs))
+	require.NoError(t, a.agg.Flush(ctx))
+	runJob(t, a, q, ports.JobDecodeIssue)
+	var issueID string
+	var actionable bool
+	require.NoError(t, st.Pool.QueryRow(ctx, `SELECT i.id, d.is_actionable FROM issues i JOIN decodes d ON d.id = i.decode_id`).Scan(&issueID, &actionable))
+	assert.False(t, actionable, "the decode calls health-check noise not actionable")
+
+	n, err := a.suggest.AutoSuggest(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0, n, "younger than 3 days: not yet")
+	_, err = st.Pool.Exec(ctx, `UPDATE issues SET first_seen = now() - interval '4 days'`)
+	require.NoError(t, err)
+	n, err = a.suggest.AutoSuggest(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
+	n, err = a.suggest.AutoSuggest(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, 0, n, "a pending suggestion is not proposed twice")
+
+	pending, err := a.suggestions.ListSuggestions(ctx, "", 10)
+	require.NoError(t, err)
+	require.Len(t, pending, 1)
+	assert.Equal(t, []string{issueID}, pending[0].IssueIDs)
+	assert.Equal(t, []string{"lb"}, pending[0].ProposedMatch.Services)
+	assert.Contains(t, pending[0].Rationale, "60 occurrences")
+
+	var enabled int
+	require.NoError(t, st.Pool.QueryRow(ctx, `SELECT count(*) FROM known_issues WHERE enabled`).Scan(&enabled))
+	assert.Equal(t, 0, enabled, "nothing is suppressed without a human")
+	var ownerID string
+	require.NoError(t, st.Pool.QueryRow(ctx, `SELECT id FROM users LIMIT 1`).Scan(&ownerID))
+	decided, err := a.suggestions.DecideSuggestion(ctx, pending[0].ID, ownerID, true, "LB health checks during deploys", "expected_noise")
+	require.NoError(t, err)
+	assert.Equal(t, "accepted", decided.Status)
+	_, err = a.suggestions.DecideSuggestion(ctx, pending[0].ID, ownerID, false, "", "")
+	assert.ErrorIs(t, err, store.ErrAlreadyDecided)
+
+	require.NoError(t, a.signals.Reload(ctx))
+	evs[0].ExternalID = "hc-after"
+	require.NoError(t, a.signals.Ingest(ctx, evs[:1]))
+	require.NoError(t, a.agg.Flush(ctx))
+	var suppressed int64
+	var status string
+	require.NoError(t, st.Pool.QueryRow(ctx, `SELECT suppressed_count, status::text FROM issues WHERE id = $1`, issueID).Scan(&suppressed, &status))
+	assert.Equal(t, int64(1), suppressed, "the accepted rule suppresses the next occurrence")
+
+	got, err := a.suggest.FromText(ctx, `Runbook: "health check failed" alerts from lb during rolling deploys are expected.`, nil, ownerID)
+	require.NoError(t, err)
+	assert.Equal(t, "high", got.Confidence)
+	require.Len(t, got.Candidates, 1)
+	assert.Equal(t, []string{got.Candidates[0].Fingerprint}, got.ProposedMatch.Fingerprints)
+	assert.Equal(t, 1, got.WouldMatch)
+	assert.Equal(t, []string{issueID}, got.SampleIssueIDs)
+	assert.Equal(t, []string{"health check failed"}, got.Terms.Messages, "found by the quoted message (2-letter service names are too ambiguous to match as words)")
 }

@@ -29,6 +29,9 @@ func TestScrub_RemovesCredentials(t *testing.T) {
 		"github token":    {"ghp_" + strings.Repeat("a1B2", 9) + " leaked", "<GITHUB_TOKEN> leaked"},
 		"slack token":     {"xoxb-1234567890-abcdefghij", "<SLACK_TOKEN>"},
 		"stripe key":      {"sk_live_" + strings.Repeat("x9", 12), "<STRIPE_KEY>"},
+		"openai key":      {"OPENAI_API_KEY is sk-proj-" + strings.Repeat("Ab3_", 8) + " ok", "OPENAI_API_KEY is <API_KEY> ok"},
+		"anthropic key":   {"x-api-key: sk-ant-api03-" + strings.Repeat("q7W-", 10), "x-api-key: <API_KEY>"},
+		"bare token":      {"retry with token=9f8e7d6c5b4a3210 failed", "retry with token=<SECRET> failed"},
 		"private key":     {"cfg -----BEGIN RSA PRIVATE KEY-----\nMIIEow\nabc\n-----END RSA PRIVATE KEY----- end", "cfg <PRIVATE_KEY> end"},
 		"openssh key":     {"-----BEGIN OPENSSH PRIVATE KEY-----\nb3Blbn\n-----END OPENSSH PRIVATE KEY-----", "<PRIVATE_KEY>"},
 	}
@@ -47,6 +50,8 @@ func TestScrub_LeavesOrdinaryTextAlone(t *testing.T) {
 		"password reset email sent",
 		"AKIA is a prefix", // too short to be a key
 		"sha256:abcdef0123456789",
+		"task-runner and sk-short", // not key-shaped
+		"token: expired",           // a short word after "token:" is not a credential
 		"",
 	} {
 		assert.Equal(t, s, Scrub(s), s)
