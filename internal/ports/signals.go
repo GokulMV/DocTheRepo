@@ -82,3 +82,51 @@ type SignalEvent struct {
 type SignalSink interface {
 	Ingest(ctx context.Context, events []SignalEvent) error
 }
+
+// SignalWebhook is a push adapter (Sentry, PagerDuty, Alertmanager, …): it verifies and parses one
+// delivery. Adapters never do I/O; the ingress layer loads the connector and hands events to the sink.
+type SignalWebhook interface {
+	// Source is the adapter name, also the path segment of /hooks/{source}/{connector_id}.
+	Source() string
+	// Verify authenticates a delivery against the connector's secret (ErrInvalidSignature on failure).
+	Verify(req WebhookRequest, cc ConnectorConfig) error
+	// Parse maps a delivery to events; state changes that are not problems (resolved, acknowledged) map to
+	// none. Malformed payloads return a *ValidationError.
+	Parse(req WebhookRequest, cc ConnectorConfig) ([]SignalEvent, error)
+}
+
+// WebhookRequest is what a push adapter sees of an HTTP delivery.
+type WebhookRequest struct {
+	Header map[string][]string
+	Query  map[string][]string
+	Body   []byte
+}
+
+// HeaderValue returns the first value of a header, case-insensitively.
+func (r WebhookRequest) HeaderValue(name string) string {
+	for k, v := range r.Header {
+		if len(v) > 0 && equalFold(k, name) {
+			return v[0]
+		}
+	}
+	return ""
+}
+
+func equalFold(a, b string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		ca, cb := a[i], b[i]
+		if 'A' <= ca && ca <= 'Z' {
+			ca += 'a' - 'A'
+		}
+		if 'A' <= cb && cb <= 'Z' {
+			cb += 'a' - 'A'
+		}
+		if ca != cb {
+			return false
+		}
+	}
+	return true
+}
