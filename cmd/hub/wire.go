@@ -39,6 +39,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/core/pipeline"
 	"github.com/GokulMV/DocTheRepo/internal/core/rag"
 	"github.com/GokulMV/DocTheRepo/internal/core/spendguard"
+	"github.com/GokulMV/DocTheRepo/internal/core/suggest"
 	"github.com/GokulMV/DocTheRepo/internal/ingest"
 	"github.com/GokulMV/DocTheRepo/internal/observability"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
@@ -80,6 +81,8 @@ type app struct {
 	signals     *ingest.SignalIngest
 	polls       *ingest.SignalPolls
 	decoder     *decode.Decoder
+	suggestions *store.Suggestions
+	suggest     *suggest.Service
 }
 
 func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.Box, q *queue.Queue, log *slog.Logger, m *observability.Metrics) (*app, error) {
@@ -202,6 +205,8 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 		Cost: func(kind, model, feature string, in, out int64) (float64, bool) {
 			return a.enforcer.Guard().Cost(kind, model, feature, in, out)
 		}}
+	a.suggestions = store.NewSuggestions(st, a.knownIssues)
+	a.suggest = &suggest.Service{Store: a.suggestions, GW: gw, Index: a.index}
 	a.pipe = &pipeline.Pipeline{Repos: repos, Chunks: a.chunks, Graph: store.NewGraph(st), Docs: a.docs, Savings: store.NewSavings(st),
 		Hosts: a.hosts.Host, Lander: &push.Dispatcher{PRs: prs, Lifecycle: a.sweeper}, GW: gw, DocGen: &docgen.Generator{GW: gw},
 		Indexer: indexer, Grammars: reg, Log: log.With("component", "pipeline")}
@@ -239,6 +244,13 @@ func (a *app) tasks() []scheduler.Task {
 			n, err := a.ingest.Poll(ctx)
 			if n > 0 {
 				a.log.Info("polling enqueued pushes", "count", n)
+			}
+			return err
+		}},
+		{Name: "suggest_known_issues", Every: 24 * time.Hour, Fn: func(ctx context.Context) error {
+			n, err := a.suggest.AutoSuggest(ctx)
+			if n > 0 {
+				a.log.Info("known-issue rules suggested", "count", n)
 			}
 			return err
 		}},

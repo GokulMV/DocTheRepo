@@ -73,6 +73,13 @@ Under construction, milestone by milestone (plan § 14). Implemented so far:
   Kinesis, Pub/Sub, RabbitMQ) open issues for sustained consumer lag (auto-resolving when it clears) and
   for dead-letter growth, one issue per error class; the Hub never commits offsets or acknowledges an
   application's messages.
+- **Phase 11 — Decode & suggestions**: every new error group is explained once, grounded in the code its
+  stack trace points at (exact file and symbol, then semantic search in the service's repositories), that
+  code's docs, commits from the last 7 days, similar issues explained before, and runbooks, within a 12k
+  token budget. A regression whose blamed code is unchanged reuses its decode instead of paying again.
+  Known-issue suggestions come from decodes that call an issue noise (no extra model call) or from pasted
+  incident text (one call, which may only reference real issues), and a dry run shows what a rule would
+  match; nothing is suppressed until a person accepts it.
 
 ## Install
 
