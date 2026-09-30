@@ -27,7 +27,7 @@ function Branch({ node, repoId, selected, onSelect, depth }: {
         onClick={() => (expandable ? setOpen(!open) : onSelect(node))}
         aria-expanded={expandable ? open : undefined}
       >
-        <span className="w-3 text-slate-400">{expandable ? (open ? '▾' : '▸') : ''}</span>
+        <span aria-hidden className="w-3 text-slate-400">{expandable ? (open ? '▾' : '▸') : ''}</span>
         <span className="truncate">{node.title}</span>
       </button>
       {open && expandable && (
@@ -48,7 +48,7 @@ function RepoTree({ root, selected, onSelect }: { root: TreeNode; selected?: str
   return (
     <li>
       <button className="flex w-full items-center gap-1 rounded px-1.5 py-1 text-left text-sm font-semibold hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => setOpen(!open)} aria-expanded={open}>
-        <span className="w-3 text-slate-400">{open ? '▾' : '▸'}</span>
+        <span aria-hidden className="w-3 text-slate-400">{open ? '▾' : '▸'}</span>
         {root.title}
       </button>
       {open && (

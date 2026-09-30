@@ -279,3 +279,23 @@ func TestHTTPIngress(t *testing.T) {
 	}
 	assert.Positive(t, limited, "per-connector rate limit")
 }
+
+func TestGitWebhook_BotGuardDiscoversIdentityWhenUnconfigured(t *testing.T) {
+	each(t, func(t *testing.T, f *hostfixture.Fixture) {
+		ctx := context.Background()
+		e := newEnv(t, f, "webhook")
+		e.cc.Config = map[string]string{} // no bot_login: the guard asks the host who it is
+		e.svc.Hosts = &fixedHosts{host: f.Host, cc: e.cc}
+		k := f.Name
+		body := pushBody(k, "main", f.BotLogin, "main.go")
+		res, err := e.svc.GitWebhook(ctx, k, "conn-1", signed(k, "push", body), []byte(body))
+		require.NoError(t, err)
+		assert.Equal(t, ingest.ReasonBotLoop, res.Reason)
+		assert.Empty(t, e.q.jobs)
+
+		body = pushBody(k, "main", "alice", "main.go")
+		res, err = e.svc.GitWebhook(ctx, k, "conn-1", signed(k, "push", body), []byte(body))
+		require.NoError(t, err)
+		assert.True(t, res.Accepted, "people still trigger work")
+	})
+}

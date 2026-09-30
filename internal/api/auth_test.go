@@ -289,6 +289,11 @@ func TestOIDCLoginRolesAndACL(t *testing.T) {
 	require.Equal(t, http.StatusNoContent, code)
 	_, me, _ = viewer.do("GET", "/api/v1/me", nil)
 	assert.ElementsMatch(t, []any{repoA, repoB}, me["repo_access"].(map[string]any)["repo_ids"])
+	code, out, _ = owner.do("GET", "/api/v1/users/"+bobID+"/repo-access", nil)
+	require.Equal(t, http.StatusOK, code)
+	assert.Equal(t, []any{map[string]any{"repo_id": repoB, "level": "read"}}, out["items"], "direct grants only (repo A comes through a group)")
+	code, _, _ = viewer.do("GET", "/api/v1/users/"+bobID+"/repo-access", nil)
+	assert.Equal(t, http.StatusForbidden, code)
 
 	code, out, _ = owner.do("PATCH", "/api/v1/users/"+annID, map[string]any{"role": "viewer"})
 	assert.Equal(t, http.StatusConflict, code)

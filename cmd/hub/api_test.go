@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -328,4 +329,66 @@ func TestOpenAPICoversEveryRoute(t *testing.T) {
 	assert.Empty(t, missing, "add these to api.Operations")
 	spec := api.OpenAPI()
 	assert.Equal(t, "3.1.0", spec["openapi"])
+}
+
+// TestWebhookRegisteredAndDelivered: tracking a repo on a webhook connector registers the hook on the git
+// host; a developer push is delivered, verified, and queued; the Hub bot's own push is dropped by the
+// bot-loop guard.
+func TestWebhookRegisteredAndDelivered(t *testing.T) {
+	ctx := context.Background()
+	st := storetest.New(t)
+	kek, err := localfile.Open(filepath.Join(t.TempDir(), "k"))
+	require.NoError(t, err)
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	cfg := config.Default()
+	cfg.Auth.Mode = "local"
+	cfg.Server.PublicURL = "http://" + l.Addr().String()
+	log := slog.New(slog.DiscardHandler)
+	m := observability.NewMetrics()
+	q := queue.New(st, queue.Options{})
+	a, err := wire(ctx, cfg, st, secrets.NewBox(kek), q, log, m)
+	require.NoError(t, err)
+	_, err = a.auth.BootstrapOwner(ctx, "owner@acme.com", "correct horse battery staple")
+	require.NoError(t, err)
+	srv := &httptest.Server{Listener: l, Config: &http.Server{Handler: api.NewRouter(api.Deps{Log: log, Metrics: m, Git: a.ingest, Auth: a.auth, V1: a.v1Routes()})}}
+	srv.Start()
+	defer srv.Close()
+
+	gh := githubmock.New()
+	defer gh.Close()
+	gh.CreateRepo("acme/shop", "main", map[string]string{"main.go": "package main\n\nfunc main() {}\n"})
+	jar, _ := cookiejar.New(nil)
+	c := &apiClient{t: t, base: srv.URL + "/api/v1", c: &http.Client{Jar: jar}}
+	_, out := c.call("POST", "/auth/local/login", map[string]string{"email": "owner@acme.com", "password": "correct horse battery staple"})
+	c.csrf = out["csrf_token"].(string)
+	code, out := c.call("POST", "/connectors", map[string]any{"type": "github", "name": "GitHub", "credentials": "ghp_x", "webhook_secret": "s3cret",
+		"mode": "webhook", "config": map[string]string{"base_url": gh.APIURL(), "bot_login": gh.BotLogin}})
+	require.Equal(t, http.StatusCreated, code, out)
+	connID := out["id"].(string)
+	code, out = c.call("POST", "/repos", map[string]any{"connector_id": connID, "full_name": "acme/shop"})
+	require.Equal(t, http.StatusCreated, code, out)
+	assert.Equal(t, "registered", out["webhook"])
+	hooks := gh.Hooks("acme/shop")
+	require.Len(t, hooks, 1)
+	assert.Equal(t, srv.URL+"/hooks/github/"+connID, hooks[0]["config"].(map[string]any)["url"])
+	code, out = c.call("POST", "/repos", map[string]any{"connector_id": connID, "full_name": "acme/shop"})
+	require.Equal(t, http.StatusCreated, code, out)
+	assert.Len(t, gh.Hooks("acme/shop"), 1, "re-registering edits the hook instead of adding a second")
+
+	body := "package main\n\nfunc main() { Serve() }\n\nfunc Serve() {}\n"
+	dev := gh.Push("acme/shop", "main", map[string]*string{"main.go": &body}, "ann")
+	doc := "# generated\n"
+	gh.Push("acme/shop", "main", map[string]*string{"docs/generated/main.md": &doc}, gh.BotLogin)
+	require.Eventually(t, func() bool { return len(gh.Deliveries()) == 2 }, 10*time.Second, 20*time.Millisecond)
+	d := gh.Deliveries()
+	assert.Equal(t, http.StatusAccepted, d[0].Status, "developer push: verified and queued")
+	assert.Equal(t, dev, d[0].After)
+	assert.Equal(t, http.StatusOK, d[1].Status, "the bot's own push is acknowledged but not queued")
+	job, err := q.Claim(ctx, ports.JobCodePush, "t", time.Minute)
+	require.NoError(t, err)
+	require.NotNil(t, job)
+	job2, err := q.Claim(ctx, ports.JobCodePush, "t", time.Minute)
+	require.NoError(t, err)
+	assert.Nil(t, job2, "exactly one push job")
 }

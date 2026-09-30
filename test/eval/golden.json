@@ -1,0 +1,352 @@
+[
+  {
+    "id": "pay-01",
+    "question": "How are failed refunds retried?",
+    "expect": [
+      "acme/payments:refunds/retry.go"
+    ]
+  },
+  {
+    "id": "pay-02",
+    "question": "How many times do we retry a refund before giving up?",
+    "expect": [
+      "acme/payments:refunds/retry.go"
+    ]
+  },
+  {
+    "id": "pay-03",
+    "question": "What happens to a refund after it exhausts its retries?",
+    "expect": [
+      "acme/payments:refunds/retry.go"
+    ]
+  },
+  {
+    "id": "pay-04",
+    "question": "How long after capture can a payment still be refunded?",
+    "expect": [
+      "acme/payments:refunds/window.go"
+    ]
+  },
+  {
+    "id": "pay-05",
+    "question": "Can an order be partially refunded more than once?",
+    "expect": [
+      "acme/payments:refunds/window.go"
+    ]
+  },
+  {
+    "id": "pay-06",
+    "question": "How do idempotency keys prevent duplicate charges?",
+    "expect": [
+      "acme/payments:idempotency/keys.go",
+      "acme/payments:docs/adr/0002-idempotency-keys.md"
+    ]
+  },
+  {
+    "id": "pay-07",
+    "question": "How long are stored idempotency key responses replayed?",
+    "expect": [
+      "acme/payments:idempotency/keys.go",
+      "acme/payments:docs/adr/0002-idempotency-keys.md"
+    ]
+  },
+  {
+    "id": "pay-08",
+    "question": "Why did we decide to require idempotency keys on every charge?",
+    "expect": [
+      "acme/payments:docs/adr/0002-idempotency-keys.md"
+    ]
+  },
+  {
+    "id": "pay-09",
+    "question": "How is the Stripe webhook signature verified?",
+    "expect": [
+      "acme/payments:webhooks/verify.go"
+    ]
+  },
+  {
+    "id": "pay-10",
+    "question": "What is the replay protection tolerance for webhook timestamps?",
+    "expect": [
+      "acme/payments:webhooks/verify.go"
+    ]
+  },
+  {
+    "id": "pay-11",
+    "question": "How are currency amounts rounded?",
+    "expect": [
+      "acme/payments:money/round.go"
+    ]
+  },
+  {
+    "id": "pay-12",
+    "question": "How many decimals does JPY have when converting to minor units?",
+    "expect": [
+      "acme/payments:money/round.go"
+    ]
+  },
+  {
+    "id": "pay-13",
+    "question": "What happens when a ledger transfer does not balance?",
+    "expect": [
+      "acme/payments:ledger/ledger.go"
+    ]
+  },
+  {
+    "id": "pay-14",
+    "question": "Which environment variables configure the payments service?",
+    "expect": [
+      "acme/payments:config/config.go"
+    ]
+  },
+  {
+    "id": "pay-15",
+    "question": "Which SQS queue are refunds retried from?",
+    "expect": [
+      "acme/payments:config/config.go"
+    ]
+  },
+  {
+    "id": "cat-01",
+    "question": "How does product search work?",
+    "expect": [
+      "acme/catalog:catalog/search.py"
+    ]
+  },
+  {
+    "id": "cat-02",
+    "question": "How does product search handle typos?",
+    "expect": [
+      "acme/catalog:catalog/search.py"
+    ]
+  },
+  {
+    "id": "cat-03",
+    "question": "What is the maximum number of search results returned?",
+    "expect": [
+      "acme/catalog:catalog/search.py"
+    ]
+  },
+  {
+    "id": "cat-04",
+    "question": "Why don't we use Elasticsearch for catalog search?",
+    "expect": [
+      "acme/catalog:docs/adr/0001-postgres-search.md"
+    ]
+  },
+  {
+    "id": "cat-05",
+    "question": "How are bulk discounts calculated?",
+    "expect": [
+      "acme/catalog:catalog/pricing.py"
+    ]
+  },
+  {
+    "id": "cat-06",
+    "question": "What is the maximum discount a customer can get?",
+    "expect": [
+      "acme/catalog:catalog/pricing.py"
+    ]
+  },
+  {
+    "id": "cat-07",
+    "question": "Do coupons stack with bulk tier discounts?",
+    "expect": [
+      "acme/catalog:catalog/pricing.py"
+    ]
+  },
+  {
+    "id": "cat-08",
+    "question": "How do we prevent overselling the last unit of stock?",
+    "expect": [
+      "acme/catalog:catalog/inventory.py"
+    ]
+  },
+  {
+    "id": "cat-09",
+    "question": "How long does a stock reservation last before it expires?",
+    "expect": [
+      "acme/catalog:catalog/inventory.py"
+    ]
+  },
+  {
+    "id": "cat-10",
+    "question": "What releases expired stock reservations?",
+    "expect": [
+      "acme/catalog:catalog/inventory.py"
+    ]
+  },
+  {
+    "id": "cat-11",
+    "question": "How long are products cached?",
+    "expect": [
+      "acme/catalog:catalog/cache.py"
+    ]
+  },
+  {
+    "id": "cat-12",
+    "question": "How is the product cache invalidated after an update?",
+    "expect": [
+      "acme/catalog:catalog/cache.py"
+    ]
+  },
+  {
+    "id": "cat-13",
+    "question": "What does the reserve endpoint return when a product is out of stock?",
+    "expect": [
+      "acme/catalog:catalog/api.py"
+    ]
+  },
+  {
+    "id": "web-01",
+    "question": "How is a card number validated at checkout?",
+    "expect": [
+      "acme/web:src/checkout/validateCard.ts"
+    ]
+  },
+  {
+    "id": "web-02",
+    "question": "How do we reject card expiry dates in the past?",
+    "expect": [
+      "acme/web:src/checkout/validateCard.ts"
+    ]
+  },
+  {
+    "id": "web-03",
+    "question": "How does percentage rollout of feature flags work?",
+    "expect": [
+      "acme/web:src/flags/featureFlags.ts"
+    ]
+  },
+  {
+    "id": "web-04",
+    "question": "Does the same user always get the same feature flag answer?",
+    "expect": [
+      "acme/web:src/flags/featureFlags.ts"
+    ]
+  },
+  {
+    "id": "web-05",
+    "question": "Which HTTP status codes does the API client retry?",
+    "expect": [
+      "acme/web:src/api/client.ts"
+    ]
+  },
+  {
+    "id": "web-06",
+    "question": "Does the frontend honor the Retry-After header?",
+    "expect": [
+      "acme/web:src/api/client.ts"
+    ]
+  },
+  {
+    "id": "web-07",
+    "question": "When is the session access token refreshed?",
+    "expect": [
+      "acme/web:src/auth/session.ts"
+    ]
+  },
+  {
+    "id": "web-08",
+    "question": "How are prices formatted for display?",
+    "expect": [
+      "acme/web:src/i18n/formatPrice.ts"
+    ]
+  },
+  {
+    "id": "web-09",
+    "question": "How are JPY prices formatted?",
+    "expect": [
+      "acme/web:src/i18n/formatPrice.ts"
+    ]
+  },
+  {
+    "id": "web-10",
+    "question": "How many attempts does fetchWithRetry make?",
+    "expect": [
+      "acme/web:src/api/client.ts"
+    ]
+  },
+  {
+    "id": "web-11",
+    "question": "What checksum validates card numbers?",
+    "expect": [
+      "acme/web:src/checkout/validateCard.ts"
+    ]
+  },
+  {
+    "id": "web-12",
+    "question": "Why is the access token refreshed before it expires?",
+    "expect": [
+      "acme/web:src/auth/session.ts"
+    ]
+  },
+  {
+    "id": "bil-01",
+    "question": "How are invoice numbers formatted?",
+    "expect": [
+      "acme/billing:invoices/generate.go"
+    ]
+  },
+  {
+    "id": "bil-02",
+    "question": "When are monthly invoices issued?",
+    "expect": [
+      "acme/billing:invoices/generate.go"
+    ]
+  },
+  {
+    "id": "bil-03",
+    "question": "How is VAT calculated for EU business customers?",
+    "expect": [
+      "acme/billing:tax/vat.go"
+    ]
+  },
+  {
+    "id": "bil-04",
+    "question": "What VAT rate applies in Germany?",
+    "expect": [
+      "acme/billing:tax/vat.go"
+    ]
+  },
+  {
+    "id": "bil-05",
+    "question": "When is an account suspended after failed subscription payments?",
+    "expect": [
+      "acme/billing:dunning/dunning.go"
+    ]
+  },
+  {
+    "id": "bil-06",
+    "question": "On which days are failed subscription payments retried?",
+    "expect": [
+      "acme/billing:dunning/dunning.go"
+    ]
+  },
+  {
+    "id": "bil-07",
+    "question": "What discount do Nightingale enterprise customers get?",
+    "expect": [
+      "acme/billing:docs/adr/0001-nightingale-pricing.md"
+    ]
+  },
+  {
+    "id": "x-01",
+    "question": "What does the payments service do and who owns it?",
+    "expect": [
+      "acme/payments:README.md"
+    ]
+  },
+  {
+    "id": "x-02",
+    "question": "Which service takes stock reservations at checkout?",
+    "expect": [
+      "acme/catalog:catalog/inventory.py"
+    ]
+  },
+  {
+    "id": "neg-01",
+    "question": "How is the Kubernetes cluster autoscaled?",
+    "expect": []
+  }
+]

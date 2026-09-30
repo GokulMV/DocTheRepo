@@ -44,6 +44,7 @@ func (h *authHandlers) routes(r chi.Router) {
 		r.Use(requireRole(auth.RoleAdmin))
 		r.Get("/users", h.listUsers)
 		r.Patch("/users/{id}", h.updateUser)
+		r.Get("/users/{id}/repo-access", h.getRepoAccess)
 		r.Put("/users/{id}/repo-access", h.setRepoAccess)
 		r.Get("/audit", h.listAudit)
 	})
@@ -281,6 +282,20 @@ func (h *authHandlers) updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = h.svc.Audit(r.Context(), p, "user.update", "user", id, in, clientIP(r))
 	WriteJSON(w, http.StatusOK, u)
+}
+
+func (h *authHandlers) getRepoAccess(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if _, err := h.svc.GetUser(r.Context(), id); err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	grants, err := h.svc.DirectRepoAccess(r.Context(), id)
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"items": grants})
 }
 
 func (h *authHandlers) setRepoAccess(w http.ResponseWriter, r *http.Request) {

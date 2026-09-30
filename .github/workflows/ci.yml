@@ -76,3 +76,35 @@ jobs:
           version: v3.16.3
       - name: terraform fmt/validate + helm lint
         run: make deploy-lint
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            web/package-lock.json
+            test/e2e/package-lock.json
+      - name: hub with the UI
+        run: make release
+      - name: Playwright browsers
+        run: cd test/e2e && npm ci --no-audit --no-fund && npx playwright install --with-deps chromium
+      - name: E2E (cold start, RBAC, spend block)
+        run: cd test/e2e && npx playwright test
+        env:
+          CI: "1"
+      - name: report and hub log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-report
+          path: |
+            test/e2e/playwright-report
+            test/e2e/test-results
+            test/e2e/.stack/hub.log

@@ -28,6 +28,7 @@ var Operations = []op{
 	{"DELETE", "/api/v1/tokens/{id}", "Auth", "Revoke a token", "viewer", false, false},
 	{"GET", "/api/v1/users", "Users", "List users", "admin", false, false},
 	{"PATCH", "/api/v1/users/{id}", "Users", "Change role or disable", "admin", true, false},
+	{"GET", "/api/v1/users/{id}/repo-access", "Users", "A user's direct repository grants", "admin", false, false},
 	{"PUT", "/api/v1/users/{id}/repo-access", "Users", "Replace a user's repository grants", "admin", true, false},
 	{"GET", "/api/v1/audit", "Users", "Audit log", "admin", false, false},
 	{"POST", "/api/v1/ask", "Ask", "Ask a question (JSON, or text/event-stream with Accept)", "viewer", true, true},

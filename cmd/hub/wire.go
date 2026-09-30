@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -161,7 +162,7 @@ func (a *app) tasks() []scheduler.Task {
 			}
 			return err
 		}},
-		{Name: "pr_lifecycle_sweep", Every: 5 * time.Minute, Fn: a.sweeper.Sweep},
+		{Name: "pr_lifecycle_sweep", Every: max(a.cfg.Docs.PRSweepInterval, time.Second), Fn: a.sweeper.Sweep},
 		{Name: "session_gc", Every: time.Hour, Fn: a.auth.GCSessions},
 		{Name: "answer_cache_gc", Every: time.Hour, Fn: a.qa.GCCache},
 		{Name: "reload_spend_guard", Every: time.Minute, Fn: a.reloadGuard},
@@ -210,7 +211,8 @@ func (a *app) v1Routes() []func(chi.Router) {
 	admin := api.AdminDeps{Auth: a.auth, Repos: a.repos, Connectors: a.conns, Providers: a.provSrc.Providers, Routes: a.routes,
 		Browse: a.browse, Queue: a.q, Seal: a.box.Seal, ProviderAAD: secrets.ProviderKeyAAD, ProviderKinds: llm.Kinds(),
 		InvalidateProvider: a.llmPool.Invalidate, Host: a.hosts.Host, InvalidateHost: a.hosts.Invalidate, DryRun: a.pipe.CodePush,
-		ReloadSpend: a.reloadGuard,
+		RegisterWebhook: a.registerWebhook,
+		ReloadSpend:     a.reloadGuard,
 		TestProvider: func(ctx context.Context, id, model string) (time.Duration, error) {
 			cfg, _, err := a.provSrc.ProviderConfig(ctx, id)
 			if err != nil {
@@ -224,6 +226,28 @@ func (a *app) v1Routes() []func(chi.Router) {
 		api.AdminRoutes(admin),
 		api.OpsRoutes(a.q, a.browse, a.auth),
 	}
+}
+
+// registerWebhook points the repo's push/review webhook at <public_url>/hooks/<kind>/<connector>, unless the
+// connector only polls or has no webhook secret (unsigned deliveries are always rejected).
+func (a *app) registerWebhook(ctx context.Context, connectorID, repo string) (string, error) {
+	host, cc, err := a.hosts.HostAndConfig(ctx, connectorID)
+	if err != nil {
+		return "", err
+	}
+	switch {
+	case cc.Mode == "poll":
+		return "skipped: the connector polls", nil
+	case cc.WebhookSecret == "":
+		return "skipped: the connector has no webhook secret", nil
+	case a.cfg.Server.PublicURL == "":
+		return "skipped: server.public_url is not set", nil
+	}
+	url := strings.TrimSuffix(a.cfg.Server.PublicURL, "/") + "/hooks/" + cc.Type + "/" + connectorID
+	if err := host.RegisterWebhook(ctx, repo, url, cc.WebhookSecret); err != nil {
+		return "", err
+	}
+	return "registered", nil
 }
 
 // readiness are the /readyz checks beyond the database.

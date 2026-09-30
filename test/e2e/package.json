@@ -1,0 +1,14 @@
+{
+  "name": "dth-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "lint": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.3"
+  }
+}

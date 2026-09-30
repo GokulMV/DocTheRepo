@@ -117,7 +117,7 @@ export default function Connectors() {
       <PageHeader title="Connectors" description="Git hosts now; logs, alerts, event buses, Confluence, Jira, Wiz and Splunk arrive in the next milestones." actions={<AddGit onCreated={(id, type, secret) => setCreated({ id, type, secret })} />} />
       {created && (
         <Card title="Finish webhook setup" className="mb-4">
-          <p className="text-sm">Add a webhook on the repository or organisation (push{created.type === 'github' ? ' and pull request review' : ' and merge request'} events):</p>
+          <p className="text-sm">The Hub registers this webhook on each repository you track. To add it by hand instead (for example on the whole organisation), use push{created.type === 'github' ? ' and pull request review' : ' and merge request'} events:</p>
           <dl className="mt-2 grid grid-cols-[8rem_1fr] gap-y-1 text-sm">
             <dt className="text-slate-500">URL</dt>
             <dd className="font-mono text-xs">{window.location.origin}/hooks/{created.type}/{created.id}</dd>

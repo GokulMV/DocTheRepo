@@ -193,6 +193,36 @@ func (q *Queries) DeleteUserSessions(ctx context.Context, userID string) error {
 	return err
 }
 
+const directRepoAccess = `-- name: DirectRepoAccess :many
+SELECT repo_id, level::text AS level FROM repo_access WHERE user_id = $1::uuid ORDER BY repo_id
+`
+
+type DirectRepoAccessRow struct {
+	RepoID string `json:"repo_id"`
+	Level  string `json:"level"`
+}
+
+// A user's direct grants (not those through IdP groups), for the access editor.
+func (q *Queries) DirectRepoAccess(ctx context.Context, uid string) ([]DirectRepoAccessRow, error) {
+	rows, err := q.db.Query(ctx, directRepoAccess, uid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DirectRepoAccessRow{}
+	for rows.Next() {
+		var i DirectRepoAccessRow
+		if err := rows.Scan(&i.RepoID, &i.Level); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const gCSessions = `-- name: GCSessions :execrows
 DELETE FROM sessions WHERE expires_at < now() OR idle_until < now()
 `

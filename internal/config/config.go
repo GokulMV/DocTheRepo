@@ -121,6 +121,9 @@ type TracingConfig struct {
 // DocsConfig holds the default generated-docs path for newly connected repos.
 type DocsConfig struct {
 	DefaultPath string `yaml:"default_path"`
+	// PRSweepInterval is how often the scheduler merges green docs PRs, rebases conflicted ones, and
+	// closes stale ones.
+	PRSweepInterval time.Duration `yaml:"pr_sweep_interval"`
 }
 
 // SpendConfig holds the acknowledgements that guard the spend ceilings (limits themselves live in the DB).
@@ -188,7 +191,7 @@ func Default() Config {
 		},
 		Logging:   LoggingConfig{Format: "json", Level: "info"},
 		Tracing:   TracingConfig{ServiceName: "dth-hub"},
-		Docs:      DocsConfig{DefaultPath: "docs/generated/"},
+		Docs:      DocsConfig{DefaultPath: "docs/generated/", PRSweepInterval: 5 * time.Minute},
 		Vector:    VectorConfig{Backend: "pgvector", QdrantKeyEnv: "DTH_QDRANT_API_KEY"},
 		Retention: RetentionConfig{EventDays: 30, ChunkGCDays: 14},
 		Grammars:  GrammarsConfig{LoadDir: "./grammars"},
@@ -253,6 +256,20 @@ func applyEnv(cfg *Config) error {
 	}
 	if v, ok := os.LookupEnv("DTH_OIDC_ALLOWED_DOMAINS"); ok {
 		cfg.Auth.OIDC.AllowedDomains = splitList(v)
+	}
+	if v, ok := os.LookupEnv("DTH_PR_SWEEP_INTERVAL"); ok {
+		d, err := time.ParseDuration(v)
+		if err != nil || d <= 0 {
+			return fmt.Errorf("DTH_PR_SWEEP_INTERVAL: want a positive duration like 5m, got %q", v)
+		}
+		cfg.Docs.PRSweepInterval = d
+	}
+	if v, ok := os.LookupEnv("DTH_ALL_USERS_READ_ALL_REPOS"); ok {
+		b, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("DTH_ALL_USERS_READ_ALL_REPOS: %w", err)
+		}
+		cfg.Auth.AllUsersReadAllRepos = b
 	}
 	if v, ok := os.LookupEnv("DTH_TRACING_ENABLED"); ok {
 		b, err := strconv.ParseBool(v)

@@ -65,6 +65,13 @@ func New(clientID string) *Server {
 	return s
 }
 
+// SetUser changes who the next authorize request signs in (safe while requests are in flight).
+func (s *Server) SetUser(u User) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.User = u
+}
+
 func (s *Server) authorize(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	if q.Get("client_id") != s.ClientID || q.Get("code_challenge_method") != "S256" || q.Get("code_challenge") == "" {

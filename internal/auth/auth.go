@@ -406,6 +406,25 @@ func (s *Service) SetRepoAccess(ctx context.Context, userID string, repoIDs []st
 	})
 }
 
+// RepoGrant is one direct repository grant.
+type RepoGrant struct {
+	RepoID string `json:"repo_id"`
+	Level  string `json:"level"`
+}
+
+// DirectRepoAccess lists a user's direct grants (group grants come from the IdP and are not editable).
+func (s *Service) DirectRepoAccess(ctx context.Context, userID string) ([]RepoGrant, error) {
+	rows, err := s.st.Q.DirectRepoAccess(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]RepoGrant, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, RepoGrant{RepoID: r.RepoID, Level: r.Level})
+	}
+	return out, nil
+}
+
 // RepoScope resolves what p may read: admins and owners read everything; with
 // auth.all_users_read_all_repos (the default) so does everyone; otherwise direct and group grants.
 func (s *Service) RepoScope(ctx context.Context, p *Principal) (RepoScope, error) {
