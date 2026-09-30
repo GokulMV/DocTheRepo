@@ -34,7 +34,8 @@ export function setup() {
   const st = stackState();
   const sessions = [];
   for (let i = 1; i <= USERS; i++) sessions.push(ssoLogin(st.hub_url, `user${String(i).padStart(2, '0')}@acme.test`));
-  return { st, sessions };
+  // The hub's histogram is cumulative since start: remember it so the run reports only its own samples.
+  return { st, sessions, before: http.get(st.metrics_url).body };
 }
 
 function question() {
@@ -56,8 +57,8 @@ export default function (data) {
   sleep(Math.max(0, PERIOD - (Date.now() - t0) / 1000));
 }
 
-// p95 upper bound and the share within 400 ms from the hub's dth_retrieval_duration_seconds histogram.
-function histogram(text, stage) {
+// Bucket counts of dth_retrieval_duration_seconds for one stage.
+function raw(text, stage) {
   const buckets = [];
   let count = 0;
   for (const line of text.split('\n')) {
@@ -69,6 +70,15 @@ function histogram(text, stage) {
     }
   }
   buckets.sort((a, b) => a[0] - b[0]);
+  return { buckets, count };
+}
+
+// p95 upper bound and the share within 400 ms for the samples between two scrapes.
+function histogram(before, after, stage) {
+  const b = raw(before, stage);
+  const a = raw(after, stage);
+  const count = a.count - b.count;
+  const buckets = a.buckets.map(([le, c]) => [le, c - ((b.buckets.find(([l]) => l === le) || [le, 0])[1])]);
   const q = buckets.find(([, c]) => c >= 0.95 * count);
   const at400 = buckets.find(([le]) => le === 0.4);
   return { p95: q ? q[0] : Infinity, within: count ? (at400 ? at400[1] : 0) / count : 0, count };
@@ -76,9 +86,9 @@ function histogram(text, stage) {
 
 export function teardown(data) {
   const text = http.get(data.st.metrics_url).body;
-  const total = histogram(text, 'total');
+  const total = histogram(data.before, text, 'total');
   p95.add(total.p95);
   within.add(total.within);
-  for (const s of Object.keys(stageP95)) stageP95[s].add(histogram(text, s).p95);
+  for (const s of Object.keys(stageP95)) stageP95[s].add(histogram(data.before, text, s).p95);
   console.log(`retrieval: ${total.count} samples, p95 ≤ ${total.p95}s, ${(total.within * 100).toFixed(1)}% within 400 ms`);
 }
