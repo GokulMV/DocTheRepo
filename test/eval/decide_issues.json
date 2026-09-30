@@ -1,0 +1,828 @@
+{
+ "task": "issue_actionability",
+ "description": "Labelled issues for the actionability decision (plan Phase 11.5). 'known_noise' means nobody needs to act; 'actionable' means the owning team should investigate. Notes explain the hard cases.",
+ "items": [
+  {
+   "id": "d001",
+   "kind": "error",
+   "title": "NullPointerException in OrderService.refund",
+   "service": "orders",
+   "message": "java.lang.NullPointerException: Cannot invoke \"Payment.getId()\" because \"payment\" is null",
+   "label": "actionable"
+  },
+  {
+   "id": "d002",
+   "kind": "error",
+   "title": "KeyError: 'currency' in invoice renderer",
+   "service": "billing",
+   "message": "KeyError: 'currency'",
+   "label": "actionable"
+  },
+  {
+   "id": "d003",
+   "kind": "error",
+   "title": "ZeroDivisionError: division by zero",
+   "service": "billing",
+   "message": "division by zero in average_line_total",
+   "label": "actionable"
+  },
+  {
+   "id": "d004",
+   "kind": "error",
+   "title": "TypeError: Cannot read properties of undefined (reading 'items')",
+   "service": "web",
+   "message": "TypeError at CartSummary.render",
+   "label": "actionable"
+  },
+  {
+   "id": "d005",
+   "kind": "error",
+   "title": "panic: runtime error: invalid memory address or nil pointer dereference",
+   "service": "gateway",
+   "message": "panic in handlers.CreateOrder",
+   "label": "actionable"
+  },
+  {
+   "id": "d006",
+   "kind": "error",
+   "title": "IntegrityError: duplicate key value violates unique constraint \"users_email_key\"",
+   "service": "accounts",
+   "message": "psycopg2.errors.UniqueViolation",
+   "label": "actionable"
+  },
+  {
+   "id": "d007",
+   "kind": "error",
+   "title": "deadlock detected while updating inventory rows",
+   "service": "inventory",
+   "message": "ERROR: deadlock detected (SQLSTATE 40P01)",
+   "label": "actionable"
+  },
+  {
+   "id": "d008",
+   "kind": "error",
+   "title": "OutOfMemoryError: Java heap space in report export",
+   "service": "reports",
+   "message": "java.lang.OutOfMemoryError: Java heap space",
+   "label": "actionable"
+  },
+  {
+   "id": "d009",
+   "kind": "error",
+   "title": "IndexError: list index out of range in pagination",
+   "service": "search",
+   "message": "IndexError: list index out of range",
+   "label": "actionable"
+  },
+  {
+   "id": "d010",
+   "kind": "alert",
+   "title": "orders-api 5xx rate above 5% for 10 minutes",
+   "service": "orders",
+   "message": "HTTPCode_Target_5XX_Count 312 > 50",
+   "label": "actionable"
+  },
+  {
+   "id": "d011",
+   "kind": "event_bus",
+   "title": "Kafka consumer group payments-worker is falling behind",
+   "service": "payments",
+   "message": "backlog 184000 (threshold 20000); sustained since 09:10",
+   "label": "actionable"
+  },
+  {
+   "id": "d012",
+   "kind": "event_bus",
+   "title": "SQS dead-letter queue orders-failed received 37 new dead-lettered messages (InventoryReservationFailed)",
+   "service": "orders",
+   "message": "reason: stock reservation timed out",
+   "label": "actionable"
+  },
+  {
+   "id": "d013",
+   "kind": "error",
+   "title": "Unhandled promise rejection: ECONNREFUSED 10.0.3.14:5432",
+   "service": "api",
+   "message": "connect ECONNREFUSED 10.0.3.14:5432",
+   "label": "actionable",
+   "note": "database unreachable from one pod"
+  },
+  {
+   "id": "d014",
+   "kind": "error",
+   "title": "SchemaValidationError: field 'amount' expected number, got string",
+   "service": "checkout",
+   "message": "validation failed for PaymentRequest.amount",
+   "label": "actionable"
+  },
+  {
+   "id": "d015",
+   "kind": "error",
+   "title": "migration 0042_add_index failed: relation \"orders_created_at_idx\" already exists",
+   "service": "orders",
+   "message": "django.db.utils.ProgrammingError",
+   "label": "actionable"
+  },
+  {
+   "id": "d016",
+   "kind": "error",
+   "title": "Checksum mismatch reading object segments/2026/09/30/part-17",
+   "service": "storage",
+   "message": "corrupt segment detected",
+   "label": "actionable"
+  },
+  {
+   "id": "d017",
+   "kind": "error",
+   "title": "ClassCastException: String cannot be cast to Long in LedgerMapper",
+   "service": "ledger",
+   "message": "java.lang.ClassCastException",
+   "label": "actionable"
+  },
+  {
+   "id": "d018",
+   "kind": "error",
+   "title": "AttributeError: 'NoneType' object has no attribute 'strip'",
+   "service": "ingest",
+   "message": "AttributeError in parse_header",
+   "label": "actionable"
+  },
+  {
+   "id": "d019",
+   "kind": "error",
+   "title": "Stripe API error: No such customer: cus_XXXX",
+   "service": "billing",
+   "message": "InvalidRequestError: No such customer",
+   "label": "actionable",
+   "note": "our stored customer IDs are stale"
+  },
+  {
+   "id": "d020",
+   "kind": "error",
+   "title": "JWT signature verification failed for all tokens after key rotation",
+   "service": "auth",
+   "message": "SignatureVerificationError",
+   "label": "actionable"
+  },
+  {
+   "id": "d021",
+   "kind": "alert",
+   "title": "disk usage above 90% on db-primary",
+   "service": "database",
+   "message": "disk_used_percent 93.4",
+   "label": "actionable"
+  },
+  {
+   "id": "d022",
+   "kind": "alert",
+   "title": "certificate for api.acme.com expires in 5 days",
+   "service": "edge",
+   "message": "days_to_expiry 5",
+   "label": "actionable"
+  },
+  {
+   "id": "d023",
+   "kind": "error",
+   "title": "SerializationException: Unknown magic byte in orders-v2 topic",
+   "service": "orders",
+   "message": "Confluent Schema Registry: unknown magic byte",
+   "label": "actionable"
+  },
+  {
+   "id": "d024",
+   "kind": "error",
+   "title": "RecursionError: maximum recursion depth exceeded in category tree",
+   "service": "catalog",
+   "message": "RecursionError while building breadcrumbs",
+   "label": "actionable"
+  },
+  {
+   "id": "d025",
+   "kind": "error",
+   "title": "Cannot find module './config/production.json'",
+   "service": "notifications",
+   "message": "Error: Cannot find module",
+   "label": "actionable"
+  },
+  {
+   "id": "d026",
+   "kind": "error",
+   "title": "Refund amount exceeds captured amount for order",
+   "service": "payments",
+   "message": "RefundError: amount 120.00 > captured 100.00",
+   "label": "actionable"
+  },
+  {
+   "id": "d027",
+   "kind": "event_bus",
+   "title": "Pub/Sub subscription invoice-events is falling behind",
+   "service": "billing",
+   "message": "oldest message 42m0s; sustained since 08:55",
+   "label": "actionable"
+  },
+  {
+   "id": "d028",
+   "kind": "error",
+   "title": "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xff",
+   "service": "imports",
+   "message": "UnicodeDecodeError in csv importer",
+   "label": "actionable"
+  },
+  {
+   "id": "d029",
+   "kind": "error",
+   "title": "Timeout waiting for lock on account 8812 after 30s",
+   "service": "ledger",
+   "message": "LockTimeoutException",
+   "label": "actionable",
+   "note": "lock contention in a hot account"
+  },
+  {
+   "id": "d030",
+   "kind": "alert",
+   "title": "p99 latency of search-api above 4s for 15 minutes",
+   "service": "search",
+   "message": "p99 4.8s",
+   "label": "actionable"
+  },
+  {
+   "id": "d031",
+   "kind": "error",
+   "title": "Failed to publish OrderCreated event: topic not found",
+   "service": "orders",
+   "message": "UnknownTopicOrPartitionException",
+   "label": "actionable"
+  },
+  {
+   "id": "d032",
+   "kind": "error",
+   "title": "Duplicate charge detected for idempotency key",
+   "service": "payments",
+   "message": "two captures for the same idempotency key",
+   "label": "actionable"
+  },
+  {
+   "id": "d033",
+   "kind": "error",
+   "title": "ValueError: time data '2026-13-01' does not match format '%Y-%m-%d'",
+   "service": "reports",
+   "message": "ValueError in parse_period",
+   "label": "actionable"
+  },
+  {
+   "id": "d034",
+   "kind": "event_bus",
+   "title": "RabbitMQ dead-letter queue emails.dlq received 12 new dead-lettered messages (TemplateNotFound)",
+   "service": "notifications",
+   "message": "reason: rejected",
+   "label": "actionable"
+  },
+  {
+   "id": "d035",
+   "kind": "error",
+   "title": "Feature flag service returned malformed payload; all flags defaulted off",
+   "service": "web",
+   "message": "JSONDecodeError",
+   "label": "actionable"
+  },
+  {
+   "id": "d036",
+   "kind": "event_bus",
+   "title": "Kinesis stream clicks is falling behind",
+   "service": "analytics",
+   "message": "oldest message 25m0s",
+   "label": "actionable"
+  },
+  {
+   "id": "d037",
+   "kind": "error",
+   "title": "S3 AccessDenied writing exports bucket after IAM change",
+   "service": "reports",
+   "message": "AccessDenied: s3:PutObject",
+   "label": "actionable"
+  },
+  {
+   "id": "d038",
+   "kind": "error",
+   "title": "Payment webhook signature mismatch for every event since 10:02",
+   "service": "payments",
+   "message": "SignatureVerificationException",
+   "label": "actionable"
+  },
+  {
+   "id": "d039",
+   "kind": "error",
+   "title": "Order total negative after discount stacking",
+   "service": "checkout",
+   "message": "AssertionError: total >= 0",
+   "label": "actionable"
+  },
+  {
+   "id": "d040",
+   "kind": "alert",
+   "title": "GuardDuty UnauthorizedAccess:EC2/SSHBruteForce against bastion",
+   "service": "security",
+   "message": "severity 5.0",
+   "label": "actionable"
+  },
+  {
+   "id": "d041",
+   "kind": "error",
+   "title": "Failed to acquire database connection from pool within 10s",
+   "service": "api",
+   "message": "HikariPool-1 - Connection is not available",
+   "label": "actionable"
+  },
+  {
+   "id": "d042",
+   "kind": "error",
+   "title": "gRPC UNIMPLEMENTED: method inventory.v2.Reserve not found",
+   "service": "orders",
+   "message": "status UNIMPLEMENTED",
+   "label": "actionable",
+   "note": "version skew after deploy"
+  },
+  {
+   "id": "d043",
+   "kind": "error",
+   "title": "Negative stock level for SKU 4412 after concurrent orders",
+   "service": "inventory",
+   "message": "invariant violated: stock < 0",
+   "label": "actionable"
+  },
+  {
+   "id": "d044",
+   "kind": "error",
+   "title": "CSRF token missing on every checkout POST since release 4.2",
+   "service": "web",
+   "message": "403 Forbidden: CSRF token missing",
+   "label": "actionable"
+  },
+  {
+   "id": "d045",
+   "kind": "error",
+   "title": "Search index mapping conflict for field price",
+   "service": "search",
+   "message": "mapper_parsing_exception",
+   "label": "actionable"
+  },
+  {
+   "id": "d046",
+   "kind": "alert",
+   "title": "error budget burn rate 14x for checkout SLO",
+   "service": "checkout",
+   "message": "burn rate 14.2",
+   "label": "actionable"
+  },
+  {
+   "id": "d047",
+   "kind": "error",
+   "title": "Cron job nightly-settlement did not run",
+   "service": "ledger",
+   "message": "no heartbeat for 26h",
+   "label": "actionable"
+  },
+  {
+   "id": "d048",
+   "kind": "error",
+   "title": "SQL syntax error near 'ORDER' in report query",
+   "service": "reports",
+   "message": "ERROR: syntax error at or near \"ORDER\"",
+   "label": "actionable"
+  },
+  {
+   "id": "d049",
+   "kind": "error",
+   "title": "Email provider rejecting all messages: domain not verified",
+   "service": "notifications",
+   "message": "550 5.7.1 domain not verified",
+   "label": "actionable"
+  },
+  {
+   "id": "d050",
+   "kind": "error",
+   "title": "Memory leak: worker RSS grows 200MB/hour until OOM kill",
+   "service": "ingest",
+   "message": "OOMKilled",
+   "label": "actionable"
+  },
+  {
+   "id": "d051",
+   "kind": "alert",
+   "title": "health check failed on lb-1 during rolling deploy",
+   "service": "lb",
+   "message": "target deregistered during deployment",
+   "label": "known_noise"
+  },
+  {
+   "id": "d052",
+   "kind": "error",
+   "title": "readiness probe failed: connection refused",
+   "service": "orders",
+   "message": "Readiness probe failed: dial tcp 10.0.1.5:8080: connect: connection refused",
+   "label": "known_noise",
+   "note": "pod starting"
+  },
+  {
+   "id": "d053",
+   "kind": "error",
+   "title": "liveness probe timed out on warmup",
+   "service": "search",
+   "message": "Liveness probe failed: context deadline exceeded",
+   "label": "known_noise"
+  },
+  {
+   "id": "d054",
+   "kind": "error",
+   "title": "client closed request (499) on /api/search",
+   "service": "search",
+   "message": "context canceled by client",
+   "label": "known_noise"
+  },
+  {
+   "id": "d055",
+   "kind": "error",
+   "title": "write: broken pipe while streaming export to browser",
+   "service": "reports",
+   "message": "write tcp: broken pipe",
+   "label": "known_noise",
+   "note": "user navigated away"
+  },
+  {
+   "id": "d056",
+   "kind": "error",
+   "title": "Request canceled by client during checkout polling",
+   "service": "checkout",
+   "message": "context canceled",
+   "label": "known_noise"
+  },
+  {
+   "id": "d057",
+   "kind": "error",
+   "title": "GET /favicon.ico 404",
+   "service": "web",
+   "message": "Not Found",
+   "label": "known_noise"
+  },
+  {
+   "id": "d058",
+   "kind": "error",
+   "title": "GET /robots.txt 404",
+   "service": "web",
+   "message": "Not Found",
+   "label": "known_noise"
+  },
+  {
+   "id": "d059",
+   "kind": "error",
+   "title": "Bot crawler hit /wp-login.php 404",
+   "service": "web",
+   "message": "Not Found: /wp-login.php",
+   "label": "known_noise",
+   "note": "scanner traffic"
+  },
+  {
+   "id": "d060",
+   "kind": "error",
+   "title": "Vulnerability scanner probing /.env returned 404",
+   "service": "web",
+   "message": "Not Found: /.env",
+   "label": "known_noise"
+  },
+  {
+   "id": "d061",
+   "kind": "error",
+   "title": "Rate limit exceeded for anonymous API key (429)",
+   "service": "api",
+   "message": "429 Too Many Requests",
+   "label": "known_noise",
+   "note": "expected throttling of free tier"
+  },
+  {
+   "id": "d062",
+   "kind": "error",
+   "title": "Retry attempt 1 of 5 for inventory call succeeded",
+   "service": "orders",
+   "message": "retrying after transient error",
+   "label": "known_noise"
+  },
+  {
+   "id": "d063",
+   "kind": "alert",
+   "title": "synthetic check from staging smoke test failed",
+   "service": "web",
+   "message": "staging smoke check",
+   "label": "known_noise"
+  },
+  {
+   "id": "d064",
+   "kind": "error",
+   "title": "load test traffic: 503 from loadtest-gateway",
+   "service": "gateway",
+   "message": "loadtest run 2026-09-30",
+   "label": "known_noise"
+  },
+  {
+   "id": "d065",
+   "kind": "error",
+   "title": "Sandbox payment declined (test card 4000000000000002)",
+   "service": "payments",
+   "message": "card_declined (sandbox)",
+   "label": "known_noise"
+  },
+  {
+   "id": "d066",
+   "kind": "error",
+   "title": "Connection reset by peer from health checker",
+   "service": "lb",
+   "message": "ECONNRESET from 10.0.0.2 (ELB health checker)",
+   "label": "known_noise"
+  },
+  {
+   "id": "d067",
+   "kind": "error",
+   "title": "Scheduled maintenance: read-only mode enabled on reporting replica",
+   "service": "reports",
+   "message": "cannot execute in read-only transaction",
+   "label": "known_noise",
+   "note": "announced maintenance window"
+  },
+  {
+   "id": "d068",
+   "kind": "alert",
+   "title": "Deploy in progress: task count below desired",
+   "service": "orders",
+   "message": "running 3 of 4 during deployment",
+   "label": "known_noise"
+  },
+  {
+   "id": "d069",
+   "kind": "error",
+   "title": "Throttling: SQS ReceiveMessage throttled, retrying",
+   "service": "ingest",
+   "message": "ThrottlingException; retrying",
+   "label": "known_noise"
+  },
+  {
+   "id": "d070",
+   "kind": "error",
+   "title": "kube-probe user agent got 503 during shutdown",
+   "service": "api",
+   "message": "503 during SIGTERM drain",
+   "label": "known_noise"
+  },
+  {
+   "id": "d071",
+   "kind": "error",
+   "title": "User entered invalid coupon code",
+   "service": "checkout",
+   "message": "CouponNotFound: SUMMER-2019",
+   "label": "known_noise",
+   "note": "user input, handled"
+  },
+  {
+   "id": "d072",
+   "kind": "error",
+   "title": "Login failed: wrong password",
+   "service": "auth",
+   "message": "InvalidCredentials",
+   "label": "known_noise",
+   "note": "expected user error"
+  },
+  {
+   "id": "d073",
+   "kind": "error",
+   "title": "Password reset link expired",
+   "service": "auth",
+   "message": "TokenExpired",
+   "label": "known_noise",
+   "note": "expected user error"
+  },
+  {
+   "id": "d074",
+   "kind": "error",
+   "title": "Upload rejected: file larger than 25MB",
+   "service": "uploads",
+   "message": "PayloadTooLarge",
+   "label": "known_noise",
+   "note": "validated user input"
+  },
+  {
+   "id": "d075",
+   "kind": "error",
+   "title": "Validation failed: email address is invalid",
+   "service": "accounts",
+   "message": "ValidationError on signup form",
+   "label": "known_noise",
+   "note": "handled user input"
+  },
+  {
+   "id": "d076",
+   "kind": "error",
+   "title": "Third-party geocoder returned 503; fell back to cached result",
+   "service": "shipping",
+   "message": "upstream 503, fallback used",
+   "label": "known_noise",
+   "note": "third-party blip with fallback"
+  },
+  {
+   "id": "d077",
+   "kind": "error",
+   "title": "Currency rates provider slow; using yesterday's rates",
+   "service": "billing",
+   "message": "timeout from rates provider, stale rates used",
+   "label": "known_noise",
+   "note": "handled fallback"
+  },
+  {
+   "id": "d078",
+   "kind": "alert",
+   "title": "CloudWatch alarm INSUFFICIENT_DATA for low-traffic queue metric",
+   "service": "ingest",
+   "message": "insufficient data",
+   "label": "known_noise"
+  },
+  {
+   "id": "d079",
+   "kind": "error",
+   "title": "Bot traffic from crawler triggered captcha",
+   "service": "web",
+   "message": "captcha challenge issued",
+   "label": "known_noise"
+  },
+  {
+   "id": "d080",
+   "kind": "error",
+   "title": "Session expired, redirecting to login",
+   "service": "web",
+   "message": "SessionExpired",
+   "label": "known_noise"
+  },
+  {
+   "id": "d081",
+   "kind": "error",
+   "title": "Heartbeat missed from preview environment pr-4412",
+   "service": "preview",
+   "message": "preview env scaled to zero",
+   "label": "known_noise"
+  },
+  {
+   "id": "d082",
+   "kind": "error",
+   "title": "Canceled by client: mobile app backgrounded during sync",
+   "service": "mobile-api",
+   "message": "context canceled",
+   "label": "known_noise"
+  },
+  {
+   "id": "d083",
+   "kind": "error",
+   "title": "Expected retry: optimistic lock conflict retried and succeeded",
+   "service": "ledger",
+   "message": "OptimisticLockException retry 1 succeeded",
+   "label": "known_noise"
+  },
+  {
+   "id": "d084",
+   "kind": "error",
+   "title": "Webhook delivery to customer endpoint returned 410 Gone; subscription disabled",
+   "service": "webhooks",
+   "message": "customer endpoint gone",
+   "label": "known_noise",
+   "note": "customer-side"
+  },
+  {
+   "id": "d085",
+   "kind": "error",
+   "title": "Chrome extension injected script error on checkout page",
+   "service": "web",
+   "message": "Script error. (from chrome-extension://)",
+   "label": "known_noise",
+   "note": "third-party browser extension"
+  },
+  {
+   "id": "d086",
+   "kind": "error",
+   "title": "ResizeObserver loop limit exceeded",
+   "service": "web",
+   "message": "ResizeObserver loop limit exceeded",
+   "label": "known_noise",
+   "note": "benign browser warning"
+  },
+  {
+   "id": "d087",
+   "kind": "error",
+   "title": "Network request failed on flaky mobile connection",
+   "service": "mobile-api",
+   "message": "TypeError: Network request failed",
+   "label": "known_noise",
+   "note": "client network"
+  },
+  {
+   "id": "d088",
+   "kind": "error",
+   "title": "DNS lookup for tracking pixel host timed out",
+   "service": "web",
+   "message": "third-party analytics pixel",
+   "label": "known_noise"
+  },
+  {
+   "id": "d089",
+   "kind": "alert",
+   "title": "staging database CPU high during nightly load test",
+   "service": "database",
+   "message": "staging load test",
+   "label": "known_noise"
+  },
+  {
+   "id": "d090",
+   "kind": "error",
+   "title": "Test tenant acme-test exceeded quota",
+   "service": "api",
+   "message": "QuotaExceeded for test tenant",
+   "label": "known_noise"
+  },
+  {
+   "id": "d091",
+   "kind": "error",
+   "title": "Probe from uptime monitor hit maintenance page",
+   "service": "web",
+   "message": "503 maintenance page (uptime robot)",
+   "label": "known_noise"
+  },
+  {
+   "id": "d092",
+   "kind": "error",
+   "title": "Deprecated API version v1 called by legacy client; served with warning",
+   "service": "api",
+   "message": "DeprecationWarning",
+   "label": "known_noise",
+   "note": "expected until sunset"
+  },
+  {
+   "id": "d093",
+   "kind": "error",
+   "title": "Customer's own SMTP server rejected our test email",
+   "service": "notifications",
+   "message": "customer SMTP 550",
+   "label": "known_noise",
+   "note": "customer-side"
+  },
+  {
+   "id": "d094",
+   "kind": "error",
+   "title": "Browser blocked third-party cookie",
+   "service": "web",
+   "message": "cookie blocked",
+   "label": "known_noise"
+  },
+  {
+   "id": "d095",
+   "kind": "error",
+   "title": "Rolling restart: consumer rebalance in progress",
+   "service": "payments",
+   "message": "rebalance in progress during rolling restart",
+   "label": "known_noise"
+  },
+  {
+   "id": "d096",
+   "kind": "error",
+   "title": "Canary pod terminated by autoscaler scale-in",
+   "service": "api",
+   "message": "SIGTERM from autoscaler",
+   "label": "known_noise"
+  },
+  {
+   "id": "d097",
+   "kind": "error",
+   "title": "Throttled by GitHub API secondary rate limit; backing off",
+   "service": "docs",
+   "message": "secondary rate limit, retrying",
+   "label": "known_noise"
+  },
+  {
+   "id": "d098",
+   "kind": "error",
+   "title": "Retrying S3 GetObject after SlowDown",
+   "service": "reports",
+   "message": "SlowDown: please reduce your request rate; retrying",
+   "label": "known_noise"
+  },
+  {
+   "id": "d099",
+   "kind": "error",
+   "title": "Load balancer health check path returned 200 slowly",
+   "service": "lb",
+   "message": "health check latency 2.1s",
+   "label": "known_noise"
+  },
+  {
+   "id": "d100",
+   "kind": "error",
+   "title": "Cache entry expired; refreshed from origin",
+   "service": "catalog",
+   "message": "stale cache refreshed after TTL",
+   "label": "known_noise"
+  }
+ ]
+}

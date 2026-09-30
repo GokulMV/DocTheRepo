@@ -143,3 +143,46 @@ func Check(rep Report, b Baseline) error {
 }
 
 func round3(x float64) float64 { return float64(int(x*1000+0.5)) / 1000 }
+
+// DecisionItem is one labelled issue for the actionability decision (decide_issues.json).
+type DecisionItem struct {
+	ID      string `json:"id"`
+	Kind    string `json:"kind"`
+	Title   string `json:"title"`
+	Service string `json:"service"`
+	Message string `json:"message"`
+	Label   string `json:"label"`
+	Note    string `json:"note,omitempty"`
+}
+
+// DecisionItems loads the labelled decision set.
+func DecisionItems() ([]DecisionItem, error) {
+	b, err := os.ReadFile(filepath.Join(Dir(), "decide_issues.json"))
+	if err != nil {
+		return nil, err
+	}
+	var f struct {
+		Items []DecisionItem `json:"items"`
+	}
+	if err := json.Unmarshal(b, &f); err != nil {
+		return nil, fmt.Errorf("decide_issues.json: %w", err)
+	}
+	return f.Items, nil
+}
+
+// DecisionBaseline is the committed reference for the stub decision run.
+type DecisionBaseline struct {
+	Accuracy      float64 `json:"accuracy"`
+	ECE           float64 `json:"ece"`
+	MissedDefects int     `json:"missed_defects"`
+}
+
+// LoadDecisionBaseline reads decide_baseline.json.
+func LoadDecisionBaseline() (DecisionBaseline, error) {
+	var b DecisionBaseline
+	raw, err := os.ReadFile(filepath.Join(Dir(), "decide_baseline.json"))
+	if err != nil {
+		return b, err
+	}
+	return b, json.Unmarshal(raw, &b)
+}

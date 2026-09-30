@@ -43,6 +43,14 @@ type Config struct {
 	Retention RetentionConfig `yaml:"retention"`
 	Grammars  GrammarsConfig  `yaml:"grammars"`
 	Vector    VectorConfig    `yaml:"vector"`
+	Decide    DecideConfig    `yaml:"decide"`
+}
+
+// DecideConfig controls decisions behind confidence gates (plan Phase 11.5). They only run when a
+// "decide" model route is configured.
+type DecideConfig struct {
+	// GateThreshold is the minimum probability at which a decision replaces the full model path.
+	GateThreshold float64 `yaml:"gate_threshold"`
 }
 
 // ServerConfig controls the HTTP listeners.
@@ -195,6 +203,7 @@ func Default() Config {
 		Vector:    VectorConfig{Backend: "pgvector", QdrantKeyEnv: "DTH_QDRANT_API_KEY"},
 		Retention: RetentionConfig{EventDays: 30, ChunkGCDays: 14},
 		Grammars:  GrammarsConfig{LoadDir: "./grammars"},
+		Decide:    DecideConfig{GateThreshold: 0.9},
 	}
 }
 
@@ -399,6 +408,9 @@ func (c Config) Validate() error {
 	}
 	if c.Tracing.Enabled && c.Tracing.OTLPEndpoint == "" {
 		add("tracing.otlp_endpoint: required when tracing.enabled is true")
+	}
+	if c.Decide.GateThreshold < 0.5 || c.Decide.GateThreshold > 1 {
+		add("decide.gate_threshold must be between 0.5 and 1 (got %v)", c.Decide.GateThreshold)
 	}
 	if err := ValidateDocsPath(c.Docs.DefaultPath); err != nil {
 		add("docs.default_path: %v", err)

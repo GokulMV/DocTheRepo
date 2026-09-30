@@ -284,3 +284,69 @@ func TestDecode_SkipsSuppressedAndPacksBudget(t *testing.T) {
 	assert.NotContains(t, l.prompts[0], "[c-vec]", "a section that does not fit is left out whole")
 	assert.NotContains(t, m.saved[0].Affected, Affected{ChunkID: "c-vec"})
 }
+
+func TestDecode_GateSkipsConfidentNoiseOnly(t *testing.T) {
+	d, m, l, sv := setup(t, good)
+	var asked []ports.DecisionQuestion
+	answer := ports.Decision{Choice: "known_noise", P: 0.96, Calibrated: true, Model: "jev", Usage: ports.TokenUsage{InputTokens: 40, OutputTokens: 2}}
+	d.Decide = func(_ context.Context, _ llmgateway.CallMeta, q ports.DecisionQuestion) (ports.Decision, error) {
+		asked = append(asked, q)
+		return answer, nil
+	}
+	d.GateThreshold = 0.9
+	d.Estimate = func(context.Context) (int64, float64) { return 8000, 0.08 }
+	out, err := d.Decode(context.Background(), "iss-1", false, "")
+	require.NoError(t, err)
+	assert.Equal(t, "gated", out.Status)
+	assert.Empty(t, l.prompts, "no full decode")
+	require.Len(t, asked, 1)
+	assert.Contains(t, asked[0].Context, "Exception: ZeroDivisionError")
+	r := m.saved[0]
+	assert.False(t, r.Result.IsActionable)
+	assert.True(t, r.Result.SuggestKnownIssue)
+	assert.Contains(t, r.Result.ProbableCause, "p=0.96, calibrated probability")
+	assert.Equal(t, int64(42), r.Tokens)
+	assert.Equal(t, "decide:anthropic", r.Provider)
+	assert.Equal(t, []string{"decision_gate"}, sv.kinds)
+
+	for _, c := range []struct {
+		name string
+		dec  ports.Decision
+		err  error
+	}{
+		{"not confident", ports.Decision{Choice: "known_noise", P: 0.8}, nil},
+		{"actionable", ports.Decision{Choice: "actionable", P: 0.99}, nil},
+		{"decide failed", ports.Decision{}, errors.New("provider down")},
+		{"no decide route", ports.Decision{}, llmgateway.ErrNoRoute},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			d, m, l, _ := setup(t, good)
+			d.Decide = func(context.Context, llmgateway.CallMeta, ports.DecisionQuestion) (ports.Decision, error) {
+				return c.dec, c.err
+			}
+			d.GateThreshold = 0.9
+			out, err := d.Decode(context.Background(), "iss-1", false, "")
+			require.NoError(t, err)
+			assert.Equal(t, "decoded", out.Status, "the full decode runs")
+			assert.Len(t, l.prompts, 1)
+			assert.True(t, m.saved[0].Result.IsActionable)
+		})
+	}
+
+	d, _, l, _ = setup(t, good)
+	d.Decide = func(context.Context, llmgateway.CallMeta, ports.DecisionQuestion) (ports.Decision, error) {
+		return answer, nil
+	}
+	out, err = d.Decode(context.Background(), "iss-1", true, "")
+	require.NoError(t, err)
+	assert.Equal(t, "decoded", out.Status, "a forced decode never takes the shortcut")
+	assert.Len(t, l.prompts, 1)
+
+	d, _, _, _ = setup(t, good)
+	d.Decide = func(context.Context, llmgateway.CallMeta, ports.DecisionQuestion) (ports.Decision, error) {
+		return ports.Decision{}, &ports.SpendBlockedError{}
+	}
+	_, err = d.Decode(context.Background(), "iss-1", false, "")
+	var sb *ports.SpendBlockedError
+	assert.ErrorAs(t, err, &sb, "a spend block parks the job instead of paying for the full decode")
+}

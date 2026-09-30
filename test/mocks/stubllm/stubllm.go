@@ -37,6 +37,7 @@ const (
 	Embedding = "embedding"
 	Decode    = "decode"
 	Suggest   = "suggest"
+	Decide    = "decide"
 	Other     = "other"
 )
 
@@ -203,6 +204,8 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		out = decode(user.String())
 	case Suggest:
 		out = suggest(user.String())
+	case Decide:
+		out = decideReply(user.String())
 	default:
 		out = "ok"
 	}
@@ -261,6 +264,8 @@ func classify(system string) string {
 		return Decode
 	case strings.HasPrefix(system, "You propose known-issue rules"):
 		return Suggest
+	case strings.HasPrefix(system, "You classify."):
+		return Decide
 	}
 	return Other
 }
@@ -504,5 +509,61 @@ func suggest(prompt string) string {
 	}
 	b, _ := json.Marshal(map[string]any{"explanation": fmt.Sprintf("stub: the text describes %d recent issue(s)", len(fps)),
 		"reason": "known_bug", "proposed_match": map[string]any{"fingerprints": fps}, "confidence": conf})
+	return string(b)
+}
+
+var decideOptionRE = regexp.MustCompile(`(?m)^- ([a-z_]+): `)
+
+// noiseWords and defectWords drive the stub's actionability guess: a keyword heuristic that makes the
+// decision plumbing and the evaluation harness testable, not a model.
+var (
+	noiseWords  = []string{"health check", "healthcheck", "liveness", "readiness", "probe", "canceled by client", "client closed", "broken pipe", "deploy", "rolling", "synthetic", "load test", "loadtest", "retrying", "retry attempt", "scheduled maintenance", "robots.txt", "favicon", "bot", "crawler", "scanner", "throttl", "rate limit", "429", "sandbox", "staging smoke"}
+	defectWords = []string{"exception", "nullpointer", "null pointer", "nil pointer", "panic", "undefined", "keyerror", "typeerror", "indexerror", "division by zero", "deadlock", "corrupt", "out of memory", "oom", "constraint", "integrity", "migration", "failed to", "cannot", "mismatch", "unhandled", "dead-letter", "dead-lettered", "falling behind", "5xx", "500"}
+)
+
+func decideReply(prompt string) string {
+	optStart := strings.Index(prompt, "## Options")
+	ctxStart := strings.Index(prompt, "## Context")
+	var opts []string
+	if optStart >= 0 && ctxStart > optStart {
+		for _, m := range decideOptionRE.FindAllStringSubmatch(prompt[optStart:ctxStart], -1) {
+			opts = append(opts, m[1])
+		}
+	}
+	body := ""
+	if ctxStart >= 0 {
+		body = strings.ToLower(prompt[ctxStart:])
+	}
+	probs := map[string]float64{}
+	if len(opts) == 2 && opts[0] == "actionable" && opts[1] == "known_noise" {
+		noise, defect := 0, 0
+		for _, w := range noiseWords {
+			if strings.Contains(body, w) {
+				noise++
+			}
+		}
+		for _, w := range defectWords {
+			if strings.Contains(body, w) {
+				defect++
+			}
+		}
+		pNoise := 0.5
+		switch {
+		case noise > 0 && defect == 0:
+			pNoise = 0.93 + 0.02*float64(min(noise, 3))
+		case noise > defect:
+			pNoise = 0.75
+		case defect > 0 && noise == 0:
+			pNoise = 0.05
+		case defect > 0:
+			pNoise = 0.3
+		}
+		probs["actionable"], probs["known_noise"] = 1-pNoise, pNoise
+	} else {
+		for _, o := range opts {
+			probs[o] = 1 / float64(len(opts))
+		}
+	}
+	b, _ := json.Marshal(map[string]any{"probabilities": probs})
 	return string(b)
 }

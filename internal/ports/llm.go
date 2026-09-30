@@ -117,3 +117,35 @@ type SchemaError struct{ Problems []string }
 func (e *SchemaError) Error() string {
 	return fmt.Sprintf("output failed schema validation: %v", e.Problems)
 }
+
+// DecisionOption is one answer a decision question allows.
+type DecisionOption struct {
+	ID          string `json:"id"`
+	Description string `json:"description"`
+}
+
+// DecisionQuestion is a typed classification question (plan Phase 11.5): pick one option given context.
+type DecisionQuestion struct {
+	// Task names the question (issue_actionability, change_cosmetic, …) for routing, prompts and evals.
+	Task    string           `json:"task"`
+	Context string           `json:"context"`
+	Options []DecisionOption `json:"options"`
+}
+
+// Decision is a probability per option. Calibrated says the probabilities come from a model trained to be
+// calibrated (a native decision model such as TypeSafe Jev); false means they are self-reported by a chat
+// model and must be treated as rough.
+type Decision struct {
+	Probabilities map[string]float64 `json:"probabilities"`
+	Choice        string             `json:"choice"`
+	P             float64            `json:"p"`
+	Calibrated    bool               `json:"calibrated"`
+	Model         string             `json:"model,omitempty"`
+	Usage         TokenUsage         `json:"usage"`
+}
+
+// Decider is implemented by providers with a native decision model. Chat providers do not need it: the
+// gateway asks them for JSON probabilities instead.
+type Decider interface {
+	Decide(ctx context.Context, model string, q DecisionQuestion) (Decision, error)
+}
