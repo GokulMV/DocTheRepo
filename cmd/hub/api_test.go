@@ -27,6 +27,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/adapters/secrets/localfile"
 	"github.com/GokulMV/DocTheRepo/internal/api"
 	"github.com/GokulMV/DocTheRepo/internal/config"
+	"github.com/GokulMV/DocTheRepo/internal/ingest"
 	"github.com/GokulMV/DocTheRepo/internal/observability"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
 	"github.com/GokulMV/DocTheRepo/internal/queue"
@@ -278,6 +279,8 @@ func runJob(t *testing.T, a *app, q *queue.Queue, typ ports.JobType) string {
 		out, err = a.pipe.CodePush(ctx, *job)
 	case ports.JobImportDocs:
 		out, err = a.pipe.ImportDocs(ctx, *job)
+	case ports.JobDecodeIssue:
+		out, err = ingest.DecodeHandler(a.decoder)(ctx, *job)
 	}
 	require.NoError(t, err)
 	status := out.Status

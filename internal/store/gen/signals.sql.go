@@ -151,6 +151,67 @@ func (q *Queries) DeleteMinuteCountsBefore(ctx context.Context, before time.Time
 	return result.RowsAffected(), nil
 }
 
+const frameChunk = `-- name: FrameChunk :many
+SELECT chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url, tsv, created_at, updated_at, deleted_at FROM chunks
+WHERE deleted_at IS NULL AND source = 'code'
+  AND (cardinality($1::uuid[]) = 0 OR repo_id = ANY($1::uuid[]))
+  AND (path = $2::text OR right($2::text, length(path) + 1) = '/' || path OR path LIKE '%/' || $2::text)
+  AND ($3::text = '' OR symbol = $3::text OR symbol = $4::text OR symbol LIKE '%.' || $3::text)
+ORDER BY (symbol = $4::text) DESC, (symbol = $3::text) DESC, (symbol = '__module__') DESC, length(path), chunk_id
+LIMIT 1
+`
+
+type FrameChunkParams struct {
+	RepoIds   []string `json:"repo_ids"`
+	File      string   `json:"file"`
+	Fn        string   `json:"fn"`
+	Qualified string   `json:"qualified"`
+}
+
+// The live code chunk a stack frame points at: the file (the frame's path ends with the chunk's path, or
+// the reverse for relative frames), preferring the qualified symbol, then the bare function name.
+func (q *Queries) FrameChunk(ctx context.Context, arg FrameChunkParams) ([]Chunk, error) {
+	rows, err := q.db.Query(ctx, frameChunk,
+		arg.RepoIds,
+		arg.File,
+		arg.Fn,
+		arg.Qualified,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Chunk{}
+	for rows.Next() {
+		var i Chunk
+		if err := rows.Scan(
+			&i.ChunkID,
+			&i.RepoID,
+			&i.Scope,
+			&i.Source,
+			&i.Path,
+			&i.Symbol,
+			&i.Language,
+			&i.Content,
+			&i.ContentHash,
+			&i.Signature,
+			&i.CommitSha,
+			&i.Url,
+			&i.Tsv,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getIssueByFingerprint = `-- name: GetIssueByFingerprint :one
 SELECT id, fingerprint, alt_fingerprint, kind, title, service, environment, repo_id, first_seen, last_seen, occurrences, suppressed_count, sources, status, severity_max, known_issue_id, decode_id, assignee_user_id, resolved_at, created_at, updated_at FROM issues WHERE fingerprint = $1
 `
