@@ -159,3 +159,9 @@ func TestEncode(t *testing.T) {
 	assert.Equal(t, "[1,-0.5,0.25]", Encode([]float32{1, -0.5, 0.25}))
 	assert.Equal(t, "[]", Encode(nil))
 }
+
+func TestSearchBeforeAnyEmbeddingIsNotFound(t *testing.T) {
+	st := storetest.New(t)
+	_, err := New(st.Pool).Search(context.Background(), []float32{1, 0}, 5, ports.VectorFilter{})
+	assert.ErrorIs(t, err, ports.ErrNotFound, "callers treat an uninitialised index as no hits")
+}

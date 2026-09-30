@@ -5,11 +5,13 @@ package pgvector
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/GokulMV/DocTheRepo/internal/adapters/vector/vlock"
@@ -199,6 +201,10 @@ func (x *Index) Search(ctx context.Context, vec []float32, k int, f ports.Vector
 		})
 		return err
 	})
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "42P01" { // undefined_table: nothing has been embedded yet
+		return nil, fmt.Errorf("vector search: index not initialised: %w", ports.ErrNotFound)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("vector search: %w", err)
 	}

@@ -236,18 +236,42 @@ func (g *Gateway) observe(r Route, outcome string, u ports.TokenUsage, latency t
 // returns human-readable problems that are shown to the model on the repair pass.
 type Check func() []string
 
+// JSONResult reports a ChatJSON call: usage summed over every attempt (retry and repair included), the
+// model that answered, and the last raw reply (kept when the output never validated).
+type JSONResult struct {
+	Usage ports.TokenUsage
+	Model string
+	Raw   string
+}
+
+func (r *JSONResult) add(resp ports.ChatResponse) {
+	r.Usage.InputTokens += resp.Usage.InputTokens
+	r.Usage.OutputTokens += resp.Usage.OutputTokens
+	r.Usage.CacheReadTokens += resp.Usage.CacheReadTokens
+	r.Usage.CacheWriteTokens += resp.Usage.CacheWriteTokens
+	r.Usage.Reported = r.Usage.Reported || resp.Usage.Reported
+	r.Model, r.Raw = resp.Model, resp.Text
+}
+
 // ChatJSON asks for a JSON object matching schema, decodes it into out, and runs check. When the output
 // fails the schema or the check, it makes exactly one repair call that shows the model its problems; a
 // second failure is a permanent *ports.SchemaError. Truncated JSON is retried once with double the
 // output budget.
 func (g *Gateway) ChatJSON(ctx context.Context, feature string, meta CallMeta, req ports.ChatRequest, schema contract.Schema, out any, check Check) error {
+	_, err := g.ChatJSONResult(ctx, feature, meta, req, schema, out, check)
+	return err
+}
+
+// ChatJSONResult is ChatJSON that also reports usage, model, and the last raw reply.
+func (g *Gateway) ChatJSONResult(ctx context.Context, feature string, meta CallMeta, req ports.ChatRequest, schema contract.Schema, out any, check Check) (JSONResult, error) {
+	var res JSONResult
 	req.JSONSchema = schema
 	resp, err := g.Chat(ctx, feature, meta, req)
 	var te *ports.TruncatedError
 	if errors.As(err, &te) {
 		route, rerr := g.Route(ctx, feature)
 		if rerr != nil {
-			return rerr
+			return res, rerr
 		}
 		max := te.MaxOutputTokens
 		if max <= 0 {
@@ -257,11 +281,12 @@ func (g *Gateway) ChatJSON(ctx context.Context, feature string, meta CallMeta, r
 		resp, err = g.Chat(ctx, feature, meta, req)
 	}
 	if err != nil {
-		return err
+		return res, err
 	}
+	res.add(resp)
 	probs := decode(resp.Text, schema, out, check)
 	if len(probs) == 0 {
-		return nil
+		return res, nil
 	}
 	repair := req
 	repair.Messages = append(append([]ports.ChatMessage{}, req.Messages...),
@@ -270,12 +295,13 @@ func (g *Gateway) ChatJSON(ctx context.Context, feature string, meta CallMeta, r
 			strings.Join(probs, "\n- ") + "\n\nReply with only the corrected JSON object."})
 	resp, err = g.Chat(ctx, feature, meta, repair)
 	if err != nil {
-		return err
+		return res, err
 	}
+	res.add(resp)
 	if probs := decode(resp.Text, schema, out, check); len(probs) > 0 {
-		return ports.Permanent(&ports.SchemaError{Problems: probs})
+		return res, ports.Permanent(&ports.SchemaError{Problems: probs})
 	}
-	return nil
+	return res, nil
 }
 
 func decode(text string, schema contract.Schema, out any, check Check) []string {

@@ -57,3 +57,14 @@ DELETE FROM issue_counts_hourly WHERE hour < sqlc.arg(before);
 -- name: ResolveIssuesByFingerprint :execrows
 UPDATE issues SET status = 'resolved', resolved_at = now(), updated_at = now()
 WHERE fingerprint = ANY(sqlc.arg(fingerprints)::text[]) AND status NOT IN ('resolved', 'suppressed');
+
+-- name: FrameChunk :many
+-- The live code chunk a stack frame points at: the file (the frame's path ends with the chunk's path, or
+-- the reverse for relative frames), preferring the qualified symbol, then the bare function name.
+SELECT * FROM chunks
+WHERE deleted_at IS NULL AND source = 'code'
+  AND (cardinality(sqlc.arg(repo_ids)::uuid[]) = 0 OR repo_id = ANY(sqlc.arg(repo_ids)::uuid[]))
+  AND (path = sqlc.arg(file)::text OR right(sqlc.arg(file)::text, length(path) + 1) = '/' || path OR path LIKE '%/' || sqlc.arg(file)::text)
+  AND (sqlc.arg(fn)::text = '' OR symbol = sqlc.arg(fn)::text OR symbol = sqlc.arg(qualified)::text OR symbol LIKE '%.' || sqlc.arg(fn)::text)
+ORDER BY (symbol = sqlc.arg(qualified)::text) DESC, (symbol = sqlc.arg(fn)::text) DESC, (symbol = '__module__') DESC, length(path), chunk_id
+LIMIT 1;

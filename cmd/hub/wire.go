@@ -30,6 +30,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/auth"
 	"github.com/GokulMV/DocTheRepo/internal/config"
 	"github.com/GokulMV/DocTheRepo/internal/core/aggregate"
+	"github.com/GokulMV/DocTheRepo/internal/core/decode"
 	"github.com/GokulMV/DocTheRepo/internal/core/docgen"
 	"github.com/GokulMV/DocTheRepo/internal/core/grammars"
 	"github.com/GokulMV/DocTheRepo/internal/core/library"
@@ -78,6 +79,7 @@ type app struct {
 	agg         *aggregate.Aggregator
 	signals     *ingest.SignalIngest
 	polls       *ingest.SignalPolls
+	decoder     *decode.Decoder
 }
 
 func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.Box, q *queue.Queue, log *slog.Logger, m *observability.Metrics) (*app, error) {
@@ -118,10 +120,15 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 	a.docs = store.NewDocs(st, shelves)
 
 	a.signalStore = store.NewSignals(st)
-	a.signalStore.OnIssues = func(_ context.Context, refs []store.IssueRef) {
+	a.signalStore.OnIssues = func(ctx context.Context, refs []store.IssueRef) {
 		for _, r := range refs {
 			m.IssuesNew.WithLabelValues(r.Status).Inc()
 			log.Info("issue opened", "component", "signals", "issue_id", r.ID, "status", r.Status, "service", r.Service, "kind", r.Kind)
+			// Flow B step 6: decode new groups; a regression re-checks whether its decode still stands.
+			if _, _, err := q.Enqueue(ctx, ports.NewJob{Type: ports.JobDecodeIssue, DedupeKey: "decode:" + r.ID,
+				Payload: ingest.DecodePayload{IssueID: r.ID}}); err != nil {
+				log.Warn("enqueue decode failed", "component", "signals", "issue_id", r.ID, "err", err)
+			}
 		}
 	}
 	a.knownIssues = store.NewKnownIssues(st)
@@ -175,9 +182,29 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 			return a.enforcer.Guard().Cost(kind, model, feature, in, out)
 		},
 		Observe: func(stage string, d time.Duration) { m.Retrieval.WithLabelValues(stage).Observe(d.Seconds()) }}
+	indexer := &pipeline.Indexer{GW: gw, Index: a.index}
+	a.decoder = &decode.Decoder{Store: store.NewDecodes(st, a.chunks), GW: gw, Index: a.index, Savings: store.NewSavings(st),
+		Embed: func(ctx context.Context, meta llmgateway.CallMeta, cs []ports.Chunk) error {
+			_, err := indexer.Embed(ctx, meta, cs)
+			return err
+		},
+		Commits: func(ctx context.Context, repoID, path string, since time.Time) ([]ports.Commit, error) {
+			repo, err := repos.Get(ctx, repoID)
+			if err != nil {
+				return nil, err
+			}
+			h, err := a.hosts.Host(ctx, repo.ConnectorID)
+			if err != nil {
+				return nil, err
+			}
+			return h.CommitsForPath(ctx, repo.FullName, path, since)
+		},
+		Cost: func(kind, model, feature string, in, out int64) (float64, bool) {
+			return a.enforcer.Guard().Cost(kind, model, feature, in, out)
+		}}
 	a.pipe = &pipeline.Pipeline{Repos: repos, Chunks: a.chunks, Graph: store.NewGraph(st), Docs: a.docs, Savings: store.NewSavings(st),
 		Hosts: a.hosts.Host, Lander: &push.Dispatcher{PRs: prs, Lifecycle: a.sweeper}, GW: gw, DocGen: &docgen.Generator{GW: gw},
-		Indexer: &pipeline.Indexer{GW: gw, Index: a.index}, Grammars: reg, Log: log.With("component", "pipeline")}
+		Indexer: indexer, Grammars: reg, Log: log.With("component", "pipeline")}
 	return a, nil
 }
 
@@ -187,6 +214,7 @@ func (a *app) registerHandlers(pool *queue.Pool) {
 	pool.Register(ports.JobImportDocs, a.pipe.ImportDocs)
 	pool.Register(ports.JobReindex, a.pipe.Reindex)
 	pool.Register(ports.JobSignalBatch, a.polls.Handle)
+	pool.Register(ports.JobDecodeIssue, ingest.DecodeHandler(a.decoder))
 	pool.Register(ports.JobPRReview, func(ctx context.Context, job ports.Job) (ports.Outcome, error) {
 		var pl ingest.ReviewPayload
 		if err := json.Unmarshal(job.Payload, &pl); err != nil {

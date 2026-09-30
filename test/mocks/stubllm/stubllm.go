@@ -35,6 +35,8 @@ const (
 	QA        = "qa"
 	Triage    = "triage"
 	Embedding = "embedding"
+	Decode    = "decode"
+	Suggest   = "suggest"
 	Other     = "other"
 )
 
@@ -197,6 +199,10 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		out = `{"cosmetic":false,"confident":true,"reason":"stub: every change is documented"}`
 	case QA:
 		out = s.answer(user.String())
+	case Decode:
+		out = decode(user.String())
+	case Suggest:
+		out = suggest(user.String())
 	default:
 		out = "ok"
 	}
@@ -251,6 +257,10 @@ func classify(system string) string {
 		return QA
 	case strings.HasPrefix(system, "You classify a file change"):
 		return Triage
+	case strings.HasPrefix(system, "You explain production issues"):
+		return Decode
+	case strings.HasPrefix(system, "You propose known-issue rules"):
+		return Suggest
 	}
 	return Other
 }
@@ -451,4 +461,48 @@ func stream(w http.ResponseWriter, model, text string, in, out int) {
 func writeJSON(w http.ResponseWriter, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(v)
+}
+
+var (
+	decodeChunkRE = regexp.MustCompile(`(?m)^\[([0-9a-f]{16})\] (\S+)`)
+	issueTitleRE  = regexp.MustCompile(`(?m)^Title: (.+)$`)
+)
+
+// decode blames the first code chunk it was shown (the frame match, when there is one) and says whether it
+// looks like noise: titles mentioning "health check" are not actionable.
+func decode(prompt string) string {
+	title := "the issue"
+	if m := issueTitleRE.FindStringSubmatch(prompt); m != nil {
+		title = m[1]
+	}
+	affected := []map[string]string{}
+	codeAt := strings.Index(prompt, "## Code")
+	if codeAt >= 0 {
+		if m := decodeChunkRE.FindStringSubmatch(prompt[codeAt:]); m != nil {
+			affected = append(affected, map[string]string{"chunk_id": m[1], "reason": "stub: the top stack frame is in " + m[2]})
+		}
+	}
+	noise := strings.Contains(strings.ToLower(title), "health check")
+	b, _ := json.Marshal(map[string]any{"summary": "stub decode of " + title, "probable_cause": "stub cause",
+		"impact": "stub impact", "affected_code": affected, "next_steps": []string{"stub step"},
+		"confidence": map[bool]string{true: "high", false: "medium"}[len(affected) > 0], "is_actionable": !noise,
+		"suggest_known_issue": noise})
+	return string(b)
+}
+
+var suggestIssueRE = regexp.MustCompile(`(?m)^- issue (\S+): fingerprint (\S+) service (\S+)`)
+
+// suggest proposes a rule matching every candidate issue it was shown, by fingerprint.
+func suggest(prompt string) string {
+	var fps []string
+	for _, m := range suggestIssueRE.FindAllStringSubmatch(prompt, -1) {
+		fps = append(fps, m[2])
+	}
+	conf := "low"
+	if len(fps) > 0 {
+		conf = "high"
+	}
+	b, _ := json.Marshal(map[string]any{"explanation": fmt.Sprintf("stub: the text describes %d recent issue(s)", len(fps)),
+		"reason": "known_bug", "proposed_match": map[string]any{"fingerprints": fps}, "confidence": conf})
+	return string(b)
 }
