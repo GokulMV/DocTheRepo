@@ -106,8 +106,9 @@ func run(cfgPath string) error {
 			Concurrency: conc, LeaseTTL: cfg.Queue.LeaseTTL, PollInterval: cfg.Queue.PollInterval,
 		}, log.With("component", "worker"), metrics)
 		a.registerHandlers(pool)
-		wg.Add(1)
+		wg.Add(2)
 		go func() { defer wg.Done(); pool.Run(ctx) }()
+		go func() { defer wg.Done(); a.streams(log).Run(ctx, time.Minute) }()
 		if !cfg.HasRole(config.RoleScheduler) {
 			wg.Add(1)
 			go func() {
