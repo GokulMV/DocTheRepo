@@ -1,0 +1,37 @@
+{
+  "description": "Close action is not a new problem",
+  "headers": {},
+  "config": {},
+  "body": {
+    "action": "Close",
+    "alert": {
+      "alertId": "70413a06-38d6-4c85-92b8-5ebc900d42e2",
+      "message": "Disk usage above 90% on db-3",
+      "tags": [
+        "service:orders-db",
+        "env:prod",
+        "team-data"
+      ],
+      "tinyId": "1791",
+      "entity": "db-3",
+      "alias": "disk-db-3",
+      "createdAt": 1790000000000,
+      "updatedAt": 1790000060000,
+      "username": "Alert API",
+      "userId": "",
+      "description": "/dev/nvme1 is 91% full",
+      "priority": "P2",
+      "details": {
+        "region": "eu-west-1"
+      },
+      "source": "prometheus"
+    },
+    "source": {
+      "name": "prometheus",
+      "type": "API"
+    },
+    "integrationName": "DocTheRepo",
+    "integrationType": "Webhook"
+  },
+  "expect": []
+}

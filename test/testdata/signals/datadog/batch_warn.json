@@ -1,0 +1,33 @@
+{
+  "description": "Array body with a warning transition",
+  "headers": {},
+  "config": {},
+  "body": [
+    {
+      "id": "1",
+      "title": "[Warn] Latency on search",
+      "msg": "Error rate 7.2% above 5% threshold",
+      "alert_type": "warning",
+      "transition": "Warn",
+      "priority": "normal",
+      "date": "1790000000000",
+      "last_updated": "1790000000000",
+      "tags": "service:search,env:staging",
+      "alert_id": "123456789",
+      "aggreg_key": "abc123",
+      "hostname": "",
+      "org": {
+        "id": "222",
+        "name": "acme"
+      },
+      "url": "https://app.datadoghq.com/monitors/123456789"
+    }
+  ],
+  "expect": [
+    {
+      "severity": "warning",
+      "service": "search",
+      "environment": "staging"
+    }
+  ]
+}

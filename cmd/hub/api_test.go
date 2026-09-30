@@ -3,6 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -391,4 +394,79 @@ func TestWebhookRegisteredAndDelivered(t *testing.T) {
 	job2, err := q.Claim(ctx, ports.JobCodePush, "t", time.Minute)
 	require.NoError(t, err)
 	assert.Nil(t, job2, "exactly one push job")
+}
+
+// TestSignalWebhookEndToEnd: a Sentry connector created through the API receives a signed delivery at the
+// path the API returned, and the error becomes an issue; bad signatures, wrong paths, and malformed bodies
+// get their documented statuses.
+func TestSignalWebhookEndToEnd(t *testing.T) {
+	ctx := context.Background()
+	st := storetest.New(t)
+	kek, err := localfile.Open(filepath.Join(t.TempDir(), "k"))
+	require.NoError(t, err)
+	cfg := config.Default()
+	cfg.Auth.Mode = "local"
+	log := slog.New(slog.DiscardHandler)
+	m := observability.NewMetrics()
+	a, err := wire(ctx, cfg, st, secrets.NewBox(kek), queue.New(st, queue.Options{}), log, m)
+	require.NoError(t, err)
+	_, err = a.auth.BootstrapOwner(ctx, "owner@acme.com", "correct horse battery staple")
+	require.NoError(t, err)
+	require.NoError(t, a.signals.Reload(ctx))
+	srv := httptest.NewServer(api.NewRouter(api.Deps{Log: log, Metrics: m, Git: a.ingest, Signals: a.signals, Auth: a.auth, V1: a.v1Routes()}))
+	defer srv.Close()
+	jar, _ := cookiejar.New(nil)
+	c := &apiClient{t: t, base: srv.URL + "/api/v1", c: &http.Client{Jar: jar}}
+	_, out := c.call("POST", "/auth/local/login", map[string]string{"email": "owner@acme.com", "password": "correct horse battery staple"})
+	c.csrf = out["csrf_token"].(string)
+	code, out := c.call("POST", "/connectors", map[string]any{"type": "sentry", "name": "Sentry", "webhook_secret": "sentry-client-secret"})
+	require.Equal(t, http.StatusCreated, code, out)
+	path := out["webhook_path"].(string)
+	assert.Equal(t, "/hooks/sentry/"+out["id"].(string), path)
+	code, out = c.call("POST", "/connectors", map[string]any{"type": "cloudwatch", "name": "AWS", "webhook_secret": "aws"})
+	require.Equal(t, http.StatusCreated, code, out)
+	assert.Equal(t, "/hooks/aws/"+out["id"].(string), out["webhook_path"])
+
+	body := []byte(`{"action":"created","data":{"error":{"event_id":"e1","issue_id":"900","level":"error","title":"ZeroDivisionError: division by zero",
+		"exception":{"values":[{"type":"ZeroDivisionError","value":"division by zero","stacktrace":{"frames":[{"module":"shop.cart","function":"avg","in_app":true}]}}]},
+		"tags":[["service","shop"],["environment","prod"]]}}}`)
+	post := func(p string, b []byte, sig string) (int, map[string]any) {
+		req, _ := http.NewRequest("POST", srv.URL+p, bytes.NewReader(b))
+		req.Header.Set("Sentry-Hook-Resource", "error")
+		if sig != "" {
+			req.Header.Set("Sentry-Hook-Signature", sig)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		var o map[string]any
+		_ = json.NewDecoder(resp.Body).Decode(&o)
+		return resp.StatusCode, o
+	}
+	mac := hmac.New(sha256.New, []byte("sentry-client-secret"))
+	mac.Write(body)
+	sig := hex.EncodeToString(mac.Sum(nil))
+	code, out = post(path, body, sig)
+	require.Equal(t, http.StatusAccepted, code, out)
+	assert.Equal(t, float64(1), out["accepted"])
+	code, _ = post(path, body, "00"+sig[2:])
+	assert.Equal(t, http.StatusUnauthorized, code)
+	code, _ = post(strings.Replace(path, "sentry", "datadog", 1), body, sig)
+	assert.Equal(t, http.StatusNotFound, code, "a connector only receives on its own source's path")
+	code, _ = post("/hooks/sentry/"+ports.NewID(), body, sig)
+	assert.Equal(t, http.StatusNotFound, code)
+	bad := []byte(`{"action":"created","data":{}}`)
+	mac = hmac.New(sha256.New, []byte("sentry-client-secret"))
+	mac.Write(bad)
+	code, _ = post(path, bad, hex.EncodeToString(mac.Sum(nil)))
+	assert.Equal(t, http.StatusBadRequest, code)
+
+	require.NoError(t, a.agg.Flush(ctx))
+	var title, service, status string
+	var n int64
+	require.NoError(t, st.Pool.QueryRow(ctx, `SELECT title, service, status::text, occurrences FROM issues`).Scan(&title, &service, &status, &n))
+	assert.Equal(t, "ZeroDivisionError: division by zero", title)
+	assert.Equal(t, "shop", service)
+	assert.Equal(t, "new", status)
+	assert.Equal(t, int64(1), n)
 }

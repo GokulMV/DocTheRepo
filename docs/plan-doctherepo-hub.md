@@ -1209,6 +1209,15 @@ CloudWatch (subscription → Firehose, alarms via EventBridge, poll for local), 
 Monitoring webhook), generic webhook, event-bus inspectors (D14); fixture suite; parity suite.
 **Phase 11 — Decode & suggestions**: decode pipeline, similar-issue search, re-decode triggers, known-issue
 suggestions; savings accounting.
+**Phase 11.5 — Decision provider (Jev, optional)** (decided 2026-09-30): a generic `decide` port (typed
+questions → typed answers with per-option probabilities) routed and spend-guarded like other features, with
+two adapters: TypeSafe **Jev** (hosted System One model; optional, needs the operator's API key) and an
+LLM-JSON fallback so the feature works with any BYO provider (its probabilities are self-reported and
+labelled so). Used only behind confidence gates (e.g. p ≥ 0.9, else the full LLM path) for decisions, never
+for writing: LLM triage fallback, actionable vs known noise before decode, likely-cause candidate selection
+(then the LLM explains only the top candidate), known-issue suggestions, issue → service routing, and the
+Q&A answerability gate. Shipped with a labelled set (~100 issues, ~50 file changes) that reports accuracy,
+calibration (reliability curve / ECE), and tokens per issue against the Phase 11 baseline.
 **Phase 12 — API + UI**: Inbox, Issue detail, Known Issues (with rule tester), Suggestions, connector
 pages for signal sources, savings on Analytics; E2E error flow; signal-storm k6.
 

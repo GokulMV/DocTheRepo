@@ -1,0 +1,85 @@
+{
+  "description": "Issue alert rule fired ('event_alert' resource, tags as objects)",
+  "headers": {
+    "Sentry-Hook-Resource": "event_alert"
+  },
+  "config": {},
+  "body": {
+    "action": "triggered",
+    "data": {
+      "event": {
+        "event_id": "0f9e8d7c6b5a49382716f5e4d3c2b1a0",
+        "issue_id": "4507812345",
+        "level": "error",
+        "platform": "python",
+        "title": "ReadTimeout: HTTPSConnectionPool(host='api.stripe.com', port=443): Read timed out.",
+        "culprit": "checkout.payments in charge",
+        "timestamp": 1790000000.123,
+        "exception": {
+          "values": [
+            {
+              "type": "ReadTimeout",
+              "value": "HTTPSConnectionPool(host='api.stripe.com', port=443): Read timed out. (read timeout=30)",
+              "stacktrace": {
+                "frames": [
+                  {
+                    "filename": "gunicorn/workers/sync.py",
+                    "module": "gunicorn.workers.sync",
+                    "function": "handle",
+                    "lineno": 136,
+                    "in_app": false
+                  },
+                  {
+                    "filename": "checkout/views.py",
+                    "module": "checkout.views",
+                    "function": "pay",
+                    "lineno": 88,
+                    "in_app": true
+                  },
+                  {
+                    "filename": "checkout/payments.py",
+                    "module": "checkout.payments",
+                    "function": "charge",
+                    "lineno": 42,
+                    "in_app": true
+                  },
+                  {
+                    "filename": "requests/api.py",
+                    "module": "requests.api",
+                    "function": "post",
+                    "lineno": 115,
+                    "in_app": false
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "tags": [
+          {
+            "key": "environment",
+            "value": "staging"
+          },
+          {
+            "key": "service",
+            "value": "checkout"
+          }
+        ],
+        "web_url": "https://sentry.io/organizations/acme/issues/4507812345/events/a1b2c3d4e5f60718293a4b5c6d7e8f90/"
+      },
+      "triggered_rule": "Stripe timeouts"
+    }
+  },
+  "expect": [
+    {
+      "source": "sentry",
+      "kind": "error",
+      "environment": "staging",
+      "service": "checkout",
+      "group_id": "4507812345",
+      "attrs": {
+        "sentry.rule": "Stripe timeouts"
+      }
+    }
+  ]
+}

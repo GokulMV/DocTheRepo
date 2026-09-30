@@ -1,0 +1,48 @@
+{
+  "description": "Back to OK is not a new problem",
+  "headers": {},
+  "config": {},
+  "body": {
+    "version": "0",
+    "id": "d4",
+    "detail-type": "CloudWatch Alarm State Change",
+    "source": "aws.cloudwatch",
+    "account": "123456789012",
+    "time": "2026-09-29T10:10:00Z",
+    "region": "eu-west-1",
+    "resources": [
+      "arn:aws:cloudwatch:eu-west-1:123456789012:alarm:orders-api-5xx"
+    ],
+    "detail": {
+      "alarmName": "orders-api-5xx",
+      "state": {
+        "value": "OK",
+        "reason": "Threshold Crossed: 1 datapoint [42.0] was greater than the threshold (10.0).",
+        "timestamp": "2026-09-29T10:10:00.000+0000"
+      },
+      "previousState": {
+        "value": "OK"
+      },
+      "configuration": {
+        "description": "5xx on orders API",
+        "metrics": [
+          {
+            "id": "m1",
+            "metricStat": {
+              "metric": {
+                "namespace": "AWS/ApplicationELB",
+                "name": "HTTPCode_Target_5XX_Count",
+                "dimensions": {
+                  "LoadBalancer": "app/orders/abc"
+                }
+              },
+              "period": 60,
+              "stat": "Sum"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "expect": []
+}

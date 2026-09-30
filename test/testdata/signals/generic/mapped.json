@@ -1,0 +1,32 @@
+{
+  "description": "Connector field mapping and a custom source name",
+  "headers": {},
+  "config": {
+    "source_name": "healthchecks",
+    "kind": "alert",
+    "field.title": "alert.name",
+    "field.severity": "alert.sev",
+    "field.service": "svc.id",
+    "field.external_id": "uid"
+  },
+  "body": {
+    "alert": {
+      "name": "Heartbeat missed",
+      "sev": "critical"
+    },
+    "svc": {
+      "id": "cron-runner"
+    },
+    "uid": "hb-77"
+  },
+  "expect": [
+    {
+      "source": "healthchecks",
+      "kind": "alert",
+      "severity": "critical",
+      "service": "cron-runner",
+      "title": "Heartbeat missed",
+      "external_id": "hb-77"
+    }
+  ]
+}

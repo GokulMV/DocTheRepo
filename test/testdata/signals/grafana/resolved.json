@@ -1,0 +1,42 @@
+{
+  "description": "Resolved notification",
+  "headers": {},
+  "config": {},
+  "body": {
+    "receiver": "dth",
+    "status": "resolved",
+    "orgId": 1,
+    "title": "[FIRING:1] HighLatency",
+    "state": "alerting",
+    "message": "",
+    "groupKey": "{}",
+    "externalURL": "https://grafana.acme.com/",
+    "version": "1",
+    "commonLabels": {},
+    "commonAnnotations": {},
+    "alerts": [
+      {
+        "status": "resolved",
+        "labels": {
+          "alertname": "HighLatency",
+          "__alert_rule_uid__": "fdk3c9",
+          "grafana_folder": "Checkout",
+          "service": "checkout",
+          "severity": "warning",
+          "environment": "prod"
+        },
+        "annotations": {
+          "summary": "p99 latency above 1.5s"
+        },
+        "startsAt": "2026-09-29T11:00:00Z",
+        "endsAt": "0001-01-01T00:00:00Z",
+        "generatorURL": "https://grafana.acme.com/alerting/grafana/fdk3c9/view",
+        "fingerprint": "8a7b6c5d4e3f2a1b",
+        "values": {
+          "B": 1.73
+        }
+      }
+    ]
+  },
+  "expect": []
+}

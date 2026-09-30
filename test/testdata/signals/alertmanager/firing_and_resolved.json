@@ -1,0 +1,67 @@
+{
+  "description": "One firing and one resolved alert in a group",
+  "headers": {},
+  "config": {},
+  "body": {
+    "version": "4",
+    "groupKey": "{}:{alertname=\"KafkaConsumerLag\"}",
+    "truncatedAlerts": 0,
+    "status": "firing",
+    "receiver": "dth",
+    "groupLabels": {
+      "alertname": "KafkaConsumerLag"
+    },
+    "commonLabels": {
+      "alertname": "KafkaConsumerLag",
+      "severity": "critical"
+    },
+    "commonAnnotations": {},
+    "externalURL": "http://alertmanager:9093",
+    "alerts": [
+      {
+        "status": "firing",
+        "labels": {
+          "alertname": "KafkaConsumerLag",
+          "severity": "critical",
+          "service": "billing-consumer",
+          "env": "prod",
+          "consumergroup": "billing"
+        },
+        "annotations": {
+          "summary": "Consumer group billing lagging",
+          "description": "Lag is 120000 messages"
+        },
+        "startsAt": "2026-09-29T09:58:00Z",
+        "endsAt": "0001-01-01T00:00:00Z",
+        "generatorURL": "http://prometheus:9090/graph?g0.expr=kafka_lag",
+        "fingerprint": "c4a1b2d3e4f50617"
+      },
+      {
+        "status": "resolved",
+        "labels": {
+          "alertname": "KafkaConsumerLag",
+          "service": "orders-consumer"
+        },
+        "annotations": {},
+        "startsAt": "2026-09-29T09:00:00Z",
+        "endsAt": "2026-09-29T09:30:00Z",
+        "fingerprint": "d5e6f7a8b9c0d1e2"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "source": "alertmanager",
+      "kind": "alert",
+      "severity": "critical",
+      "service": "billing-consumer",
+      "environment": "prod",
+      "rule_id": "KafkaConsumerLag",
+      "title": "Consumer group billing lagging",
+      "external_id": "c4a1b2d3e4f50617@2026-09-29T09:58:00Z",
+      "attrs": {
+        "consumergroup": "billing"
+      }
+    }
+  ]
+}

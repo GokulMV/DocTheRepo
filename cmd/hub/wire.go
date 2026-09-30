@@ -16,6 +16,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/adapters/llm"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/push"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/push/lifecycle"
+	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/registry"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/vector/pgvector"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/vector/qdrant"
 	"github.com/GokulMV/DocTheRepo/internal/api"
@@ -125,7 +126,8 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 		m.EventsFlushed.Add(float64(b.Events()))
 	}})
 	a.signals = &ingest.SignalIngest{Agg: a.agg, Rules: a.signalStore, Log: log.With("component", "signals"),
-		OnEvent: func(source, outcome string) { m.SignalEvents.WithLabelValues(source, outcome).Inc() }}
+		OnEvent:  func(source, outcome string) { m.SignalEvents.WithLabelValues(source, outcome).Inc() },
+		Webhooks: registry.Webhooks(), Accepts: registry.Accepts, LoadConnector: conns.Get}
 	a.ingest = &ingest.Service{Queue: q, Repos: repos, Hosts: a.hosts, Log: log.With("component", "ingest")}
 	a.sweeper = &lifecycle.Sweeper{PRs: prs, Requeue: a.ingest.RequeueDocs, Log: log.With("component", "pr_lifecycle"),
 		Hosts: func(ctx context.Context, repoID string) (ports.CodeHost, ports.RepoConfig, error) {
@@ -238,7 +240,7 @@ func bootstrapOwner(ctx context.Context, cfg config.Config, st *store.Store, svc
 func (a *app) v1Routes() []func(chi.Router) {
 	admin := api.AdminDeps{Auth: a.auth, Repos: a.repos, Connectors: a.conns, Providers: a.provSrc.Providers, Routes: a.routes,
 		Browse: a.browse, Queue: a.q, Seal: a.box.Seal, ProviderAAD: secrets.ProviderKeyAAD, ProviderKinds: llm.Kinds(),
-		InvalidateProvider: a.llmPool.Invalidate, Host: a.hosts.Host, InvalidateHost: a.hosts.Invalidate, DryRun: a.pipe.CodePush,
+		InvalidateProvider: a.llmPool.Invalidate, Host: a.hosts.Host, InvalidateHost: func(id string) { a.hosts.Invalidate(id); a.signals.InvalidateConnector(id) }, DryRun: a.pipe.CodePush,
 		RegisterWebhook: a.registerWebhook,
 		ReloadSpend:     a.reloadGuard,
 		TestProvider: func(ctx context.Context, id, model string) (time.Duration, error) {

@@ -1,0 +1,38 @@
+{
+  "description": "GuardDuty high-severity finding",
+  "headers": {},
+  "config": {},
+  "body": {
+    "version": "0",
+    "id": "e1",
+    "detail-type": "GuardDuty Finding",
+    "source": "aws.guardduty",
+    "account": "123456789012",
+    "time": "2026-09-29T10:20:00Z",
+    "region": "eu-west-1",
+    "resources": [],
+    "detail": {
+      "id": "a2b3c4",
+      "type": "UnauthorizedAccess:EC2/SSHBruteForce",
+      "severity": 8.0,
+      "title": "SSH brute force against i-0abc",
+      "description": "i-0abc is being probed by 198.51.100.7",
+      "updatedAt": "2026-09-29T10:19:00Z",
+      "resource": {
+        "resourceType": "Instance",
+        "instanceDetails": {
+          "instanceId": "i-0abc"
+        }
+      }
+    }
+  },
+  "expect": [
+    {
+      "source": "guardduty",
+      "kind": "security_finding",
+      "severity": "error",
+      "rule_id": "UnauthorizedAccess:EC2/SSHBruteForce",
+      "resource_id": "i-0abc"
+    }
+  ]
+}

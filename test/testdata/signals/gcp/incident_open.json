@@ -1,0 +1,55 @@
+{
+  "description": "Monitoring webhook, open incident",
+  "headers": {},
+  "config": {},
+  "body": {
+    "version": "1.2",
+    "incident": {
+      "incident_id": "0.nq3u2zk8bx7w",
+      "scoping_project_id": "acme-prod",
+      "url": "https://console.cloud.google.com/monitoring/alerting/incidents/0.nq3u2zk8bx7w",
+      "severity": "Error",
+      "started_at": 1790000000,
+      "ended_at": null,
+      "state": "open",
+      "summary": "Cloud Run error rate for payments exceeds 2%",
+      "resource": {
+        "type": "cloud_run_revision",
+        "labels": {
+          "service_name": "payments",
+          "location": "europe-west1"
+        }
+      },
+      "metric": {
+        "type": "run.googleapis.com/request_count",
+        "displayName": "Request Count"
+      },
+      "policy_name": "Payments 5xx",
+      "policy_user_labels": {
+        "env": "prod"
+      },
+      "condition_name": "5xx ratio",
+      "documentation": {
+        "content": "See the payments runbook.",
+        "mime_type": "text/markdown"
+      },
+      "observed_value": "0.031",
+      "threshold_value": "0.02"
+    }
+  },
+  "expect": [
+    {
+      "source": "gcp",
+      "kind": "alert",
+      "severity": "error",
+      "service": "payments",
+      "environment": "prod",
+      "rule_id": "Payments 5xx/5xx ratio",
+      "external_id": "0.nq3u2zk8bx7w",
+      "attrs": {
+        "gcp.resource_type": "cloud_run_revision",
+        "gcp.resource.labels.location": "europe-west1"
+      }
+    }
+  ]
+}
