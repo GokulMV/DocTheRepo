@@ -247,6 +247,11 @@ func prepare(ctx context.Context, control, hub, ghAPI, llmURL string, repos []st
 			return fmt.Errorf("route %s: %d %v", f, code, err)
 		}
 	}
+	// A load test measures latency, not the spend guard: lift the seeded 2M tokens/day global ceiling (at
+	// ~4k prompt tokens per answer it would block the run after ~500 questions with HTTP 402).
+	if code, err := h.do("PUT", "/spend/limits", map[string]any{"items": []map[string]any{{"scope": "global", "window": "day", "max_tokens": 2_000_000_000}}}, nil); err != nil || code != 204 {
+		return fmt.Errorf("spend limits: %d %v", code, err)
+	}
 	for _, r := range repos {
 		if code, err := h.do("POST", "/repos", map[string]any{"connector_id": connID, "full_name": r, "push_mode": "direct"}, nil); err != nil || code != 201 {
 			return fmt.Errorf("track %s: %d %v", r, code, err)

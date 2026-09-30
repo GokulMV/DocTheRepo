@@ -53,6 +53,9 @@ Under construction, milestone by milestone (plan § 14). Implemented so far:
   image; Docker Compose for local use; Terraform for AWS (ECS Fargate, RDS, ALB, KMS, Secrets Manager) and
   GCP (Cloud Run, Cloud SQL, load balancer, Cloud KMS, Secret Manager); least-privilege read-only roles for
   watched AWS accounts and GCP projects; a Helm chart for any Kubernetes cluster.
+- **Phase 8 — End-to-end, load, and quality**: Playwright E2E against the real hub and mocks (cold start
+  through the UI to a cited answer; RBAC; spend blocking); k6 push-burst and Q&A load runs; a 50-question
+  retrieval eval that gates the build. Measured results: [`docs/perf-results.md`](docs/perf-results.md).
 
 ## Install
 
@@ -138,6 +141,9 @@ make test-unit   # tests that need no Docker (integration tests are skipped)
 make build       # ./bin/dth-hub (API only unless the UI was staged) and ./bin/dth
 make image       # container image with the UI embedded (docker/Dockerfile)
 make deploy-lint # terraform fmt/validate + helm lint
+make e2e         # Playwright E2E (real hub + Postgres + GitHub/OIDC mocks + stub model)
+make stack       # that stack on its own, for manual testing (URLs printed as JSON)
+make perf-push   # k6 push burst; make perf-qa for the 250k-chunk Q&A run (needs k6)
 make web         # build the React UI and stage it for embedding (then `make build`)
 make web-test    # UI typecheck + unit tests
 ```
