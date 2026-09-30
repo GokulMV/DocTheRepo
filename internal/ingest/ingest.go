@@ -45,6 +45,12 @@ type Service struct {
 
 	mu       sync.Mutex
 	lastPoll map[string]time.Time
+	bots     map[string]botEntry // connector → discovered bot identity
+}
+
+type botEntry struct {
+	id ports.Identity
+	at time.Time
 }
 
 // Result is the webhook response (plan § 7.1).
@@ -97,11 +103,44 @@ func (s *Service) GitWebhook(ctx context.Context, kind, connectorID string, hdr 
 	}
 	switch e := ev.(type) {
 	case ports.PushEvent:
-		return s.push(ctx, cc, e)
+		return s.push(ctx, s.withBot(ctx, host, cc), e)
 	case ports.ReviewEvent:
 		return s.review(ctx, cc, e)
 	}
 	return Result{Status: http.StatusOK, Reason: ReasonIgnoredEvent}, nil
+}
+
+// withBot fills bot_login/bot_email from the host's own identity when the connector does not configure
+// them, so the bot-loop guard works without manual setup. Identities are cached for ten minutes; a failed
+// lookup leaves the config as is (the docs-path guard still applies).
+func (s *Service) withBot(ctx context.Context, host ports.CodeHost, cc ports.ConnectorConfig) ports.ConnectorConfig {
+	if cc.Config["bot_login"] != "" || cc.Config["bot_email"] != "" {
+		return cc
+	}
+	s.mu.Lock()
+	e, ok := s.bots[cc.ID]
+	s.mu.Unlock()
+	if !ok || s.now().Sub(e.at) > 10*time.Minute {
+		id, err := host.BotIdentity(ctx)
+		if err != nil {
+			s.log().Warn("could not discover the connector's bot identity", "connector", cc.ID, "err", err)
+			return cc
+		}
+		e = botEntry{id: id, at: s.now()}
+		s.mu.Lock()
+		if s.bots == nil {
+			s.bots = map[string]botEntry{}
+		}
+		s.bots[cc.ID] = e
+		s.mu.Unlock()
+	}
+	cfg := make(map[string]string, len(cc.Config)+2)
+	for k, v := range cc.Config {
+		cfg[k] = v
+	}
+	cfg["bot_login"], cfg["bot_email"] = e.id.Login, e.id.Email
+	cc.Config = cfg
+	return cc
 }
 
 // IsBot reports whether an identity string is the Hub's bot (connector config bot_login / bot_email).

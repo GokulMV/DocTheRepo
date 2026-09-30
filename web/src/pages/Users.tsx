@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from '@/api/client';
 import { keys, useInvalidating, useMe, useRepos, useUsers } from '@/api/hooks';
 import type { Role, User } from '@/api/types';
@@ -8,6 +8,14 @@ import { relTime } from '@/lib/format';
 function RepoAccess({ user, onClose }: { user: User; onClose: () => void }) {
   const repos = useRepos();
   const [ids, setIds] = useState<string[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState<unknown>();
+  useEffect(() => {
+    api.get<{ items: { repo_id: string }[] }>(`/users/${user.id}/repo-access`).then(
+      (r) => { setIds(r.items.map((g) => g.repo_id)); setLoaded(true); },
+      setLoadError,
+    );
+  }, [user.id]);
   const save = useInvalidating(() => api.put(`/users/${user.id}/repo-access`, { repo_ids: ids, level: 'read' }));
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()} title={`Repository access: ${user.email}`} description="Direct grants replace the user's previous ones. Access through identity-provider groups is kept.">
@@ -19,8 +27,8 @@ function RepoAccess({ user, onClose }: { user: User; onClose: () => void }) {
           </label>
         ))}
       </div>
-      <ErrorNote error={save.error} />
-      <Button className="mt-3" onClick={async () => { await save.mutateAsync(undefined); onClose(); }}>Save</Button>
+      <ErrorNote error={loadError ?? save.error} />
+      <Button className="mt-3" disabled={!loaded || save.isPending} onClick={async () => { await save.mutateAsync(undefined); onClose(); }}>Save</Button>
     </Dialog>
   );
 }

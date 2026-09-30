@@ -44,6 +44,9 @@ type AdminDeps struct {
 	// Host returns a git connector's adapter; InvalidateHost drops it after an edit.
 	Host           func(ctx context.Context, connectorID string) (ports.CodeHost, error)
 	InvalidateHost func(id string)
+	// RegisterWebhook points the git host's push webhook for repo at this Hub; it reports "registered", or
+	// "skipped: …" when the connector polls. Best effort: a failure never blocks tracking the repository.
+	RegisterWebhook func(ctx context.Context, connectorID, repo string) (string, error)
 	// DryRun runs code_push in dry-run mode synchronously.
 	DryRun func(ctx context.Context, job ports.Job) (ports.Outcome, error)
 	// ReloadSpend applies edited ceilings immediately on this replica.
@@ -154,7 +157,15 @@ func (h *adminHandlers) createRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.audit(r, "repo.create", "repo", id, in)
-	WriteJSON(w, http.StatusCreated, map[string]string{"id": id})
+	out := map[string]string{"id": id}
+	if h.d.RegisterWebhook != nil {
+		status, err := h.d.RegisterWebhook(r.Context(), in.ConnectorID, in.FullName)
+		if err != nil {
+			status = "failed: " + err.Error() + " (the scheduler's polling still picks up pushes when the connector polls)"
+		}
+		out["webhook"] = status
+	}
+	WriteJSON(w, http.StatusCreated, out)
 }
 
 func (h *adminHandlers) patchRepo(w http.ResponseWriter, r *http.Request) {

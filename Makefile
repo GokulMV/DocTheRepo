@@ -4,7 +4,7 @@ VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo de
 LDFLAGS   := -s -w -X main.version=$(VERSION)
 SQLC      ?= sqlc
 
-.PHONY: all build test test-unit test-integration cover lint vet fmt generate vuln clean web web-test release image cli-release deploy-lint
+.PHONY: all build test test-unit test-integration cover lint vet fmt generate vuln clean web web-test release image cli-release deploy-lint e2e stack
 
 all: lint test build
 
@@ -21,6 +21,12 @@ release: web build ## Hub binary with the UI embedded
 build: ## Build the hub and CLI binaries into ./bin
 	$(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/dth-hub ./cmd/hub
 	CGO_ENABLED=0 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/dth ./cmd/dth
+
+e2e: release ## Playwright E2E against the real hub + mocks (needs Docker and Chromium)
+	cd test/e2e && npm ci --no-audit --no-fund && CI=1 npx playwright test
+
+stack: ## Run the E2E stack (hub + Postgres + GitHub/OIDC mocks + stub LLM) for manual testing or k6
+	$(GO) run ./test/e2e/stack -hub ./bin/dth-hub
 
 IMAGE ?= ghcr.io/gokulmv/doctherepo-hub:$(VERSION)
 image: ## Container image (UI + hub + CLI on distroless)

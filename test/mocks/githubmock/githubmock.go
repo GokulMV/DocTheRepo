@@ -5,7 +5,10 @@
 package githubmock
 
 import (
+	"bytes"
+	"crypto/hmac"
 	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -74,6 +77,9 @@ type Server struct {
 	BotLogin string
 	// AppTokenRequests counts installation-token exchanges (GitHub App auth).
 	AppTokenRequests int
+	// deliveries feeds the webhook worker (in order); deliveryLog records outcomes.
+	deliveries  chan delivery
+	deliveryLog []Delivery
 	// ConflictOnUpdate makes update-branch fail with 422 (simulates an unresolvable rebase).
 	ConflictOnUpdate bool
 	now              func() time.Time
@@ -82,7 +88,9 @@ type Server struct {
 // New starts an empty mock.
 func New() *Server {
 	s := &Server{repos: map[string]*Repo{}, commits: map[string]*Commit{}, trees: map[string]map[string]string{},
-		checks: map[string]string{}, teams: map[string]bool{}, BotLogin: "dth-hub[bot]", now: time.Now}
+		checks: map[string]string{}, teams: map[string]bool{}, BotLogin: "dth-hub[bot]", now: time.Now,
+		deliveries: make(chan delivery, 256)}
+	go s.deliverLoop()
 	r := chi.NewRouter()
 	r.Route("/api/v3", func(r chi.Router) { s.routes(r) })
 	s.Server = httptest.NewServer(r)
@@ -101,7 +109,7 @@ func (s *Server) CreateRepo(fullName, defaultBranch string, files map[string]str
 	s.repos[fullName] = &Repo{FullName: fullName, DefaultBranch: defaultBranch, Branches: map[string]string{},
 		Protected: map[string]bool{}, PRs: map[int]*PR{}, nextPR: 1, Collaborators: map[string]bool{}}
 	sha := s.commitLocked("", "initial", "dev", "dev@example.com", files)
-	s.repos[fullName].Branches[defaultBranch] = sha
+	s.repos[fullName].Branches[defaultBranch] = sha // repository creation fires no push event
 	return sha
 }
 
@@ -120,7 +128,7 @@ func (s *Server) Push(fullName, branch string, changes map[string]*string, autho
 		}
 	}
 	sha := s.commitLocked(parent, "push by "+author, author, author+"@example.com", files)
-	r.Branches[branch] = sha
+	s.moveLocked(r, branch, sha, author)
 	return sha
 }
 
@@ -290,6 +298,7 @@ func (s *Server) routes(r chi.Router) {
 		r.Get("/collaborators/{user}", s.isCollaborator)
 		r.Post("/hooks", s.createHook)
 		r.Get("/hooks", s.listHooks)
+		r.Patch("/hooks/{hook}", s.editHook)
 		r.Route("/git", func(r chi.Router) {
 			r.Get("/ref/*", s.getRef)
 			r.Post("/refs", s.createRef)
@@ -530,6 +539,25 @@ func (s *Server) createHook(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 201, body)
 }
 
+func (s *Server) editHook(w http.ResponseWriter, r *http.Request) {
+	var body map[string]any
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rp := s.repo(w, r)
+	if rp == nil {
+		return
+	}
+	id, _ := strconv.Atoi(chi.URLParam(r, "hook"))
+	if id < 1 || id > len(rp.Hooks) {
+		notFound(w)
+		return
+	}
+	body["id"] = id
+	rp.Hooks[id-1] = body
+	writeJSON(w, 200, body)
+}
+
 func (s *Server) listHooks(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -579,7 +607,7 @@ func (s *Server) createRef(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 422, map[string]any{"message": "Object does not exist"})
 		return
 	}
-	rp.Branches[b] = body.SHA
+	s.moveLocked(rp, b, body.SHA, s.BotLogin)
 	writeJSON(w, 201, map[string]any{"ref": body.Ref, "object": map[string]any{"sha": body.SHA}})
 }
 
@@ -609,7 +637,7 @@ func (s *Server) updateRef(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, 422, map[string]any{"message": "Update is not a fast forward"})
 		return
 	}
-	rp.Branches[b] = body.SHA
+	s.moveLocked(rp, b, body.SHA, s.BotLogin)
 	writeJSON(w, 200, map[string]any{"ref": "refs/heads/" + b, "object": map[string]any{"sha": body.SHA}})
 }
 
@@ -878,7 +906,7 @@ func (s *Server) mergePR(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	sha := s.commitLocked(base, p.Title, s.BotLogin, "", files)
-	rp.Branches[p.Base] = sha
+	s.moveLocked(rp, p.Base, sha, s.BotLogin)
 	p.Merged, p.State = true, "closed"
 	writeJSON(w, 200, map[string]any{"merged": true, "sha": sha})
 }
@@ -916,7 +944,7 @@ func (s *Server) updateBranch(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	sha := s.commitLocked(base, "Merge base into "+p.Head, s.BotLogin, "", files)
-	rp.Branches[p.Head] = sha
+	s.moveLocked(rp, p.Head, sha, s.BotLogin)
 	writeJSON(w, 202, map[string]any{"message": "Updating pull request branch.", "url": ""})
 }
 
@@ -971,3 +999,124 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 func notFound(w http.ResponseWriter) { writeJSON(w, 404, map[string]any{"message": "Not Found"}) }
+
+// --- webhook delivery ---
+
+// Delivery is one attempted webhook delivery.
+type Delivery struct {
+	Repo, URL, After, Pusher string
+	Status                   int // 0 when the request failed
+}
+
+type delivery struct {
+	repo, url, secret, after, pusher string
+	body                             []byte
+}
+
+// Deliveries returns the webhook delivery log.
+func (s *Server) Deliveries() []Delivery {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]Delivery(nil), s.deliveryLog...)
+}
+
+// moveLocked moves a branch head and queues a signed push event to every hook subscribed to "push",
+// like GitHub does for any ref update (pushes, API commits, merges). The caller holds s.mu.
+func (s *Server) moveLocked(rp *Repo, branch, sha, pusher string) {
+	before := rp.Branches[branch]
+	rp.Branches[branch] = sha
+	if len(rp.Hooks) == 0 {
+		return
+	}
+	if before == "" {
+		before = strings.Repeat("0", 40)
+	}
+	var commits []map[string]any
+	for c := s.commits[sha]; c != nil && c.SHA != before && len(commits) < 20; c = s.commits[c.Parent] {
+		var added, modified, removed []string
+		var parent map[string]string
+		if p := s.commits[c.Parent]; p != nil {
+			parent = p.Files
+		}
+		for path, content := range c.Files {
+			old, ok := parent[path]
+			switch {
+			case !ok:
+				added = append(added, path)
+			case old != content:
+				modified = append(modified, path)
+			}
+		}
+		for path := range parent {
+			if _, ok := c.Files[path]; !ok {
+				removed = append(removed, path)
+			}
+		}
+		sort.Strings(added)
+		sort.Strings(modified)
+		sort.Strings(removed)
+		commits = append([]map[string]any{{"id": c.SHA, "message": c.Message, "added": nonNil(added), "modified": nonNil(modified),
+			"removed": nonNil(removed), "author": map[string]any{"name": c.Author, "email": c.Email, "username": c.Author},
+			"committer": map[string]any{"name": c.Author, "email": c.Email, "username": c.Author}}}, commits...)
+	}
+	payload := map[string]any{"ref": "refs/heads/" + branch, "before": before, "after": sha, "created": before == strings.Repeat("0", 40),
+		"repository": map[string]any{"full_name": rp.FullName, "name": rp.FullName[strings.Index(rp.FullName, "/")+1:], "default_branch": rp.DefaultBranch},
+		"pusher":     map[string]any{"name": pusher}, "sender": map[string]any{"login": pusher}, "commits": commits}
+	body, _ := json.Marshal(payload)
+	for _, h := range rp.Hooks {
+		cfg, _ := h["config"].(map[string]any)
+		url, _ := cfg["url"].(string)
+		secret, _ := cfg["secret"].(string)
+		if url == "" || !subscribed(h, "push") {
+			continue
+		}
+		select {
+		case s.deliveries <- delivery{repo: rp.FullName, url: url, secret: secret, after: sha, pusher: pusher, body: body}:
+		default: // a stuck receiver must not block the mock
+		}
+	}
+}
+
+func subscribed(h map[string]any, event string) bool {
+	evs, ok := h["events"].([]any)
+	if !ok {
+		return true
+	}
+	for _, e := range evs {
+		if e == event {
+			return true
+		}
+	}
+	return false
+}
+
+func nonNil(xs []string) []string {
+	if xs == nil {
+		return []string{}
+	}
+	return xs
+}
+
+func (s *Server) deliverLoop() {
+	c := &http.Client{Timeout: 10 * time.Second}
+	n := 0
+	for d := range s.deliveries {
+		n++
+		mac := hmac.New(sha256.New, []byte(d.secret))
+		mac.Write(d.body)
+		req, _ := http.NewRequest(http.MethodPost, d.url, bytes.NewReader(d.body))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-GitHub-Event", "push")
+		req.Header.Set("X-GitHub-Delivery", fmt.Sprintf("mock-%d-%s", n, d.after[:8]))
+		req.Header.Set("X-Hub-Signature-256", "sha256="+hex.EncodeToString(mac.Sum(nil)))
+		status := 0
+		if resp, err := c.Do(req); err == nil {
+			status = resp.StatusCode
+			_, _ = io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+		}
+		s.mu.Lock()
+		s.deliveryLog = append(s.deliveryLog, Delivery{Repo: d.repo, URL: d.url, After: d.after, Pusher: d.pusher, Status: status})
+		s.mu.Unlock()
+	}
+}

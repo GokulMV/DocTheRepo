@@ -11,12 +11,12 @@ const MODES: { id: PushMode; label: string }[] = [
   { id: 'pr_with_approver', label: 'Pull request + human approver' },
 ];
 
-function AddRepo() {
+function AddRepo({ onAdded }: { onAdded: (fullName: string, webhook?: string) => void }) {
   const [open, setOpen] = useState(false);
   const conns = useConnectors(open);
   const [connectorId, setConnectorId] = useState('');
   const [fullName, setFullName] = useState('');
-  const add = useInvalidating((b: object) => api.post('/repos', b), keys.repos);
+  const add = useInvalidating((b: object) => api.post<{ id: string; webhook?: string }>('/repos', b), keys.repos);
   const git = conns.data?.filter((c) => c.type === 'github' || c.type === 'gitlab') ?? [];
   return (
     <>
@@ -26,8 +26,9 @@ function AddRepo() {
           className="space-y-3"
           onSubmit={async (e) => {
             e.preventDefault();
-            await add.mutateAsync({ connector_id: connectorId || git[0]?.id, full_name: fullName.trim() });
+            const r = await add.mutateAsync({ connector_id: connectorId || git[0]?.id, full_name: fullName.trim() });
             setOpen(false);
+            onAdded(fullName.trim(), r.webhook);
             setFullName('');
           }}
         >
@@ -138,11 +139,17 @@ export default function Repos() {
   const repos = useRepos();
   const [editing, setEditing] = useState<Repo>();
   const [dry, setDry] = useState<Repo>();
+  const [added, setAdded] = useState<{ name: string; webhook?: string }>();
   const imp = useInvalidating((id: string) => api.post(`/repos/${id}/import`, {}));
   const admin = atLeast(me.data?.role, 'admin');
   return (
     <>
-      <PageHeader title="Repositories" description="Repositories whose pushes keep docs and the index up to date." actions={admin && <AddRepo />} />
+      <PageHeader title="Repositories" description="Repositories whose pushes keep docs and the index up to date." actions={admin && <AddRepo onAdded={(name, webhook) => setAdded({ name, webhook })} />} />
+      {added && (
+        <p role="status" className="mb-4 text-sm text-slate-600">
+          Tracking {added.name}.{added.webhook && <> Webhook: {added.webhook}.</>}
+        </p>
+      )}
       {repos.isLoading && <Spinner />}
       <ErrorNote error={repos.error ?? imp.error} />
       {repos.data?.length === 0 && <Empty title="No repositories tracked">{admin ? 'Track one to start generating docs.' : 'Ask an admin to track repositories.'}</Empty>}

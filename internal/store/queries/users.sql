@@ -88,6 +88,10 @@ SELECT ra.repo_id FROM repo_access ra WHERE ra.user_id = sqlc.arg(uid)::uuid
 UNION
 SELECT gra.repo_id FROM group_repo_access gra JOIN group_members gm ON gm.group_id = gra.group_id WHERE gm.user_id = sqlc.arg(uid)::uuid;
 
+-- name: DirectRepoAccess :many
+-- A user's direct grants (not those through IdP groups), for the access editor.
+SELECT repo_id, level::text AS level FROM repo_access WHERE user_id = sqlc.arg(uid)::uuid ORDER BY repo_id;
+
 -- name: ClearRepoAccess :exec
 DELETE FROM repo_access WHERE user_id = sqlc.arg(user_id);
 

@@ -53,6 +53,8 @@ func TestLoad_EnvOverridesFile(t *testing.T) {
 	t.Setenv("DTH_TRACING_ENABLED", "true")
 	t.Setenv("DTH_OTLP_ENDPOINT", "http://otel:4318")
 	t.Setenv("DTH_OIDC_ALLOWED_DOMAINS", "acme.com, ,acme.io")
+	t.Setenv("DTH_ALL_USERS_READ_ALL_REPOS", "false")
+	t.Setenv("DTH_PR_SWEEP_INTERVAL", "5s")
 	cfg, err := Load(writeFile(t, "server:\n  listen: \":9999\"\n"))
 	require.NoError(t, err)
 	assert.Equal(t, ":7000", cfg.Server.Listen)
@@ -60,6 +62,8 @@ func TestLoad_EnvOverridesFile(t *testing.T) {
 	assert.False(t, cfg.HasRole(RoleAPI))
 	assert.True(t, cfg.Tracing.Enabled)
 	assert.Equal(t, []string{"acme.com", "acme.io"}, cfg.Auth.OIDC.AllowedDomains)
+	assert.False(t, cfg.Auth.AllUsersReadAllRepos)
+	assert.Equal(t, 5*time.Second, cfg.Docs.PRSweepInterval)
 }
 
 func TestLoad_BadBoolEnv_Errors(t *testing.T) {
