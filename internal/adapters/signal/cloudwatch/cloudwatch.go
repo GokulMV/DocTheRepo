@@ -230,24 +230,34 @@ type staticKey struct {
 	SessionToken    string `json:"session_token"`
 }
 
-// Connect builds SDK clients: region from config, credentials from the connector or the default chain,
-// then AssumeRole into role_arn with external_id when set.
+// Connect builds SDK clients from LoadConfig.
 func Connect(ctx context.Context, cc ports.ConnectorConfig) (Clients, error) {
+	cfg, account, err := LoadConfig(ctx, cc)
+	if err != nil {
+		return Clients{}, err
+	}
+	return Clients{Logs: cloudwatchlogs.NewFromConfig(cfg), Alarms: cw.NewFromConfig(cfg), Account: account, Region: cfg.Region}, nil
+}
+
+// LoadConfig builds an AWS config for a connector: region from config, credentials from the connector or
+// the default chain, then AssumeRole into role_arn with external_id when set. It verifies the credentials
+// (STS GetCallerIdentity) and returns the account ID. Every AWS signal adapter uses it.
+func LoadConfig(ctx context.Context, cc ports.ConnectorConfig) (awssdk.Config, string, error) {
 	region := strings.TrimSpace(cc.Config["region"])
 	if region == "" {
-		return Clients{}, &ports.ValidationError{Code: "INVALID_CONFIG", Message: "region is required"}
+		return awssdk.Config{}, "", &ports.ValidationError{Code: "INVALID_CONFIG", Message: "region is required"}
 	}
 	opts := []func(*config.LoadOptions) error{config.WithRegion(region)}
 	if strings.TrimSpace(cc.Credentials) != "" {
 		var k staticKey
 		if err := json.Unmarshal([]byte(cc.Credentials), &k); err != nil || k.AccessKeyID == "" || k.SecretAccessKey == "" {
-			return Clients{}, &ports.ValidationError{Code: "INVALID_CREDENTIALS", Message: `credentials must be {"access_key_id","secret_access_key"}`}
+			return awssdk.Config{}, "", &ports.ValidationError{Code: "INVALID_CREDENTIALS", Message: `credentials must be {"access_key_id","secret_access_key"}`}
 		}
 		opts = append(opts, config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(k.AccessKeyID, k.SecretAccessKey, k.SessionToken)))
 	}
 	cfg, err := config.LoadDefaultConfig(ctx, opts...)
 	if err != nil {
-		return Clients{}, fmt.Errorf("aws config: %w", err)
+		return awssdk.Config{}, "", fmt.Errorf("aws config: %w", err)
 	}
 	if role := strings.TrimSpace(cc.Config["role_arn"]); role != "" {
 		ext := strings.TrimSpace(cc.Config["external_id"])
@@ -260,9 +270,9 @@ func Connect(ctx context.Context, cc ports.ConnectorConfig) (Clients, error) {
 	}
 	id, err := sts.NewFromConfig(cfg).GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
 	if err != nil {
-		return Clients{}, fmt.Errorf("aws credentials: %w", err)
+		return awssdk.Config{}, "", fmt.Errorf("aws credentials: %w", err)
 	}
-	return Clients{Logs: cloudwatchlogs.NewFromConfig(cfg), Alarms: cw.NewFromConfig(cfg), Account: awssdk.ToString(id.Account), Region: region}, nil
+	return cfg, awssdk.ToString(id.Account), nil
 }
 
 func groups(cfg map[string]string) []string {

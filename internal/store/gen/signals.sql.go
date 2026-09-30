@@ -410,6 +410,19 @@ func (q *Queries) ListServiceMap(ctx context.Context) ([]ServiceMap, error) {
 	return items, nil
 }
 
+const resolveIssuesByFingerprint = `-- name: ResolveIssuesByFingerprint :execrows
+UPDATE issues SET status = 'resolved', resolved_at = now(), updated_at = now()
+WHERE fingerprint = ANY($1::text[]) AND status NOT IN ('resolved', 'suppressed')
+`
+
+func (q *Queries) ResolveIssuesByFingerprint(ctx context.Context, fingerprints []string) (int64, error) {
+	result, err := q.db.Exec(ctx, resolveIssuesByFingerprint, fingerprints)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateKnownIssue = `-- name: UpdateKnownIssue :execrows
 UPDATE known_issues SET title = $1, description = $2, reason = $3, match = $4,
        action = $5, enabled = $6, expires_at = $7, ticket_url = $8,

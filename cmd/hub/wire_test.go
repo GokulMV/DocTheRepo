@@ -12,6 +12,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/twmb/franz-go/pkg/kadm"
+	"github.com/twmb/franz-go/pkg/kfake"
+	"github.com/twmb/franz-go/pkg/kgo"
 
 	"github.com/GokulMV/DocTheRepo/internal/adapters/secrets/localfile"
 	"github.com/GokulMV/DocTheRepo/internal/api"
@@ -162,4 +165,89 @@ func TestSignalPollJob(t *testing.T) {
 	out, err := a.polls.Handle(ctx, ports.Job{Payload: []byte(`{"connector_id":"` + ports.NewID() + `"}`)})
 	require.NoError(t, err)
 	assert.Equal(t, ports.JobAborted, out.Status, "a deleted connector ends its queued poll quietly")
+}
+
+// TestKafkaInspectionEndToEnd: a lagging consumer group opens an event-bus issue, catching up resolves
+// it, and dead-letter growth opens an issue per error class, all through the scheduled poll job.
+func TestKafkaInspectionEndToEnd(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	st := storetest.New(t)
+	kek, err := localfile.Open(filepath.Join(t.TempDir(), "k"))
+	require.NoError(t, err)
+	a, err := wire(ctx, config.Default(), st, secrets.NewBox(kek), queue.New(st, queue.Options{}), slog.New(slog.DiscardHandler), observability.NewMetrics())
+	require.NoError(t, err)
+	require.NoError(t, a.signals.Reload(ctx))
+	go a.agg.Run(ctx)
+
+	cluster, err := kfake.NewCluster(kfake.NumBrokers(1), kfake.SeedTopics(1, "orders", "orders.dlq"))
+	require.NoError(t, err)
+	defer cluster.Close()
+	cl, err := kgo.NewClient(kgo.SeedBrokers(cluster.ListenAddrs()...))
+	require.NoError(t, err)
+	defer cl.Close()
+	produce := func(topic string, n int, class string) {
+		var recs []*kgo.Record
+		for i := 0; i < n; i++ {
+			r := &kgo.Record{Topic: topic, Value: []byte("m")}
+			if class != "" {
+				r.Headers = []kgo.RecordHeader{{Key: "x-exception-class", Value: []byte(class)}}
+			}
+			recs = append(recs, r)
+		}
+		require.NoError(t, cl.ProduceSync(ctx, recs...).FirstErr())
+	}
+	commit := func(at int64) {
+		offs := kadm.Offsets{}
+		offs.Add(kadm.Offset{Topic: "orders", Partition: 0, At: at})
+		_, err := kadm.NewClient(cl).CommitOffsets(ctx, "orders-consumer", offs)
+		require.NoError(t, err)
+	}
+	produce("orders", 1500, "")
+	produce("orders.dlq", 2, "Old")
+	commit(100)
+
+	id, err := a.conns.Create(ctx, store.NewConnector{Type: "kafka", Name: "Kafka", Mode: "poll",
+		Config: map[string]string{"brokers": strings.Join(cluster.ListenAddrs(), ","), "sustain_seconds": "0", "resolve_seconds": "0"}})
+	require.NoError(t, err)
+	cc, err := a.conns.Get(ctx, id)
+	require.NoError(t, err)
+	assert.Equal(t, int64(30), cc.PollSeconds, "event platforms default to a 30 s poll")
+	job := ports.Job{Type: ports.JobSignalBatch, Payload: []byte(`{"connector_id":"` + id + `"}`)}
+	poll := func() {
+		_, err := a.polls.Handle(ctx, job)
+		require.NoError(t, err)
+	}
+	status := func(rule string) (string, int64) {
+		var s string
+		var n int64
+		require.NoError(t, st.Pool.QueryRow(ctx, `SELECT status::text, occurrences FROM issues WHERE kind = 'event_bus' AND title LIKE $1`, "%"+rule+"%").Scan(&s, &n))
+		return s, n
+	}
+
+	poll()
+	s, n := status("falling behind")
+	assert.Equal(t, "new", s, "lag 1,400 > 1,000")
+	assert.Equal(t, int64(1), n)
+	var dlqIssues int
+	require.NoError(t, st.Pool.QueryRow(ctx, `SELECT count(*) FROM issues WHERE title LIKE '%dead-lettered%'`).Scan(&dlqIssues))
+	assert.Equal(t, 0, dlqIssues, "existing DLQ depth is the baseline, not an incident")
+
+	commit(1500)
+	produce("orders.dlq", 3, "com.acme.PaymentDeclined")
+	poll()
+	s, _ = status("falling behind")
+	assert.Equal(t, "resolved", s, "caught up: auto-resolved")
+	var title string
+	require.NoError(t, st.Pool.QueryRow(ctx, `SELECT count(*) FROM issues WHERE title LIKE '%dead-lettered%'`).Scan(&dlqIssues))
+	assert.Equal(t, 1, dlqIssues, "only the new messages' class: the two older 'Old' records are not re-reported")
+	require.NoError(t, st.Pool.QueryRow(ctx, `SELECT title FROM issues WHERE title LIKE '%dead-lettered%'`).Scan(&title))
+	assert.Equal(t, "Kafka dead-letter topic orders.dlq received 3 new dead-lettered messages (com.acme.PaymentDeclined)", title,
+		"the samples are the newest records, whose header names the class")
+
+	produce("orders", 5000, "")
+	poll()
+	s, n = status("falling behind")
+	assert.Equal(t, "regressed", s, "lag again: the resolved issue regresses")
+	assert.Equal(t, int64(2), n)
 }

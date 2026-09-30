@@ -53,3 +53,7 @@ DELETE FROM issue_counts_minutely WHERE minute < sqlc.arg(before);
 
 -- name: DeleteHourCountsBefore :execrows
 DELETE FROM issue_counts_hourly WHERE hour < sqlc.arg(before);
+
+-- name: ResolveIssuesByFingerprint :execrows
+UPDATE issues SET status = 'resolved', resolved_at = now(), updated_at = now()
+WHERE fingerprint = ANY(sqlc.arg(fingerprints)::text[]) AND status NOT IN ('resolved', 'suppressed');

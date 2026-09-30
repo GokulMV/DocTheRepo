@@ -446,3 +446,16 @@ func nonNilMap(m map[string]string) map[string]string {
 	}
 	return m
 }
+
+// Resolve marks issues resolved by fingerprint (conditions that cleared, such as consumer lag); a later
+// occurrence regresses them. Suppressed issues keep their status.
+func (s *Signals) Resolve(ctx context.Context, fingerprints []string) (int64, error) {
+	if len(fingerprints) == 0 {
+		return 0, nil
+	}
+	n, err := s.s.Q.ResolveIssuesByFingerprint(ctx, fingerprints)
+	if err != nil {
+		return 0, fmt.Errorf("resolve issues: %w", err)
+	}
+	return n, nil
+}
