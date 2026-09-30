@@ -1,0 +1,40 @@
+{
+  "description": "P1 escalation maps to critical",
+  "headers": {},
+  "config": {},
+  "body": {
+    "event": {
+      "id": "01E4P1",
+      "event_type": "incident.escalated",
+      "resource_type": "incident",
+      "occurred_at": "2026-09-29T10:05:00.000Z",
+      "agent": {
+        "type": "service_reference"
+      },
+      "data": {
+        "id": "Q1W2E3R4T5",
+        "type": "incident",
+        "number": 1042,
+        "title": "Payment API error rate above 5%",
+        "status": "triggered",
+        "urgency": "high",
+        "service": {
+          "id": "PSVC123",
+          "summary": "payments-api",
+          "type": "service_reference"
+        },
+        "priority": {
+          "id": "PPRIO1",
+          "summary": "P1"
+        },
+        "html_url": "https://acme.pagerduty.com/incidents/Q1W2E3R4T5"
+      }
+    }
+  },
+  "expect": [
+    {
+      "severity": "critical",
+      "kind": "alert"
+    }
+  ]
+}

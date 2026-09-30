@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/registry"
 	"net/http"
 	"slices"
 	"strings"
@@ -289,7 +290,7 @@ func (h *adminHandlers) createConnector(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	h.audit(r, "connector.create", "connector", id, map[string]any{"type": in.Type, "name": in.Name, "mode": in.Mode})
-	WriteJSON(w, http.StatusCreated, map[string]string{"id": id, "webhook_path": "/hooks/" + in.Type + "/" + id})
+	WriteJSON(w, http.StatusCreated, map[string]string{"id": id, "webhook_path": registry.WebhookPath(in.Type, id)})
 }
 
 func (h *adminHandlers) patchConnector(w http.ResponseWriter, r *http.Request) {

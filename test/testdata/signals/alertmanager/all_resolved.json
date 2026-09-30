@@ -1,0 +1,35 @@
+{
+  "description": "A resolved group is not a new problem",
+  "headers": {},
+  "config": {},
+  "body": {
+    "version": "4",
+    "groupKey": "{}:{alertname=\"KafkaConsumerLag\"}",
+    "truncatedAlerts": 0,
+    "status": "resolved",
+    "receiver": "dth",
+    "groupLabels": {
+      "alertname": "KafkaConsumerLag"
+    },
+    "commonLabels": {
+      "alertname": "KafkaConsumerLag",
+      "severity": "critical"
+    },
+    "commonAnnotations": {},
+    "externalURL": "http://alertmanager:9093",
+    "alerts": [
+      {
+        "status": "resolved",
+        "labels": {
+          "alertname": "KafkaConsumerLag",
+          "service": "orders-consumer"
+        },
+        "annotations": {},
+        "startsAt": "2026-09-29T09:00:00Z",
+        "endsAt": "2026-09-29T09:30:00Z",
+        "fingerprint": "d5e6f7a8b9c0d1e2"
+      }
+    ]
+  },
+  "expect": []
+}

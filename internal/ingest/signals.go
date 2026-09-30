@@ -3,6 +3,7 @@ package ingest
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -37,8 +38,85 @@ type SignalIngest struct {
 	// OnEvent observes each event's outcome (metrics); optional.
 	OnEvent func(source, outcome string)
 
+	// Webhooks are the push adapters by path segment; Accepts says which connector types a path serves.
+	Webhooks map[string]ports.SignalWebhook
+	Accepts  func(source, connectorType string) bool
+	// LoadConnector returns an enabled connector with decrypted secrets (ports.ErrNotFound otherwise).
+	LoadConnector func(ctx context.Context, id string) (ports.ConnectorConfig, error)
+
 	matcher  atomic.Pointer[knownissues.Matcher]
 	services atomic.Pointer[[]signals.ServiceRule]
+
+	cacheMu sync.Mutex
+	cache   map[string]cachedConnector
+}
+
+type cachedConnector struct {
+	cc ports.ConnectorConfig
+	at time.Time
+}
+
+// connectorTTL bounds how long a connector (and its decrypted secret) is reused across deliveries; with a
+// cloud KMS every uncached load is a key-unwrap call. Admin edits also invalidate immediately.
+const connectorTTL = time.Minute
+
+// InvalidateConnector drops a cached connector after an edit or delete.
+func (s *SignalIngest) InvalidateConnector(id string) {
+	s.cacheMu.Lock()
+	delete(s.cache, id)
+	s.cacheMu.Unlock()
+}
+
+func (s *SignalIngest) connector(ctx context.Context, id string) (ports.ConnectorConfig, error) {
+	s.cacheMu.Lock()
+	c, ok := s.cache[id]
+	s.cacheMu.Unlock()
+	if ok && time.Since(c.at) < connectorTTL {
+		return c.cc, nil
+	}
+	cc, err := s.LoadConnector(ctx, id)
+	if err != nil {
+		return cc, err
+	}
+	s.cacheMu.Lock()
+	if s.cache == nil {
+		s.cache = map[string]cachedConnector{}
+	}
+	s.cache[id] = cachedConnector{cc: cc, at: time.Now()}
+	s.cacheMu.Unlock()
+	return cc, nil
+}
+
+// Webhook verifies, parses, and ingests one push delivery for /hooks/{source}/{connector_id}. It returns
+// how many events the delivery carried. Errors: ports.ErrNotFound (unknown source, unknown or disabled
+// connector, or a connector of another type), ports.ErrInvalidSignature, *ports.ValidationError (malformed
+// payload), aggregate.ErrOverloaded (retry later).
+func (s *SignalIngest) Webhook(ctx context.Context, source, connectorID string, req ports.WebhookRequest) (int, error) {
+	a, ok := s.Webhooks[source]
+	if !ok {
+		return 0, ports.ErrNotFound
+	}
+	cc, err := s.connector(ctx, connectorID)
+	if err != nil {
+		return 0, err
+	}
+	if s.Accepts != nil && !s.Accepts(source, cc.Type) {
+		return 0, ports.ErrNotFound
+	}
+	if err := a.Verify(req, cc); err != nil {
+		return 0, err
+	}
+	events, err := a.Parse(req, cc)
+	if err != nil {
+		return 0, err
+	}
+	for i := range events {
+		events[i].ConnectorID = cc.ID
+	}
+	if err := s.Ingest(ctx, events); err != nil {
+		return 0, err
+	}
+	return len(events), nil
 }
 
 // Reload recompiles known-issue rules and the service map. Called at startup, periodically, and after an

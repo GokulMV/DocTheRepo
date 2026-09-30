@@ -1,0 +1,106 @@
+{
+  "description": "Integration platform 'error' resource with an exception and in-app frames",
+  "headers": {
+    "Sentry-Hook-Resource": "error"
+  },
+  "config": {},
+  "body": {
+    "action": "created",
+    "installation": {
+      "uuid": "b0f3"
+    },
+    "data": {
+      "error": {
+        "event_id": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+        "issue_id": "4507812345",
+        "level": "error",
+        "platform": "python",
+        "title": "ReadTimeout: HTTPSConnectionPool(host='api.stripe.com', port=443): Read timed out.",
+        "culprit": "checkout.payments in charge",
+        "timestamp": 1790000000.123,
+        "exception": {
+          "values": [
+            {
+              "type": "ReadTimeout",
+              "value": "HTTPSConnectionPool(host='api.stripe.com', port=443): Read timed out. (read timeout=30)",
+              "stacktrace": {
+                "frames": [
+                  {
+                    "filename": "gunicorn/workers/sync.py",
+                    "module": "gunicorn.workers.sync",
+                    "function": "handle",
+                    "lineno": 136,
+                    "in_app": false
+                  },
+                  {
+                    "filename": "checkout/views.py",
+                    "module": "checkout.views",
+                    "function": "pay",
+                    "lineno": 88,
+                    "in_app": true
+                  },
+                  {
+                    "filename": "checkout/payments.py",
+                    "module": "checkout.payments",
+                    "function": "charge",
+                    "lineno": 42,
+                    "in_app": true
+                  },
+                  {
+                    "filename": "requests/api.py",
+                    "module": "requests.api",
+                    "function": "post",
+                    "lineno": 115,
+                    "in_app": false
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "tags": [
+          [
+            "environment",
+            "production"
+          ],
+          [
+            "release",
+            "checkout@2.14.0"
+          ],
+          [
+            "service",
+            "checkout"
+          ],
+          [
+            "customer",
+            "cus_9f8e7d"
+          ]
+        ],
+        "web_url": "https://sentry.io/organizations/acme/issues/4507812345/events/a1b2c3d4e5f60718293a4b5c6d7e8f90/"
+      }
+    },
+    "actor": {
+      "type": "application",
+      "name": "Sentry"
+    }
+  },
+  "expect": [
+    {
+      "source": "sentry",
+      "kind": "error",
+      "severity": "error",
+      "service": "checkout",
+      "environment": "production",
+      "exception_type": "ReadTimeout",
+      "group_id": "4507812345",
+      "external_id": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+      "frames": [
+        "checkout.payments:charge",
+        "checkout.views:pay"
+      ],
+      "attrs": {
+        "release": "checkout@2.14.0"
+      }
+    }
+  ]
+}

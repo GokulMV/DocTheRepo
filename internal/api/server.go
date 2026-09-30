@@ -30,6 +30,8 @@ type Deps struct {
 	Checks map[string]ReadinessCheck
 	// Git handles /hooks/github|gitlab/{connector_id}; nil disables git ingress.
 	Git GitIngest
+	// Signals handles /hooks/{source}/{connector_id} for signal sources; nil disables signal ingress.
+	Signals SignalIngress
 	// WebhookPerMinute is the per-connector ingress rate (default 6000).
 	WebhookPerMinute int
 	// Auth enables /api/v1 (nil serves only health and ingress).
@@ -52,13 +54,16 @@ func NewRouter(d Deps) http.Handler {
 		WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
 	r.Get("/readyz", readyz(d.Checks))
+	perMin := d.WebhookPerMinute
+	if perMin <= 0 {
+		perMin = 6000
+	}
+	lim := &connectorLimiter{perMin: perMin}
 	if d.Git != nil {
-		perMin := d.WebhookPerMinute
-		if perMin <= 0 {
-			perMin = 6000
-		}
-		lim := &connectorLimiter{perMin: perMin}
 		r.Post("/hooks/{kind:github|gitlab}/{connector_id}", gitHook(d.Git, lim))
+	}
+	if d.Signals != nil {
+		r.Post("/hooks/{source}/{connector_id}", signalHook(d.Signals, lim))
 	}
 	if d.Auth != nil {
 		ah := &authHandlers{svc: d.Auth, oidc: d.OIDC, secure: d.SecureCookies}

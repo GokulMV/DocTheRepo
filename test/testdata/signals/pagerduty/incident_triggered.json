@@ -1,0 +1,48 @@
+{
+  "description": "incident.triggered (v3)",
+  "headers": {},
+  "config": {},
+  "body": {
+    "event": {
+      "id": "01E4XYZ",
+      "event_type": "incident.triggered",
+      "resource_type": "incident",
+      "occurred_at": "2026-09-29T10:05:00.000Z",
+      "agent": {
+        "type": "service_reference"
+      },
+      "data": {
+        "id": "Q1W2E3R4T5",
+        "type": "incident",
+        "number": 1042,
+        "title": "Payment API error rate above 5%",
+        "status": "triggered",
+        "urgency": "high",
+        "service": {
+          "id": "PSVC123",
+          "summary": "payments-api",
+          "type": "service_reference"
+        },
+        "priority": {
+          "id": "PPRIO1",
+          "summary": "P2"
+        },
+        "html_url": "https://acme.pagerduty.com/incidents/Q1W2E3R4T5"
+      }
+    }
+  },
+  "expect": [
+    {
+      "source": "pagerduty",
+      "kind": "alert",
+      "severity": "error",
+      "service": "payments-api",
+      "external_id": "01E4XYZ",
+      "title": "Payment API error rate above 5%",
+      "attrs": {
+        "priority": "P2",
+        "pagerduty.number": "1042"
+      }
+    }
+  ]
+}

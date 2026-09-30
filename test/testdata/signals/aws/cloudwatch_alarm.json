@@ -1,0 +1,62 @@
+{
+  "description": "CloudWatch alarm into ALARM via an EventBridge API destination",
+  "headers": {},
+  "config": {},
+  "body": {
+    "version": "0",
+    "id": "c4c1c1c9-6542-e61b-6ef0-8c4d36933a92",
+    "detail-type": "CloudWatch Alarm State Change",
+    "source": "aws.cloudwatch",
+    "account": "123456789012",
+    "time": "2026-09-29T10:10:00Z",
+    "region": "eu-west-1",
+    "resources": [
+      "arn:aws:cloudwatch:eu-west-1:123456789012:alarm:orders-api-5xx"
+    ],
+    "detail": {
+      "alarmName": "orders-api-5xx",
+      "state": {
+        "value": "ALARM",
+        "reason": "Threshold Crossed: 1 datapoint [42.0] was greater than the threshold (10.0).",
+        "timestamp": "2026-09-29T10:10:00.000+0000"
+      },
+      "previousState": {
+        "value": "OK"
+      },
+      "configuration": {
+        "description": "5xx on orders API",
+        "metrics": [
+          {
+            "id": "m1",
+            "metricStat": {
+              "metric": {
+                "namespace": "AWS/ApplicationELB",
+                "name": "HTTPCode_Target_5XX_Count",
+                "dimensions": {
+                  "LoadBalancer": "app/orders/abc"
+                }
+              },
+              "period": 60,
+              "stat": "Sum"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "expect": [
+    {
+      "source": "cloudwatch",
+      "kind": "alert",
+      "severity": "error",
+      "rule_id": "arn:aws:cloudwatch:eu-west-1:123456789012:alarm:orders-api-5xx",
+      "title": "orders-api-5xx",
+      "external_id": "c4c1c1c9-6542-e61b-6ef0-8c4d36933a92",
+      "attrs": {
+        "metric_name": "HTTPCode_Target_5XX_Count",
+        "alarm_name": "orders-api-5xx",
+        "aws.region": "eu-west-1"
+      }
+    }
+  ]
+}

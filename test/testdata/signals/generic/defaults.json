@@ -1,0 +1,45 @@
+{
+  "description": "Common field names, events array",
+  "headers": {},
+  "config": {},
+  "body": {
+    "events": [
+      {
+        "id": "evt-1",
+        "title": "Job failed",
+        "message": "nightly-export exited 1",
+        "severity": "error",
+        "service": "exporter",
+        "env": "prod",
+        "timestamp": "2026-09-29T02:00:00Z",
+        "job": "nightly-export"
+      },
+      {
+        "id": "evt-2",
+        "title": "Queue backlog",
+        "severity": "warning",
+        "service": "exporter",
+        "kind": "alert",
+        "rule": "backlog"
+      }
+    ]
+  },
+  "expect": [
+    {
+      "source": "generic",
+      "kind": "error",
+      "severity": "error",
+      "service": "exporter",
+      "environment": "prod",
+      "title": "Job failed",
+      "attrs": {
+        "job": "nightly-export"
+      }
+    },
+    {
+      "kind": "alert",
+      "severity": "warning",
+      "rule_id": "backlog"
+    }
+  ]
+}

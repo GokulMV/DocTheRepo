@@ -1,0 +1,7 @@
+{
+  "description": "An empty array carries no events",
+  "headers": {},
+  "config": {},
+  "body": [],
+  "expect": []
+}

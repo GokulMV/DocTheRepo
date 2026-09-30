@@ -1,0 +1,25 @@
+{
+  "description": "Recovery is not a new problem",
+  "headers": {},
+  "config": {},
+  "body": {
+    "id": "7406539862741231399",
+    "title": "[Triggered] High error rate on checkout",
+    "msg": "Error rate 7.2% above 5% threshold",
+    "alert_type": "success",
+    "transition": "Recovered",
+    "priority": "normal",
+    "date": "1790000000000",
+    "last_updated": "1790000000000",
+    "tags": "service:checkout,env:prod,team:payments",
+    "alert_id": "123456789",
+    "aggreg_key": "abc123",
+    "hostname": "",
+    "org": {
+      "id": "222",
+      "name": "acme"
+    },
+    "url": "https://app.datadoghq.com/monitors/123456789"
+  },
+  "expect": []
+}

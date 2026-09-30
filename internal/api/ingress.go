@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/time/rate"
 
+	"github.com/GokulMV/DocTheRepo/internal/core/aggregate"
 	"github.com/GokulMV/DocTheRepo/internal/ingest"
 	"github.com/GokulMV/DocTheRepo/internal/observability"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
@@ -85,5 +86,51 @@ func gitHook(g GitIngest, lim *connectorLimiter) http.HandlerFunc {
 			observability.Logger(r.Context()).Info("webhook accepted", "connector_id", id, "job_id", res.JobID)
 		}
 		WriteJSON(w, res.Status, res)
+	}
+}
+
+// SignalIngress handles verified signal pushes (Sentry, PagerDuty, Alertmanager, …).
+type SignalIngress interface {
+	Webhook(ctx context.Context, source, connectorID string, req ports.WebhookRequest) (int, error)
+}
+
+func signalHook(s SignalIngress, lim *connectorLimiter) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		source, id := chi.URLParam(r, "source"), chi.URLParam(r, "connector_id")
+		if !lim.allow(id) {
+			w.Header().Set("Retry-After", "1")
+			WriteError(w, r, http.StatusTooManyRequests, "RATE_LIMITED", "too many webhook deliveries for this connector", nil)
+			return
+		}
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, MaxWebhookBytes))
+		if err != nil {
+			var mbe *http.MaxBytesError
+			if errors.As(err, &mbe) {
+				WriteError(w, r, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "webhook body exceeds 5 MB", nil)
+				return
+			}
+			WriteError(w, r, http.StatusBadRequest, "MALFORMED_PAYLOAD", "could not read body", nil)
+			return
+		}
+		n, err := s.Webhook(r.Context(), source, id, ports.WebhookRequest{Header: r.Header, Query: r.URL.Query(), Body: body})
+		switch {
+		case err == nil:
+			WriteJSON(w, http.StatusAccepted, map[string]int{"accepted": n})
+		case errors.Is(err, ports.ErrNotFound):
+			WriteError(w, r, http.StatusNotFound, "UNKNOWN_CONNECTOR", "no enabled "+source+" connector with this ID", nil)
+		case errors.Is(err, ports.ErrInvalidSignature):
+			observability.Logger(r.Context()).Warn("signal webhook authentication rejected", "connector_id", id, "source", source)
+			WriteError(w, r, http.StatusUnauthorized, "INVALID_SIGNATURE", "webhook authentication failed", nil)
+		case errors.Is(err, aggregate.ErrOverloaded):
+			w.Header().Set("Retry-After", "5")
+			WriteError(w, r, http.StatusServiceUnavailable, "OVERLOADED", "the Hub is catching up; retry shortly", nil)
+		default:
+			var v *ports.ValidationError
+			if errors.As(err, &v) {
+				WriteError(w, r, http.StatusBadRequest, "MALFORMED_PAYLOAD", v.Message, nil)
+				return
+			}
+			WriteErr(w, r, err)
+		}
 	}
 }
