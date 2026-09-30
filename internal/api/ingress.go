@@ -6,10 +6,12 @@ import (
 	"io"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"golang.org/x/time/rate"
 
+	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/firehose"
 	"github.com/GokulMV/DocTheRepo/internal/core/aggregate"
 	"github.com/GokulMV/DocTheRepo/internal/ingest"
 	"github.com/GokulMV/DocTheRepo/internal/observability"
@@ -131,6 +133,67 @@ func signalHook(s SignalIngress, lim *connectorLimiter) http.HandlerFunc {
 				return
 			}
 			WriteErr(w, r, err)
+		}
+	}
+}
+
+// FirehoseIngress handles Amazon Data Firehose HTTP endpoint deliveries; it returns once events are
+// persisted, with the delivery's request ID.
+type FirehoseIngress interface {
+	Firehose(ctx context.Context, connectorID string, req ports.WebhookRequest) (requestID string, n int, err error)
+}
+
+// MaxFirehoseBytes bounds a Firehose delivery (the stream's buffer size is configurable up to 64 MiB; the
+// Hub's setup guide recommends 5 MiB).
+const MaxFirehoseBytes = 64 << 20
+
+// firehoseHook answers in Firehose's own contract: 200 {requestId, timestamp} when delivered, any other
+// status with errorMessage makes Firehose retry and, after its retry window, back up to S3.
+func firehoseHook(f FirehoseIngress, lim *connectorLimiter) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := chi.URLParam(r, "connector_id")
+		requestID := r.Header.Get("X-Amz-Firehose-Request-Id")
+		reply := func(status int, msg string) {
+			if status == http.StatusTooManyRequests || status == http.StatusServiceUnavailable {
+				w.Header().Set("Retry-After", "5")
+			}
+			WriteJSON(w, status, firehose.Response{RequestID: requestID, Timestamp: time.Now().UnixMilli(), ErrorMessage: msg})
+		}
+		if !lim.allow(id) {
+			reply(http.StatusTooManyRequests, "too many deliveries for this connector")
+			return
+		}
+		body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, MaxFirehoseBytes))
+		if err != nil {
+			var mbe *http.MaxBytesError
+			if errors.As(err, &mbe) {
+				reply(http.StatusRequestEntityTooLarge, "delivery exceeds 64 MiB; lower the stream's buffer size")
+				return
+			}
+			reply(http.StatusBadRequest, "could not read body")
+			return
+		}
+		rid, n, err := f.Firehose(r.Context(), id, ports.WebhookRequest{Header: r.Header, Query: r.URL.Query(), Body: body})
+		if rid != "" {
+			requestID = rid
+		}
+		var v *ports.ValidationError
+		switch {
+		case err == nil:
+			observability.Logger(r.Context()).Debug("firehose delivery persisted", "connector_id", id, "events", n)
+			reply(http.StatusOK, "")
+		case errors.Is(err, ports.ErrNotFound):
+			reply(http.StatusNotFound, "no enabled Firehose or CloudWatch connector with this ID")
+		case errors.Is(err, ports.ErrInvalidSignature):
+			observability.Logger(r.Context()).Warn("firehose access key rejected", "connector_id", id)
+			reply(http.StatusUnauthorized, "access key rejected")
+		case errors.Is(err, aggregate.ErrOverloaded), errors.Is(err, context.DeadlineExceeded):
+			reply(http.StatusServiceUnavailable, "the Hub is catching up; retry shortly")
+		case errors.As(err, &v):
+			reply(http.StatusBadRequest, v.Message)
+		default:
+			observability.Logger(r.Context()).Error("firehose delivery failed", "connector_id", id, "err", err)
+			reply(http.StatusInternalServerError, "internal error")
 		}
 	}
 }

@@ -2,9 +2,11 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"io"
@@ -469,4 +471,69 @@ func TestSignalWebhookEndToEnd(t *testing.T) {
 	assert.Equal(t, "shop", service)
 	assert.Equal(t, "new", status)
 	assert.Equal(t, int64(1), n)
+}
+
+// TestFirehoseDurableEndToEnd: a Firehose delivery of CloudWatch Logs is answered 200 only once its issue
+// is in the database, and a redelivery (Firehose retries on timeouts) is not counted twice.
+func TestFirehoseDurableEndToEnd(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	st := storetest.New(t)
+	kek, err := localfile.Open(filepath.Join(t.TempDir(), "k"))
+	require.NoError(t, err)
+	cfg := config.Default()
+	cfg.Auth.Mode = "local"
+	log := slog.New(slog.DiscardHandler)
+	m := observability.NewMetrics()
+	a, err := wire(ctx, cfg, st, secrets.NewBox(kek), queue.New(st, queue.Options{}), log, m)
+	require.NoError(t, err)
+	_, err = a.auth.BootstrapOwner(ctx, "owner@acme.com", "correct horse battery staple")
+	require.NoError(t, err)
+	require.NoError(t, a.signals.Reload(ctx))
+	go a.agg.Run(ctx)
+	srv := httptest.NewServer(api.NewRouter(api.Deps{Log: log, Metrics: m, Signals: a.signals, Auth: a.auth, V1: a.v1Routes()}))
+	defer srv.Close()
+	jar, _ := cookiejar.New(nil)
+	c := &apiClient{t: t, base: srv.URL + "/api/v1", c: &http.Client{Jar: jar}}
+	_, out := c.call("POST", "/auth/local/login", map[string]string{"email": "owner@acme.com", "password": "correct horse battery staple"})
+	c.csrf = out["csrf_token"].(string)
+	code, out := c.call("POST", "/connectors", map[string]any{"type": "firehose", "name": "Logs", "webhook_secret": "fh-access-key"})
+	require.Equal(t, http.StatusCreated, code, out)
+	path := out["webhook_path"].(string)
+	assert.Equal(t, "/hooks/firehose/"+out["id"].(string), path)
+
+	var zb bytes.Buffer
+	zw := gzip.NewWriter(&zb)
+	_, _ = zw.Write([]byte(`{"messageType":"DATA_MESSAGE","owner":"123456789012","logGroup":"/ecs/orders","logStream":"s",
+		"logEvents":[{"id":"ev-1","timestamp":1790000000000,"message":"ERROR payment gateway returned 502 for order 1234"}]}`))
+	_ = zw.Close()
+	body, _ := json.Marshal(map[string]any{"requestId": "rq-1", "timestamp": 1790000000000,
+		"records": []map[string]string{{"data": base64.StdEncoding.EncodeToString(zb.Bytes())}}})
+	post := func(key string) (int, map[string]any) {
+		req, _ := http.NewRequest("POST", srv.URL+path, bytes.NewReader(body))
+		req.Header.Set("X-Amz-Firehose-Access-Key", key)
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		var o map[string]any
+		_ = json.NewDecoder(resp.Body).Decode(&o)
+		return resp.StatusCode, o
+	}
+	code, out = post("wrong")
+	assert.Equal(t, http.StatusUnauthorized, code)
+	assert.NotEmpty(t, out["errorMessage"])
+	code, out = post("fh-access-key")
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Equal(t, "rq-1", out["requestId"])
+
+	var service string
+	var n int64
+	require.NoError(t, st.Pool.QueryRow(ctx, `SELECT service, occurrences FROM issues`).Scan(&service, &n), "persisted before the 200")
+	assert.Equal(t, "orders", service)
+	assert.Equal(t, int64(1), n)
+
+	code, _ = post("fh-access-key")
+	require.Equal(t, http.StatusOK, code)
+	require.NoError(t, st.Pool.QueryRow(ctx, `SELECT occurrences FROM issues`).Scan(&n))
+	assert.Equal(t, int64(1), n, "a redelivered record is recognised by its log event ID")
 }
