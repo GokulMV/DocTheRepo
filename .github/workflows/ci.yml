@@ -99,6 +99,9 @@ jobs:
         run: cd test/e2e && npx playwright test
         env:
           CI: "1"
+      - uses: grafana/setup-k6-action@v1
+      - name: k6 scripts parse (the runs themselves are manual; see docs/perf-results.md)
+        run: k6 inspect test/perf/push-burst.js >/dev/null && k6 inspect test/perf/qa.js >/dev/null
       - name: report and hub log on failure
         if: failure()
         uses: actions/upload-artifact@v4

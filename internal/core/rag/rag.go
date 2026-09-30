@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/GokulMV/DocTheRepo/internal/core/chunker"
 	"github.com/GokulMV/DocTheRepo/internal/core/llmgateway"
@@ -67,6 +68,9 @@ type Engine struct {
 	Savings Savings
 	// Cost prices a call (spendguard.Guard.Cost); optional.
 	Cost func(providerKind, model, feature string, in, out int64) (float64, bool)
+	// Observe receives retrieval stage timings (embed, vector_search, full_text, load_expand, total);
+	// optional.
+	Observe func(stage string, d time.Duration)
 }
 
 // Query is one question.
@@ -214,9 +218,24 @@ func (e *Engine) Ask(ctx context.Context, q Query) (Answer, error) {
 
 // retrieve runs hybrid search, fusion, and graph expansion; every read is ACL-scoped in SQL.
 func (e *Engine) retrieve(ctx context.Context, meta llmgateway.CallMeta, question string, s Scope) ([]ports.Chunk, error) {
+	start := time.Now()
+	lap := start
+	stage := func(name string) {
+		if e.Observe != nil {
+			now := time.Now()
+			e.Observe(name, now.Sub(lap))
+			lap = now
+		}
+	}
+	defer func() {
+		if e.Observe != nil {
+			e.Observe("total", time.Since(start))
+		}
+	}()
 	var vec []ports.VectorHit
 	if e.Index != nil {
 		vs, _, err := e.GW.Embed(ctx, meta, []string{question})
+		stage("embed")
 		switch {
 		case errors.Is(err, llmgateway.ErrNoRoute):
 		case err != nil:
@@ -233,12 +252,14 @@ func (e *Engine) retrieve(ctx context.Context, meta llmgateway.CallMeta, questio
 			if err != nil && !errors.Is(err, ports.ErrNotFound) {
 				return nil, err
 			}
+			stage("vector_search")
 		}
 	}
 	fts, err := e.Store.FullText(ctx, question, s, CandidatesPerMethod)
 	if err != nil {
 		return nil, err
 	}
+	stage("full_text")
 	fused := Fuse(RRFK, vec, fts)
 	if len(fused) > FusedTop {
 		fused = fused[:FusedTop]
@@ -261,7 +282,9 @@ func (e *Engine) retrieve(ctx context.Context, meta llmgateway.CallMeta, questio
 			ordered = append(ordered, c)
 		}
 	}
-	return append(ordered, e.expand(ctx, ordered, s)...), nil
+	out := append(ordered, e.expand(ctx, ordered, s)...)
+	stage("load_expand")
+	return out, nil
 }
 
 // expand adds callers/callees of the top code chunks (max ExpandMax), ACL-filtered.

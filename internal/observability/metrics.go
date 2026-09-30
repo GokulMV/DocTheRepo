@@ -20,6 +20,8 @@ type Metrics struct {
 	JobDuration  *prometheus.HistogramVec
 	QueueDepth   *prometheus.GaugeVec
 	JobsInFlight *prometheus.GaugeVec
+	// Retrieval times each Q&A retrieval stage (embed, vector_search, full_text, load_expand, total).
+	Retrieval *prometheus.HistogramVec
 }
 
 // NewMetrics registers all collectors on a fresh registry (never the global one, so tests stay isolated).
@@ -48,8 +50,12 @@ func NewMetrics() *Metrics {
 		JobsInFlight: prometheus.NewGaugeVec(prometheus.GaugeOpts{
 			Name: "dth_jobs_in_flight", Help: "Jobs currently being processed by this replica, by type.",
 		}, []string{"type"}),
+		Retrieval: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name: "dth_retrieval_duration_seconds", Help: "Q&A retrieval latency by stage.",
+			Buckets: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1, 2, 5},
+		}, []string{"stage"}),
 	}
-	reg.MustRegister(m.HTTPRequests, m.HTTPDuration, m.JobsTotal, m.JobDuration, m.QueueDepth, m.JobsInFlight)
+	reg.MustRegister(m.HTTPRequests, m.HTTPDuration, m.JobsTotal, m.JobDuration, m.QueueDepth, m.JobsInFlight, m.Retrieval)
 	return m
 }
 

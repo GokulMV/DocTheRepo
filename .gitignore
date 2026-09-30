@@ -17,3 +17,4 @@ web/dist/
 *.tfstate*
 terraform.tfvars
 .proxy-ca.crt
+/.perf/
