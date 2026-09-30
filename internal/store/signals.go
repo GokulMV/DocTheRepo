@@ -459,3 +459,12 @@ func (s *Signals) Resolve(ctx context.Context, fingerprints []string) (int64, er
 	}
 	return n, nil
 }
+
+// DecodeEstimate is the average cost of the last 100 decodes (DefaultDecodeTokens before any decode ran).
+func (x *Signals) DecodeEstimate(ctx context.Context) (int64, float64) {
+	est, err := x.s.Q.DecodeEstimate(ctx)
+	if err != nil || est.Tokens <= 0 {
+		return DefaultDecodeTokens, 0
+	}
+	return est.Tokens, est.CostUsd
+}

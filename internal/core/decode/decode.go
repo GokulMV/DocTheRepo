@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/GokulMV/DocTheRepo/internal/core/chunker"
+	"github.com/GokulMV/DocTheRepo/internal/core/decide"
 	"github.com/GokulMV/DocTheRepo/internal/core/llmgateway"
 	"github.com/GokulMV/DocTheRepo/internal/core/signals"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
@@ -121,11 +122,19 @@ type Decoder struct {
 	Cost   func(providerKind, model, feature string, in, out int64) (float64, bool)
 	Budget int
 	Now    func() time.Time
+
+	// Decide, when set, asks the decision route whether a new issue is recurring noise before paying for a
+	// full decode (plan Phase 11.5). Only "known_noise" at p >= GateThreshold short-circuits; anything else,
+	// or no decide route, runs the full decode.
+	Decide        func(ctx context.Context, meta llmgateway.CallMeta, q ports.DecisionQuestion) (ports.Decision, error)
+	GateThreshold float64
+	// Estimate is the average cost of a full decode (the saving a gated decode is credited with).
+	Estimate func(ctx context.Context) (tokens int64, costUSD float64)
 }
 
 // Outcome of one decode request.
 type Outcome struct {
-	Status   string `json:"status"` // decoded | reused | skipped
+	Status   string `json:"status"` // decoded | reused | gated | skipped
 	DecodeID string `json:"decode_id,omitempty"`
 	Reason   string `json:"reason,omitempty"`
 }
@@ -154,6 +163,14 @@ func (d *Decoder) Decode(ctx context.Context, issueID string, force bool, jobID 
 				}
 				return Outcome{Status: "reused", DecodeID: prev.ID}, nil
 			}
+		}
+	}
+
+	if !force {
+		if out, ok, err := d.gate(ctx, meta, is); err != nil {
+			return Outcome{}, err
+		} else if ok {
+			return out, nil
 		}
 	}
 
@@ -203,6 +220,64 @@ func (d *Decoder) Decode(ctx context.Context, issueID string, force bool, jobID 
 	}
 	d.index(ctx, meta, is, res)
 	return Outcome{Status: "decoded", DecodeID: id}, nil
+}
+
+// gate asks the decision route whether the issue is recurring noise; a confident "yes" stores a short
+// decode that says so (not actionable, suggest as known issue) instead of the full one. Errors other than
+// a spend block fall through to the full decode: the gate may only save, never block, an explanation.
+func (d *Decoder) gate(ctx context.Context, meta llmgateway.CallMeta, is Issue) (Outcome, bool, error) {
+	if d.Decide == nil {
+		return Outcome{}, false, nil
+	}
+	samples, err := d.Store.Samples(ctx, is.ID, 1)
+	if err != nil {
+		return Outcome{}, false, err
+	}
+	in := decide.IssueInput{Kind: is.Kind, Title: is.Title, Service: is.Service, Environment: is.Environment,
+		Occurrences: is.Occurrences, Sources: is.Sources}
+	if len(samples) > 0 {
+		in.Message, in.ExceptionType = samples[0].Message, samples[0].ExceptionType
+	}
+	dec, err := d.Decide(ctx, meta, decide.IssueActionability(in))
+	var sb *ports.SpendBlockedError
+	switch {
+	case errors.As(err, &sb):
+		return Outcome{}, false, err
+	case err != nil:
+		return Outcome{}, false, nil
+	}
+	if dec.Choice != decide.KnownNoise || !decide.Accept(dec, d.GateThreshold) {
+		return Outcome{}, false, nil
+	}
+	source := "self-reported"
+	if dec.Calibrated {
+		source = "calibrated"
+	}
+	conf := "medium"
+	if dec.P >= 0.97 {
+		conf = "high"
+	}
+	res := contract.DecodeResult{
+		Summary:       "Recurring noise: " + is.Title,
+		ProbableCause: fmt.Sprintf("The decision model classified this as known noise (p=%.2f, %s probability), so no full decode was run. Ask for a full decode if that is wrong.", dec.P, source),
+		Impact:        "None expected.", Confidence: conf, IsActionable: false, SuggestKnownIssue: true, NextSteps: []string{"Mark as known if this is expected"},
+	}
+	rec := Record{IssueID: is.ID, Result: res, Model: dec.Model, Tokens: dec.Usage.InputTokens + dec.Usage.OutputTokens}
+	if rt, rerr := d.GW.Route(ctx, llmgateway.FeatureDecide); rerr == nil {
+		rec.Provider = "decide:" + rt.ProviderKind
+		if d.Cost != nil {
+			rec.CostUSD, _ = d.Cost(rt.ProviderKind, dec.Model, llmgateway.FeatureDecide, dec.Usage.InputTokens, dec.Usage.OutputTokens)
+		}
+	}
+	id, err := d.Store.SaveDecode(ctx, rec)
+	if err != nil {
+		return Outcome{}, false, err
+	}
+	if d.Savings != nil && d.Estimate != nil {
+		tokens, cost := d.Estimate(ctx)
+		_ = d.Savings.Record(ctx, "decision_gate", max(tokens-rec.Tokens, 0), max(cost-rec.CostUSD, 0), is.ID)
+	}
+	return Outcome{Status: "gated", DecodeID: id, Reason: fmt.Sprintf("known noise at p=%.2f", dec.P)}, true, nil
 }
 
 // fresh reports whether a stored decode still stands: same fingerprint recipe and every blamed chunk

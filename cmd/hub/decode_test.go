@@ -31,10 +31,27 @@ import (
 // regression with unchanged code reuses the decode (no model call) and records the saving.
 // signalEnv is a wired Hub with the stub LLM on the given routes.
 type signalEnv struct {
-	a    *app
-	st   *store.Store
-	q    *queue.Queue
-	stub *stubllm.Server
+	a      *app
+	st     *store.Store
+	q      *queue.Queue
+	stub   *stubllm.Server
+	c      *apiClient
+	stubID any
+}
+
+// addProvider registers an LLM provider through the API and returns its ID.
+func (e *signalEnv) addProvider(t *testing.T, kind, baseURL, key string) any {
+	t.Helper()
+	code, out := e.c.call("POST", "/providers", map[string]any{"kind": kind, "name": "p-" + kind + "-" + ports.NewID()[:8], "base_url": baseURL, "api_key": key})
+	require.Equal(t, http.StatusCreated, code, out)
+	return out["id"]
+}
+
+// setRoute points a feature at a provider and model.
+func (e *signalEnv) setRoute(t *testing.T, feature string, providerID any, model string) {
+	t.Helper()
+	code, out := e.c.call("PUT", "/routes/"+feature, map[string]any{"provider_id": providerID, "model": model})
+	require.Equal(t, http.StatusNoContent, code, out)
 }
 
 func newSignalEnv(t *testing.T, routes ...string) *signalEnv {
@@ -72,7 +89,7 @@ func newSignalEnv(t *testing.T, routes ...string) *signalEnv {
 		code, out = c.call("PUT", "/routes/"+f, map[string]any{"provider_id": provID, "model": model})
 		require.Equal(t, http.StatusNoContent, code, out)
 	}
-	return &signalEnv{a: a, st: st, q: q, stub: stub}
+	return &signalEnv{a: a, st: st, q: q, stub: stub, c: c, stubID: provID}
 }
 
 func TestDecodeEndToEnd(t *testing.T) {
@@ -201,4 +218,33 @@ func TestSuggestionsEndToEnd(t *testing.T) {
 	assert.Equal(t, 1, got.WouldMatch)
 	assert.Equal(t, []string{issueID}, got.SampleIssueIDs)
 	assert.Equal(t, []string{"health check failed"}, got.Terms.Messages, "found by the quoted message (2-letter service names are too ambiguous to match as words)")
+}
+
+// TestDecisionGateEndToEnd: with a decide route, confident noise gets a short decode without a full decode
+// call; a real defect still gets the full decode.
+func TestDecisionGateEndToEnd(t *testing.T) {
+	ctx := context.Background()
+	env := newSignalEnv(t, "decode", "decide")
+	a, st, q, stub := env.a, env.st, env.q, env.stub
+	require.NoError(t, a.signals.Ingest(ctx, []ports.SignalEvent{
+		{Source: "alertmanager", Kind: ports.KindAlert, ExternalID: "n1", Service: "lb", RuleID: "LBHealth", Title: "readiness probe failed during rolling deploy"},
+		{Source: "sentry", Kind: ports.KindError, ExternalID: "d1", Service: "orders", ExceptionType: "NullPointerException", Title: "NullPointerException in OrderService.refund"},
+	}))
+	require.NoError(t, a.agg.Flush(ctx))
+	runJob(t, a, q, ports.JobDecodeIssue)
+	runJob(t, a, q, ports.JobDecodeIssue)
+	assert.Equal(t, 2, stub.Calls(stubllm.Decide), "every new issue is asked")
+	assert.Equal(t, 1, stub.Calls(stubllm.Decode), "only the defect pays for a full decode")
+
+	var provider string
+	var actionable bool
+	require.NoError(t, st.Pool.QueryRow(ctx, `SELECT d.provider, d.is_actionable FROM issues i JOIN decodes d ON d.id = i.decode_id WHERE i.service = 'lb'`).Scan(&provider, &actionable))
+	assert.Equal(t, "decide:openai_compat", provider)
+	assert.False(t, actionable)
+	require.NoError(t, st.Pool.QueryRow(ctx, `SELECT d.provider, d.is_actionable FROM issues i JOIN decodes d ON d.id = i.decode_id WHERE i.service = 'orders'`).Scan(&provider, &actionable))
+	assert.Equal(t, "openai_compat", provider)
+	assert.True(t, actionable)
+	var saved int
+	require.NoError(t, st.Pool.QueryRow(ctx, `SELECT count(*) FROM savings_events WHERE kind = 'decision_gate'`).Scan(&saved))
+	assert.Equal(t, 1, saved)
 }

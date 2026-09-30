@@ -80,6 +80,15 @@ Under construction, milestone by milestone (plan § 14). Implemented so far:
   Known-issue suggestions come from decodes that call an issue noise (no extra model call) or from pasted
   incident text (one call, which may only reference real issues), and a dry run shows what a rule would
   match; nothing is suppressed until a person accepts it.
+- **Phase 11.5 — Decisions behind confidence gates**: an optional `decide` model route answers typed
+  questions with a probability per option. Before a full decode, the Hub asks whether a new issue is
+  recurring noise; only "known noise" at p ≥ `decide.gate_threshold` (default 0.9) replaces the decode with
+  a short note (the issue stays visible, and a full decode is one click away). Any chat provider can
+  serve the route (probabilities self-reported and labelled so); a native decision model such as TypeSafe
+  Jev plugs in by implementing `ports.Decider`, which the gateway then calls directly with the same
+  scrubbing, spend guard, and ledger. `go test ./cmd/hub -run TestDecisionEval` scores a provider on
+  100 labelled issues: accuracy, calibration (ECE, reliability curve, Brier), gate coverage, defects the
+  gate would skip, and net tokens saved per issue.
 
 ## Install
 

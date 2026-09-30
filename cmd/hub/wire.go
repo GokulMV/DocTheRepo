@@ -204,7 +204,9 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 		},
 		Cost: func(kind, model, feature string, in, out int64) (float64, bool) {
 			return a.enforcer.Guard().Cost(kind, model, feature, in, out)
-		}}
+		},
+		// Phase 11.5: with a "decide" route, confident "known noise" skips the full decode.
+		Decide: gw.Decide, GateThreshold: cfg.Decide.GateThreshold, Estimate: a.signalStore.DecodeEstimate}
 	a.suggestions = store.NewSuggestions(st, a.knownIssues)
 	a.suggest = &suggest.Service{Store: a.suggestions, GW: gw, Index: a.index}
 	a.pipe = &pipeline.Pipeline{Repos: repos, Chunks: a.chunks, Graph: store.NewGraph(st), Docs: a.docs, Savings: store.NewSavings(st),
