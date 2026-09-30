@@ -67,6 +67,7 @@ func (r *Routes) Route(ctx context.Context, feature string) (llmgateway.Route, e
 	rt := llmgateway.Route{
 		Feature: feature, ProviderID: row.ProviderID, ProviderKind: string(row.ProviderKind), Model: row.Model,
 		MaxOutputTokens: int(row.MaxOutputTokens), ContextBudget: int(row.ContextTokenBudget), Effort: row.Effort,
+		RedactPII: row.ProviderRedactPii,
 	}
 	if row.Temperature != nil {
 		t := float64(*row.Temperature)
@@ -74,7 +75,8 @@ func (r *Routes) Route(ctx context.Context, feature string) (llmgateway.Route, e
 	}
 	if row.FallbackProviderID != nil && row.FallbackModel != "" && row.FallbackEnabled != nil && *row.FallbackEnabled {
 		rt.Fallback = &llmgateway.Route{Feature: feature, ProviderID: *row.FallbackProviderID, ProviderKind: string(*row.FallbackKind),
-			Model: row.FallbackModel, MaxOutputTokens: rt.MaxOutputTokens, ContextBudget: rt.ContextBudget}
+			Model: row.FallbackModel, MaxOutputTokens: rt.MaxOutputTokens, ContextBudget: rt.ContextBudget,
+			RedactPII: row.FallbackRedactPii != nil && *row.FallbackRedactPii}
 	}
 	return rt, nil
 }

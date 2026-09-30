@@ -46,9 +46,9 @@ func (q *Queries) GetProvider(ctx context.Context, id string) (LlmProvider, erro
 }
 
 const getRoute = `-- name: GetRoute :one
-SELECT r.feature, r.provider_id, p.kind AS provider_kind, p.enabled AS provider_enabled, r.model, r.max_output_tokens,
-       r.context_token_budget, r.temperature, r.effort, r.fallback_provider_id, r.fallback_model,
-       fp.kind AS fallback_kind, fp.enabled AS fallback_enabled
+SELECT r.feature, r.provider_id, p.kind AS provider_kind, p.enabled AS provider_enabled, p.redact_pii AS provider_redact_pii,
+       r.model, r.max_output_tokens, r.context_token_budget, r.temperature, r.effort, r.fallback_provider_id, r.fallback_model,
+       fp.kind AS fallback_kind, fp.enabled AS fallback_enabled, fp.redact_pii AS fallback_redact_pii
 FROM model_routes r
 JOIN llm_providers p ON p.id = r.provider_id
 LEFT JOIN llm_providers fp ON fp.id = r.fallback_provider_id
@@ -60,6 +60,7 @@ type GetRouteRow struct {
 	ProviderID         string           `json:"provider_id"`
 	ProviderKind       LlmProviderKind  `json:"provider_kind"`
 	ProviderEnabled    bool             `json:"provider_enabled"`
+	ProviderRedactPii  bool             `json:"provider_redact_pii"`
 	Model              string           `json:"model"`
 	MaxOutputTokens    int32            `json:"max_output_tokens"`
 	ContextTokenBudget int32            `json:"context_token_budget"`
@@ -69,6 +70,7 @@ type GetRouteRow struct {
 	FallbackModel      string           `json:"fallback_model"`
 	FallbackKind       *LlmProviderKind `json:"fallback_kind"`
 	FallbackEnabled    *bool            `json:"fallback_enabled"`
+	FallbackRedactPii  *bool            `json:"fallback_redact_pii"`
 }
 
 func (q *Queries) GetRoute(ctx context.Context, feature LlmFeature) (GetRouteRow, error) {
@@ -79,6 +81,7 @@ func (q *Queries) GetRoute(ctx context.Context, feature LlmFeature) (GetRouteRow
 		&i.ProviderID,
 		&i.ProviderKind,
 		&i.ProviderEnabled,
+		&i.ProviderRedactPii,
 		&i.Model,
 		&i.MaxOutputTokens,
 		&i.ContextTokenBudget,
@@ -88,6 +91,7 @@ func (q *Queries) GetRoute(ctx context.Context, feature LlmFeature) (GetRouteRow
 		&i.FallbackModel,
 		&i.FallbackKind,
 		&i.FallbackEnabled,
+		&i.FallbackRedactPii,
 	)
 	return i, err
 }

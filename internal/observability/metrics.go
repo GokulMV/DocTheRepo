@@ -22,6 +22,12 @@ type Metrics struct {
 	JobsInFlight *prometheus.GaugeVec
 	// Retrieval times each Q&A retrieval stage (embed, vector_search, full_text, load_expand, total).
 	Retrieval *prometheus.HistogramVec
+	// Signals: events by source and outcome, new issues, flush latency, windows waiting to flush.
+	SignalEvents  *prometheus.CounterVec
+	IssuesNew     *prometheus.CounterVec
+	SignalFlush   prometheus.Histogram
+	SignalPending prometheus.Gauge
+	EventsFlushed prometheus.Counter
 }
 
 // NewMetrics registers all collectors on a fresh registry (never the global one, so tests stay isolated).
@@ -54,8 +60,25 @@ func NewMetrics() *Metrics {
 			Name: "dth_retrieval_duration_seconds", Help: "Q&A retrieval latency by stage.",
 			Buckets: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1, 2, 5},
 		}, []string{"stage"}),
+		SignalEvents: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "dth_ingress_events_total", Help: "Signal events by source and outcome (accepted, suppressed, labeled, invalid, overloaded).",
+		}, []string{"source", "outcome"}),
+		IssuesNew: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "dth_issues_new_total", Help: "Issues created or regressed, by status.",
+		}, []string{"status"}),
+		SignalFlush: prometheus.NewHistogram(prometheus.HistogramOpts{
+			Name: "dth_signal_flush_seconds", Help: "Time to persist one aggregation window.",
+			Buckets: []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5},
+		}),
+		SignalPending: prometheus.NewGauge(prometheus.GaugeOpts{
+			Name: "dth_signal_pending_windows", Help: "Aggregation windows waiting to be flushed (backpressure above 3).",
+		}),
+		EventsFlushed: prometheus.NewCounter(prometheus.CounterOpts{
+			Name: "dth_signal_events_flushed_total", Help: "Events persisted by aggregation flushes (suppressed included).",
+		}),
 	}
-	reg.MustRegister(m.HTTPRequests, m.HTTPDuration, m.JobsTotal, m.JobDuration, m.QueueDepth, m.JobsInFlight, m.Retrieval)
+	reg.MustRegister(m.HTTPRequests, m.HTTPDuration, m.JobsTotal, m.JobDuration, m.QueueDepth, m.JobsInFlight, m.Retrieval,
+		m.SignalEvents, m.IssuesNew, m.SignalFlush, m.SignalPending, m.EventsFlushed)
 	return m
 }
 

@@ -208,6 +208,49 @@ func (ns NullConnectorType) Value() (driver.Value, error) {
 	return string(ns.ConnectorType), nil
 }
 
+type DecodeConfidence string
+
+const (
+	DecodeConfidenceHigh   DecodeConfidence = "high"
+	DecodeConfidenceMedium DecodeConfidence = "medium"
+	DecodeConfidenceLow    DecodeConfidence = "low"
+)
+
+func (e *DecodeConfidence) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = DecodeConfidence(s)
+	case string:
+		*e = DecodeConfidence(s)
+	default:
+		return fmt.Errorf("unsupported scan type for DecodeConfidence: %T", src)
+	}
+	return nil
+}
+
+type NullDecodeConfidence struct {
+	DecodeConfidence DecodeConfidence `json:"decode_confidence"`
+	Valid            bool             `json:"valid"` // Valid is true if DecodeConfidence is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullDecodeConfidence) Scan(value interface{}) error {
+	if value == nil {
+		ns.DecodeConfidence, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.DecodeConfidence.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullDecodeConfidence) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.DecodeConfidence), nil
+}
+
 type DocNodeKind string
 
 const (
@@ -296,6 +339,52 @@ func (ns NullHealthState) Value() (driver.Value, error) {
 	return string(ns.HealthState), nil
 }
 
+type IssueStatus string
+
+const (
+	IssueStatusNew          IssueStatus = "new"
+	IssueStatusDecoded      IssueStatus = "decoded"
+	IssueStatusSuppressed   IssueStatus = "suppressed"
+	IssueStatusAcknowledged IssueStatus = "acknowledged"
+	IssueStatusResolved     IssueStatus = "resolved"
+	IssueStatusRegressed    IssueStatus = "regressed"
+)
+
+func (e *IssueStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = IssueStatus(s)
+	case string:
+		*e = IssueStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for IssueStatus: %T", src)
+	}
+	return nil
+}
+
+type NullIssueStatus struct {
+	IssueStatus IssueStatus `json:"issue_status"`
+	Valid       bool        `json:"valid"` // Valid is true if IssueStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullIssueStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.IssueStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.IssueStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullIssueStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.IssueStatus), nil
+}
+
 type JobStatus string
 
 const (
@@ -343,6 +432,139 @@ func (ns NullJobStatus) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.JobStatus), nil
+}
+
+type KnownIssueAction string
+
+const (
+	KnownIssueActionSuppress  KnownIssueAction = "suppress"
+	KnownIssueActionLabelOnly KnownIssueAction = "label_only"
+)
+
+func (e *KnownIssueAction) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = KnownIssueAction(s)
+	case string:
+		*e = KnownIssueAction(s)
+	default:
+		return fmt.Errorf("unsupported scan type for KnownIssueAction: %T", src)
+	}
+	return nil
+}
+
+type NullKnownIssueAction struct {
+	KnownIssueAction KnownIssueAction `json:"known_issue_action"`
+	Valid            bool             `json:"valid"` // Valid is true if KnownIssueAction is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullKnownIssueAction) Scan(value interface{}) error {
+	if value == nil {
+		ns.KnownIssueAction, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.KnownIssueAction.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullKnownIssueAction) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.KnownIssueAction), nil
+}
+
+type KnownIssueReason string
+
+const (
+	KnownIssueReasonKnownBug      KnownIssueReason = "known_bug"
+	KnownIssueReasonWontFix       KnownIssueReason = "wont_fix"
+	KnownIssueReasonThirdParty    KnownIssueReason = "third_party"
+	KnownIssueReasonExpectedNoise KnownIssueReason = "expected_noise"
+	KnownIssueReasonCannotAction  KnownIssueReason = "cannot_action"
+	KnownIssueReasonInProgress    KnownIssueReason = "in_progress"
+)
+
+func (e *KnownIssueReason) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = KnownIssueReason(s)
+	case string:
+		*e = KnownIssueReason(s)
+	default:
+		return fmt.Errorf("unsupported scan type for KnownIssueReason: %T", src)
+	}
+	return nil
+}
+
+type NullKnownIssueReason struct {
+	KnownIssueReason KnownIssueReason `json:"known_issue_reason"`
+	Valid            bool             `json:"valid"` // Valid is true if KnownIssueReason is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullKnownIssueReason) Scan(value interface{}) error {
+	if value == nil {
+		ns.KnownIssueReason, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.KnownIssueReason.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullKnownIssueReason) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.KnownIssueReason), nil
+}
+
+type KnownIssueSource string
+
+const (
+	KnownIssueSourceManual     KnownIssueSource = "manual"
+	KnownIssueSourceSuggested  KnownIssueSource = "suggested"
+	KnownIssueSourceConfluence KnownIssueSource = "confluence"
+	KnownIssueSourceJira       KnownIssueSource = "jira"
+	KnownIssueSourcePasted     KnownIssueSource = "pasted"
+)
+
+func (e *KnownIssueSource) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = KnownIssueSource(s)
+	case string:
+		*e = KnownIssueSource(s)
+	default:
+		return fmt.Errorf("unsupported scan type for KnownIssueSource: %T", src)
+	}
+	return nil
+}
+
+type NullKnownIssueSource struct {
+	KnownIssueSource KnownIssueSource `json:"known_issue_source"`
+	Valid            bool             `json:"valid"` // Valid is true if KnownIssueSource is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullKnownIssueSource) Scan(value interface{}) error {
+	if value == nil {
+		ns.KnownIssueSource, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.KnownIssueSource.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullKnownIssueSource) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.KnownIssueSource), nil
 }
 
 type LlmFeature string
@@ -697,6 +919,95 @@ func (ns NullShelfItemType) Value() (driver.Value, error) {
 	return string(ns.ShelfItemType), nil
 }
 
+type SignalKind string
+
+const (
+	SignalKindError           SignalKind = "error"
+	SignalKindAlert           SignalKind = "alert"
+	SignalKindSecurityFinding SignalKind = "security_finding"
+	SignalKindLogMatch        SignalKind = "log_match"
+	SignalKindEventBus        SignalKind = "event_bus"
+)
+
+func (e *SignalKind) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SignalKind(s)
+	case string:
+		*e = SignalKind(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SignalKind: %T", src)
+	}
+	return nil
+}
+
+type NullSignalKind struct {
+	SignalKind SignalKind `json:"signal_kind"`
+	Valid      bool       `json:"valid"` // Valid is true if SignalKind is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSignalKind) Scan(value interface{}) error {
+	if value == nil {
+		ns.SignalKind, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SignalKind.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSignalKind) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SignalKind), nil
+}
+
+type SignalSeverity string
+
+const (
+	SignalSeverityInfo     SignalSeverity = "info"
+	SignalSeverityWarning  SignalSeverity = "warning"
+	SignalSeverityError    SignalSeverity = "error"
+	SignalSeverityCritical SignalSeverity = "critical"
+)
+
+func (e *SignalSeverity) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SignalSeverity(s)
+	case string:
+		*e = SignalSeverity(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SignalSeverity: %T", src)
+	}
+	return nil
+}
+
+type NullSignalSeverity struct {
+	SignalSeverity SignalSeverity `json:"signal_severity"`
+	Valid          bool           `json:"valid"` // Valid is true if SignalSeverity is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSignalSeverity) Scan(value interface{}) error {
+	if value == nil {
+		ns.SignalSeverity, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SignalSeverity.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSignalSeverity) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SignalSeverity), nil
+}
+
 type SpendScope string
 
 const (
@@ -781,6 +1092,49 @@ func (ns NullSpendWindow) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.SpendWindow), nil
+}
+
+type SuggestionStatus string
+
+const (
+	SuggestionStatusPending  SuggestionStatus = "pending"
+	SuggestionStatusAccepted SuggestionStatus = "accepted"
+	SuggestionStatusRejected SuggestionStatus = "rejected"
+)
+
+func (e *SuggestionStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = SuggestionStatus(s)
+	case string:
+		*e = SuggestionStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for SuggestionStatus: %T", src)
+	}
+	return nil
+}
+
+type NullSuggestionStatus struct {
+	SuggestionStatus SuggestionStatus `json:"suggestion_status"`
+	Valid            bool             `json:"valid"` // Valid is true if SuggestionStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullSuggestionStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.SuggestionStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.SuggestionStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullSuggestionStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.SuggestionStatus), nil
 }
 
 type UsageOutcome string
@@ -956,6 +1310,28 @@ type CostTable struct {
 	VerifiedAt       *time.Time      `json:"verified_at"`
 }
 
+type Decode struct {
+	ID                 string           `json:"id"`
+	IssueID            string           `json:"issue_id"`
+	Summary            string           `json:"summary"`
+	ProbableCause      string           `json:"probable_cause"`
+	Impact             string           `json:"impact"`
+	AffectedCode       json.RawMessage  `json:"affected_code"`
+	RelatedCommits     json.RawMessage  `json:"related_commits"`
+	RelatedDocs        json.RawMessage  `json:"related_docs"`
+	SimilarIssueIds    []string         `json:"similar_issue_ids"`
+	NextSteps          []string         `json:"next_steps"`
+	Confidence         DecodeConfidence `json:"confidence"`
+	IsActionable       bool             `json:"is_actionable"`
+	SuggestKnownIssue  bool             `json:"suggest_known_issue"`
+	Provider           string           `json:"provider"`
+	Model              string           `json:"model"`
+	Tokens             int64            `json:"tokens"`
+	CostUsd            float64          `json:"cost_usd"`
+	FingerprintVersion int32            `json:"fingerprint_version"`
+	CreatedAt          time.Time        `json:"created_at"`
+}
+
 type DocNode struct {
 	ID        string      `json:"id"`
 	RepoID    string      `json:"repo_id"`
@@ -1008,6 +1384,29 @@ type Entity struct {
 	DeletedAt *time.Time      `json:"deleted_at"`
 }
 
+type EventSample struct {
+	IssueID         string          `json:"issue_id"`
+	SampleDay       pgtype.Date     `json:"sample_day"`
+	SampleHour      time.Time       `json:"sample_hour"`
+	SampleSlot      int16           `json:"sample_slot"`
+	SampleKind      string          `json:"sample_kind"`
+	ConnectorID     *string         `json:"connector_id"`
+	Source          string          `json:"source"`
+	ExternalID      string          `json:"external_id"`
+	OccurredAt      time.Time       `json:"occurred_at"`
+	ReceivedAt      time.Time       `json:"received_at"`
+	Severity        SignalSeverity  `json:"severity"`
+	Kind            SignalKind      `json:"kind"`
+	Service         string          `json:"service"`
+	Environment     string          `json:"environment"`
+	Title           string          `json:"title"`
+	MessageScrubbed string          `json:"message_scrubbed"`
+	ExceptionType   string          `json:"exception_type"`
+	Stack           json.RawMessage `json:"stack"`
+	Attrs           json.RawMessage `json:"attrs"`
+	Fingerprint     string          `json:"fingerprint"`
+}
+
 type Group struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
@@ -1028,6 +1427,44 @@ type GroupRepoAccess struct {
 type IndexVersion struct {
 	ID      bool  `json:"id"`
 	Version int64 `json:"version"`
+}
+
+type Issue struct {
+	ID              string         `json:"id"`
+	Fingerprint     string         `json:"fingerprint"`
+	AltFingerprint  string         `json:"alt_fingerprint"`
+	Kind            SignalKind     `json:"kind"`
+	Title           string         `json:"title"`
+	Service         string         `json:"service"`
+	Environment     string         `json:"environment"`
+	RepoID          *string        `json:"repo_id"`
+	FirstSeen       time.Time      `json:"first_seen"`
+	LastSeen        time.Time      `json:"last_seen"`
+	Occurrences     int64          `json:"occurrences"`
+	SuppressedCount int64          `json:"suppressed_count"`
+	Sources         []string       `json:"sources"`
+	Status          IssueStatus    `json:"status"`
+	SeverityMax     SignalSeverity `json:"severity_max"`
+	KnownIssueID    *string        `json:"known_issue_id"`
+	DecodeID        *string        `json:"decode_id"`
+	AssigneeUserID  *string        `json:"assignee_user_id"`
+	ResolvedAt      *time.Time     `json:"resolved_at"`
+	CreatedAt       time.Time      `json:"created_at"`
+	UpdatedAt       time.Time      `json:"updated_at"`
+}
+
+type IssueCountsHourly struct {
+	IssueID         string    `json:"issue_id"`
+	Hour            time.Time `json:"hour"`
+	Count           int64     `json:"count"`
+	SuppressedCount int64     `json:"suppressed_count"`
+}
+
+type IssueCountsMinutely struct {
+	IssueID         string    `json:"issue_id"`
+	Minute          time.Time `json:"minute"`
+	Count           int64     `json:"count"`
+	SuppressedCount int64     `json:"suppressed_count"`
 }
 
 type Job struct {
@@ -1051,6 +1488,39 @@ type Job struct {
 	ReplayedFrom  *string         `json:"replayed_from"`
 	CreatedAt     time.Time       `json:"created_at"`
 	UpdatedAt     time.Time       `json:"updated_at"`
+}
+
+type KnownIssue struct {
+	ID               string           `json:"id"`
+	Title            string           `json:"title"`
+	Description      string           `json:"description"`
+	Explanation      string           `json:"explanation"`
+	SourceText       string           `json:"source_text"`
+	JiraKey          *string          `json:"jira_key"`
+	Reason           KnownIssueReason `json:"reason"`
+	Match            json.RawMessage  `json:"match"`
+	Action           KnownIssueAction `json:"action"`
+	Enabled          bool             `json:"enabled"`
+	ExpiresAt        *time.Time       `json:"expires_at"`
+	Source           KnownIssueSource `json:"source"`
+	ConfluencePageID *string          `json:"confluence_page_id"`
+	OwnerUserID      *string          `json:"owner_user_id"`
+	TicketUrl        string           `json:"ticket_url"`
+	Hits             int64            `json:"hits"`
+	LastHitAt        *time.Time       `json:"last_hit_at"`
+	CreatedAt        time.Time        `json:"created_at"`
+	UpdatedAt        time.Time        `json:"updated_at"`
+}
+
+type KnownIssueSuggestion struct {
+	ID            string           `json:"id"`
+	IssueIds      []string         `json:"issue_ids"`
+	ProposedMatch json.RawMessage  `json:"proposed_match"`
+	Rationale     string           `json:"rationale"`
+	Status        SuggestionStatus `json:"status"`
+	DecidedBy     *string          `json:"decided_by"`
+	DecidedAt     *time.Time       `json:"decided_at"`
+	CreatedAt     time.Time        `json:"created_at"`
 }
 
 type LibraryShelf struct {

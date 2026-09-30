@@ -21,6 +21,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/api"
 	"github.com/GokulMV/DocTheRepo/internal/auth"
 	"github.com/GokulMV/DocTheRepo/internal/config"
+	"github.com/GokulMV/DocTheRepo/internal/core/aggregate"
 	"github.com/GokulMV/DocTheRepo/internal/core/docgen"
 	"github.com/GokulMV/DocTheRepo/internal/core/grammars"
 	"github.com/GokulMV/DocTheRepo/internal/core/library"
@@ -63,6 +64,11 @@ type app struct {
 	repos    *store.Repos
 	conns    *store.Connectors
 	browse   *store.Browse
+	// Signals: storage, the aggregation hot path, and the ingest entry point.
+	signalStore *store.Signals
+	knownIssues *store.KnownIssues
+	agg         *aggregate.Aggregator
+	signals     *ingest.SignalIngest
 }
 
 func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.Box, q *queue.Queue, log *slog.Logger, m *observability.Metrics) (*app, error) {
@@ -102,6 +108,24 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 	a.chunks = store.NewChunks(st)
 	a.docs = store.NewDocs(st, shelves)
 
+	a.signalStore = store.NewSignals(st)
+	a.signalStore.OnIssues = func(_ context.Context, refs []store.IssueRef) {
+		for _, r := range refs {
+			m.IssuesNew.WithLabelValues(r.Status).Inc()
+			log.Info("issue opened", "component", "signals", "issue_id", r.ID, "status", r.Status, "service", r.Service, "kind", r.Kind)
+		}
+	}
+	a.knownIssues = store.NewKnownIssues(st)
+	a.agg = aggregate.New(a.signalStore, aggregate.Options{OnFlush: func(b aggregate.Batch, d time.Duration, err error) {
+		if err != nil {
+			log.Warn("signal flush failed; retrying", "component", "signals", "err", err, "groups", len(b.Groups))
+			return
+		}
+		m.SignalFlush.Observe(d.Seconds())
+		m.EventsFlushed.Add(float64(b.Events()))
+	}})
+	a.signals = &ingest.SignalIngest{Agg: a.agg, Rules: a.signalStore, Log: log.With("component", "signals"),
+		OnEvent: func(source, outcome string) { m.SignalEvents.WithLabelValues(source, outcome).Inc() }}
 	a.ingest = &ingest.Service{Queue: q, Repos: repos, Hosts: a.hosts, Log: log.With("component", "ingest")}
 	a.sweeper = &lifecycle.Sweeper{PRs: prs, Requeue: a.ingest.RequeueDocs, Log: log.With("component", "pr_lifecycle"),
 		Hosts: func(ctx context.Context, repoID string) (ports.CodeHost, ports.RepoConfig, error) {
@@ -156,6 +180,9 @@ func (a *app) registerHandlers(pool *queue.Pool) {
 func (a *app) tasks() []scheduler.Task {
 	return []scheduler.Task{
 		{Name: "seed_library_shelves", Every: 24 * time.Hour, RunFirst: true, Fn: a.docs.SeedShelves},
+		{Name: "signal_maintenance", Every: 6 * time.Hour, RunFirst: true, Fn: func(ctx context.Context) error {
+			return a.signalStore.Maintain(ctx, time.Now())
+		}},
 		{Name: "poll_git_repos", Every: 30 * time.Second, RunFirst: true, Fn: func(ctx context.Context) error {
 			n, err := a.ingest.Poll(ctx)
 			if n > 0 {

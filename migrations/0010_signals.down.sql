@@ -1,0 +1,17 @@
+DROP FUNCTION IF EXISTS ensure_event_sample_partitions(date, integer);
+DROP TABLE IF EXISTS known_issue_suggestions;
+DROP TABLE IF EXISTS issue_counts_hourly;
+DROP TABLE IF EXISTS issue_counts_minutely;
+DROP TABLE IF EXISTS event_samples;
+ALTER TABLE IF EXISTS issues DROP CONSTRAINT IF EXISTS issues_decode_fk;
+DROP TABLE IF EXISTS decodes;
+DROP TABLE IF EXISTS issues;
+DROP TABLE IF EXISTS known_issues;
+DROP TYPE IF EXISTS suggestion_status;
+DROP TYPE IF EXISTS decode_confidence;
+DROP TYPE IF EXISTS known_issue_source;
+DROP TYPE IF EXISTS known_issue_action;
+DROP TYPE IF EXISTS known_issue_reason;
+DROP TYPE IF EXISTS issue_status;
+DROP TYPE IF EXISTS signal_kind;
+DROP TYPE IF EXISTS signal_severity;
