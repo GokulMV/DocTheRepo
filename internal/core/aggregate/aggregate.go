@@ -73,6 +73,7 @@ type Group struct {
 
 // Batch is one window's groups.
 type Batch struct {
+	Seq    uint64 // window sequence number (see WaitFlushed)
 	Window time.Time
 	Groups []*Group
 }
@@ -118,6 +119,10 @@ type Aggregator struct {
 	hours   map[string]*hourly // fingerprint → this hour's reservoir state
 	hourNow time.Time
 	wake    chan struct{}
+
+	seq       uint64        // windows cut so far; the open window is seq+1
+	flushed   uint64        // every window up to this sequence is persisted
+	flushedCh chan struct{} // closed (and replaced) whenever flushed advances
 }
 
 type hourly struct {
@@ -146,7 +151,7 @@ func New(sink Sink, o Options) *Aggregator {
 		o.Rand = rand.IntN
 	}
 	return &Aggregator{o: o, sink: sink, cur: map[string]*Group{}, firsts: newLRU[int](o.LRUSize), seen: newLRU[time.Time](o.LRUSize),
-		hours: map[string]*hourly{}, wake: make(chan struct{}, 1)}
+		hours: map[string]*hourly{}, wake: make(chan struct{}, 1), flushedCh: make(chan struct{})}
 }
 
 // Overloaded reports whether new events should be refused (see ErrOverloaded).
@@ -247,14 +252,54 @@ func (a *Aggregator) sample(g *Group, ev ports.SignalEvent, now time.Time) {
 	g.Samples = append(g.Samples, Sample{Kind: SampleReservoir, Hour: hour, Slot: slot, Event: ev})
 }
 
+// OpenWindow is the sequence number of the window new events go into. Pass it to WaitFlushed after adding
+// events to wait until they are persisted.
+func (a *Aggregator) OpenWindow() uint64 {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.seq + 1
+}
+
+// WaitFlushed blocks until every window up to seq has been persisted (or ctx ends). Receivers that must
+// not confirm delivery before events are durable (Firehose, Pub/Sub) acknowledge only after it returns.
+func (a *Aggregator) WaitFlushed(ctx context.Context, seq uint64) error {
+	for {
+		a.mu.Lock()
+		done, ch := a.flushed >= seq, a.flushedCh
+		a.mu.Unlock()
+		if done {
+			return nil
+		}
+		select {
+		case <-ch:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+}
+
+// advanceLocked records that windows up to seq are persisted and wakes waiters. Callers hold a.mu.
+func (a *Aggregator) advanceLocked(seq uint64) {
+	if seq <= a.flushed {
+		return
+	}
+	a.flushed = seq
+	close(a.flushedCh)
+	a.flushedCh = make(chan struct{})
+}
+
 // cut closes the current window into the flush queue.
 func (a *Aggregator) cut() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	a.seq++
 	if len(a.cur) == 0 {
+		if len(a.queue) == 0 {
+			a.advanceLocked(a.seq) // nothing pending: this (empty) window is trivially persisted
+		}
 		return
 	}
-	b := Batch{Window: a.o.Now(), Groups: make([]*Group, 0, len(a.cur))}
+	b := Batch{Seq: a.seq, Window: a.o.Now(), Groups: make([]*Group, 0, len(a.cur))}
 	for _, g := range a.cur {
 		b.Groups = append(b.Groups, g)
 	}
@@ -288,6 +333,11 @@ func (a *Aggregator) drain(ctx context.Context) error {
 		}
 		a.mu.Lock()
 		a.queue = a.queue[1:]
+		if len(a.queue) == 0 {
+			a.advanceLocked(a.seq) // empty windows cut while this batch was flushing are done too
+		} else {
+			a.advanceLocked(b.Seq)
+		}
 		a.mu.Unlock()
 	}
 }

@@ -8,6 +8,9 @@ import (
 // Unknown is the service of events nothing maps.
 const Unknown = "unknown"
 
+// DerivedServiceAttr is a service name an adapter guessed from resource naming; it loses to service_map.
+const DerivedServiceAttr = "service.derived"
+
 // serviceTags are explicit service attributes, most specific first (plan § 8.8).
 var serviceTags = []string{"service", "service.name", "dd.service", "k8s.label.app", "kubernetes.labels.app", "app.kubernetes.io/name", "app", "job"}
 
@@ -20,7 +23,8 @@ type ServiceRule struct {
 }
 
 // ResolveService returns the event's service: an explicit value, then an explicit tag, then the first
-// service_map rule whose every pattern matches, else Unknown.
+// service_map rule whose every pattern matches, then a name the adapter derived from the resource
+// (DerivedServiceAttr: a Lambda function, an ECS log group), else Unknown.
 func ResolveService(explicit string, attrs map[string]string, rules []ServiceRule) string {
 	if s := strings.TrimSpace(explicit); s != "" && s != Unknown {
 		return s
@@ -49,6 +53,9 @@ func ResolveService(explicit string, attrs map[string]string, rules []ServiceRul
 		if ok {
 			return r.Service
 		}
+	}
+	if v := strings.TrimSpace(attrs[DerivedServiceAttr]); v != "" {
+		return v
 	}
 	return Unknown
 }

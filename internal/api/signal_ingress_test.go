@@ -61,3 +61,50 @@ func TestSignalHookStatuses(t *testing.T) {
 	}
 	assert.Greater(t, limited, 0)
 }
+
+type fakeFirehose struct {
+	fakeSignals
+	fhErr error
+	calls int
+}
+
+func (f *fakeFirehose) Firehose(_ context.Context, id string, req ports.WebhookRequest) (string, int, error) {
+	f.calls++
+	return "req-body", 2, f.fhErr
+}
+
+func TestFirehoseHookContract(t *testing.T) {
+	f := &fakeFirehose{}
+	h := NewRouter(Deps{Log: slog.New(slog.DiscardHandler), Metrics: observability.NewMetrics(), Signals: f, WebhookPerMinute: 6000})
+	do := func() *httptest.ResponseRecorder {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/hooks/firehose/c1", strings.NewReader(`{}`))
+		req.Header.Set("X-Amz-Firehose-Request-Id", "req-hdr")
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	rec := do()
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"requestId":"req-body"`)
+	assert.NotContains(t, rec.Body.String(), "errorMessage")
+	assert.Equal(t, 1, f.calls, "the static firehose route wins over /hooks/{source}")
+
+	for err, code := range map[error]int{
+		ports.ErrInvalidSignature:                      http.StatusUnauthorized,
+		ports.ErrNotFound:                              http.StatusNotFound,
+		aggregate.ErrOverloaded:                        http.StatusServiceUnavailable,
+		context.DeadlineExceeded:                       http.StatusServiceUnavailable,
+		&ports.ValidationError{Message: "bad records"}: http.StatusBadRequest,
+	} {
+		f.fhErr = err
+		rec := do()
+		assert.Equal(t, code, rec.Code, "%v", err)
+		assert.Contains(t, rec.Body.String(), `"errorMessage"`)
+	}
+
+	plain := &fakeSignals{}
+	h = NewRouter(Deps{Log: slog.New(slog.DiscardHandler), Metrics: observability.NewMetrics(), Signals: plain})
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/hooks/firehose/c1", strings.NewReader(`{}`)))
+	assert.Equal(t, http.StatusAccepted, rec.Code, "without Firehose support the path falls through to the generic signal route")
+}

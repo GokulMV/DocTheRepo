@@ -63,6 +63,9 @@ func NewRouter(d Deps) http.Handler {
 		r.Post("/hooks/{kind:github|gitlab}/{connector_id}", gitHook(d.Git, lim))
 	}
 	if d.Signals != nil {
+		if f, ok := d.Signals.(FirehoseIngress); ok { // a static segment: chi matches it before {source}
+			r.Post("/hooks/firehose/{connector_id}", firehoseHook(f, lim))
+		}
 		r.Post("/hooks/{source}/{connector_id}", signalHook(d.Signals, lim))
 	}
 	if d.Auth != nil {

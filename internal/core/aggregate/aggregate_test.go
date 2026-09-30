@@ -270,3 +270,31 @@ func BenchmarkAdd(b *testing.B) {
 		}
 	}
 }
+
+func TestWaitFlushed(t *testing.T) {
+	s := &memSink{}
+	a := New(s, Options{})
+	ctx := context.Background()
+	require.NoError(t, a.Add(evt("w", 1, ports.SeverityError), nil))
+	seq := a.OpenWindow()
+	short, cancel := context.WithTimeout(ctx, 20*time.Millisecond)
+	defer cancel()
+	assert.ErrorIs(t, a.WaitFlushed(short, seq), context.DeadlineExceeded, "not persisted yet")
+
+	s.fail.Store(true)
+	assert.Error(t, a.Flush(ctx))
+	short2, cancel2 := context.WithTimeout(ctx, 20*time.Millisecond)
+	defer cancel2()
+	assert.ErrorIs(t, a.WaitFlushed(short2, seq), context.DeadlineExceeded, "a failed flush is not durable")
+
+	s.fail.Store(false)
+	done := make(chan error, 1)
+	go func() { done <- a.WaitFlushed(ctx, seq) }()
+	require.NoError(t, a.Flush(ctx))
+	require.NoError(t, <-done)
+
+	// A quiet period: an empty cut with nothing queued counts as flushed, so waiters never hang.
+	idle := a.OpenWindow()
+	require.NoError(t, a.Flush(ctx))
+	require.NoError(t, a.WaitFlushed(ctx, idle))
+}
