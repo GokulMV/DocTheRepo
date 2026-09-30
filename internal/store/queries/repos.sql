@@ -85,3 +85,10 @@ WHERE repo_id = sqlc.arg(repo_id) AND number = sqlc.arg(number);
 -- name: ListAllRepos :many
 SELECT r.*, extract(epoch FROM r.pr_stale_after)::bigint AS stale_seconds, c.type AS connector_type
 FROM repos r JOIN connectors c ON c.id = r.connector_id ORDER BY r.full_name;
+
+-- name: ListConnectorCursors :many
+SELECT stream, cursor FROM connector_cursors WHERE connector_id = $1;
+
+-- name: SetConnectorCursor :exec
+INSERT INTO connector_cursors (connector_id, stream, cursor) VALUES ($1, $2, $3)
+ON CONFLICT (connector_id, stream) DO UPDATE SET cursor = EXCLUDED.cursor, updated_at = now();

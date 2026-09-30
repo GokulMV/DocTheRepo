@@ -131,4 +131,3 @@ func plain(m Message, cc ports.ConnectorConfig, min ports.Severity) []ports.Sign
 	}
 	return []ports.SignalEvent{ev}
 }
-

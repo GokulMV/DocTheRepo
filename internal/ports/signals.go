@@ -130,3 +130,13 @@ func equalFold(a, b string) bool {
 	}
 	return true
 }
+
+// SignalPoller pulls events from a low-volume read API (CloudWatch Logs FilterLogEvents, alarm history,
+// GCP Logging entries.list) with a cursor per stream (a log group, a project). Poll hands each page to
+// emit with the cursor to store once that page's events are persisted; an emit error stops the poll and
+// the page is fetched again next time (at-least-once, deduplicated by external ID).
+type SignalPoller interface {
+	// Type is the connector type polled.
+	Type() string
+	Poll(ctx context.Context, cc ConnectorConfig, cursors map[string]string, emit func(stream, cursor string, events []SignalEvent) error) error
+}

@@ -16,6 +16,8 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/adapters/llm"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/push"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/push/lifecycle"
+	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/cloudwatch"
+	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/gcplogging"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/pubsub"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/registry"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/vector/pgvector"
@@ -71,6 +73,7 @@ type app struct {
 	knownIssues *store.KnownIssues
 	agg         *aggregate.Aggregator
 	signals     *ingest.SignalIngest
+	polls       *ingest.SignalPolls
 }
 
 func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.Box, q *queue.Queue, log *slog.Logger, m *observability.Metrics) (*app, error) {
@@ -129,6 +132,8 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 	a.signals = &ingest.SignalIngest{Agg: a.agg, Rules: a.signalStore, Log: log.With("component", "signals"),
 		OnEvent:  func(source, outcome string) { m.SignalEvents.WithLabelValues(source, outcome).Inc() },
 		Webhooks: registry.Webhooks(), Accepts: registry.Accepts, LoadConnector: conns.Get}
+	a.polls = &ingest.SignalPolls{Sink: a.signals, Store: conns, Queue: q,
+		Pollers: map[string]ports.SignalPoller{"cloudwatch": cloudwatch.New(), "gcp": gcplogging.New()}}
 	a.ingest = &ingest.Service{Queue: q, Repos: repos, Hosts: a.hosts, Log: log.With("component", "ingest")}
 	a.sweeper = &lifecycle.Sweeper{PRs: prs, Requeue: a.ingest.RequeueDocs, Log: log.With("component", "pr_lifecycle"),
 		Hosts: func(ctx context.Context, repoID string) (ports.CodeHost, ports.RepoConfig, error) {
@@ -166,6 +171,7 @@ func (a *app) registerHandlers(pool *queue.Pool) {
 	pool.Register(ports.JobCodePush, a.pipe.CodePush)
 	pool.Register(ports.JobImportDocs, a.pipe.ImportDocs)
 	pool.Register(ports.JobReindex, a.pipe.Reindex)
+	pool.Register(ports.JobSignalBatch, a.polls.Handle)
 	pool.Register(ports.JobPRReview, func(ctx context.Context, job ports.Job) (ports.Outcome, error) {
 		var pl ingest.ReviewPayload
 		if err := json.Unmarshal(job.Payload, &pl); err != nil {
@@ -191,6 +197,10 @@ func (a *app) tasks() []scheduler.Task {
 			if n > 0 {
 				a.log.Info("polling enqueued pushes", "count", n)
 			}
+			return err
+		}},
+		{Name: "poll_signal_connectors", Every: 15 * time.Second, RunFirst: true, Fn: func(ctx context.Context) error {
+			_, err := a.polls.Enqueue(ctx)
 			return err
 		}},
 		{Name: "pr_lifecycle_sweep", Every: max(a.cfg.Docs.PRSweepInterval, time.Second), Fn: a.sweeper.Sweep},
