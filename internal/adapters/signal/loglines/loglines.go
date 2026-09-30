@@ -22,7 +22,7 @@ type Parsed struct {
 }
 
 var (
-	levelRE      = regexp.MustCompile(`\b(FATAL|PANIC|CRITICAL|CRIT|SEVERE|ERROR|ERR|WARNING|WARN)\b`)
+	levelRE      = regexp.MustCompile(`\b(FATAL|PANIC|CRITICAL|CRIT|SEVERE|ERROR|ERR|WARNING|WARN|NOTICE|INFO|DEBUG|TRACE)\b`)
 	pyFrameRE    = regexp.MustCompile(`File "([^"]+)", line (\d+), in (\S+)`)
 	pyExcRE      = regexp.MustCompile(`(?m)^([A-Za-z_][\w.]*(?:Error|Exception|Exit|Interrupt|Warning|Fault)):?\s?(.*)$`)
 	javaExcRE    = regexp.MustCompile(`(?m)^(?:Exception in thread "[^"]*" )?(?:Caused by: )?([a-zA-Z_$][\w$]*(?:\.[a-zA-Z_$][\w$]*)+(?:Exception|Error|Throwable))(?::\s*(.*))?$`)

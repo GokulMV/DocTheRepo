@@ -16,6 +16,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/adapters/llm"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/push"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/push/lifecycle"
+	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/pubsub"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/registry"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/vector/pgvector"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/vector/qdrant"
@@ -297,5 +298,29 @@ func (a *app) readiness() map[string]api.ReadinessCheck {
 			_, err := a.index.State(ctx)
 			return err
 		},
+	}
+}
+
+// streams runs a pull consumer per enabled Pub/Sub connector (worker role).
+func (a *app) streams(log *slog.Logger) *ingest.StreamRunner {
+	log = log.With("component", "streams")
+	health := func(id string, err error) {
+		if herr := a.conns.SetHealth(context.Background(), id, err); herr != nil {
+			log.Warn("record connector health failed", "connector_id", id, "err", herr)
+		}
+	}
+	return &ingest.StreamRunner{
+		Log:  log,
+		List: func(ctx context.Context) ([]ports.ConnectorConfig, error) { return a.conns.ListByType(ctx, "pubsub") },
+		Start: func(ctx context.Context, cc ports.ConnectorConfig) (func(context.Context), error) {
+			client, err := pubsub.NewClient(ctx, cc)
+			if err != nil {
+				return nil, err
+			}
+			c := &pubsub.Consumer{Client: client, CC: cc, Sink: a.signals, Log: log,
+				OnHealth: func(err error) { health(cc.ID, err) }}
+			return c.Run, nil
+		},
+		OnError: func(cc ports.ConnectorConfig, err error) { health(cc.ID, err) },
 	}
 }
