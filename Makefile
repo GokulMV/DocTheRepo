@@ -4,7 +4,7 @@ VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo de
 LDFLAGS   := -s -w -X main.version=$(VERSION)
 SQLC      ?= sqlc
 
-.PHONY: all build test test-unit test-integration cover lint vet fmt generate vuln clean web web-test release image cli-release deploy-lint e2e stack
+.PHONY: all build test test-unit test-integration cover lint vet fmt generate vuln clean web web-test release image cli-release deploy-lint e2e stack perf-push perf-qa
 
 all: lint test build
 
@@ -27,6 +27,17 @@ e2e: release ## Playwright E2E against the real hub + mocks (needs Docker and Ch
 
 stack: ## Run the E2E stack (hub + Postgres + GitHub/OIDC mocks + stub LLM) for manual testing or k6
 	$(GO) run ./test/e2e/stack -hub ./bin/dth-hub
+
+K6 ?= k6
+perf-push: build ## Push burst: 40 commits / 5 repos / 90 s docgen must drain < 30 min at concurrency 4 (needs k6)
+	$(GO) run ./test/e2e/stack -hub ./bin/dth-hub -auth local -synthetic-repos 5 -docgen-delay 90s -work-dir .perf/push -state-file .perf/push.json & \
+	  until [ -s .perf/push.json ]; do sleep 1; done; $(K6) run test/perf/push-burst.js; s=$$?; kill %1; rm -f .perf/push.json; exit $$s
+
+perf-qa: build ## Q&A: 50 users, 1 ask/10 s, 250k chunks, retrieval p95 < 400 ms (needs k6)
+	$(GO) run ./test/e2e/stack -hub ./bin/dth-hub -listen 127.0.0.1:18190 -control 127.0.0.1:18199 -llm 127.0.0.1:18198 \
+	  -metrics 127.0.0.1:18191 -synthetic-repos 20 -hub-env DTH_ALL_USERS_READ_ALL_REPOS=true -work-dir .perf/qa -state-file .perf/qa.json & \
+	  until [ -s .perf/qa.json ]; do sleep 1; done; $(GO) run ./test/perf/seed -control http://127.0.0.1:18199 -chunks 250000 && \
+	  DTH_CONTROL=http://127.0.0.1:18199 $(K6) run test/perf/qa.js; s=$$?; kill %1; rm -f .perf/qa.json; exit $$s
 
 IMAGE ?= ghcr.io/gokulmv/doctherepo-hub:$(VERSION)
 image: ## Container image (UI + hub + CLI on distroless)
@@ -74,4 +85,4 @@ vuln: ## Known-vulnerability scan
 	$(GO) run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
 clean:
-	rm -rf bin dist coverage.out
+	rm -rf bin dist coverage.out .perf

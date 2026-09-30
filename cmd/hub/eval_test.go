@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/require"
 
 	"github.com/GokulMV/DocTheRepo/internal/adapters/secrets/localfile"
@@ -117,6 +118,7 @@ func TestRetrievalEval(t *testing.T) {
 		}
 		results = append(results, eval.Score(g, cited))
 	}
+	require.Equal(t, 5, testutil.CollectAndCount(m.Retrieval), "every retrieval stage is timed (dth_retrieval_duration_seconds)")
 	rep := eval.Summarize(mode, model, results)
 	t.Logf("retrieval eval (%s): %d questions, citation precision %.3f, recall %.3f, hit rate %.3f", mode, rep.Questions, rep.Precision, rep.Recall, rep.HitRate)
 	for _, r := range results {

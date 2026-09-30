@@ -52,6 +52,8 @@ type State struct {
 	Repos        []string `json:"repos"`
 	AuthMode     string   `json:"auth_mode"`
 	HubLog       string   `json:"hub_log"`
+	DatabaseURL  string   `json:"database_url"` // the throwaway test database (perf seeding)
+	MetricsURL   string   `json:"metrics_url,omitempty"`
 }
 
 func main() {
@@ -70,6 +72,8 @@ func main() {
 		stateFile   = flag.String("state-file", "", "also write the ready JSON here")
 		workDir     = flag.String("work-dir", "", "directory for the hub log and key (default: a temp dir)")
 		extraEnv    = flag.String("hub-env", "", "extra KEY=VALUE pairs for the hub, comma-separated")
+		metrics     = flag.String("metrics", "", "hub metrics listen address (e.g. 127.0.0.1:18091); off by default")
+		synthetic   = flag.Int("synthetic-repos", 0, "also create acme/svc-01..N (small Go services) for perf runs")
 	)
 	flag.Parse()
 	log.SetFlags(log.Ltime)
@@ -77,14 +81,15 @@ func main() {
 	defer stop()
 	if err := run(ctx, runOpts{hubBin: *hubBin, listen: *listen, control: *control, llmListen: *llmListen, dbURL: *dbURL,
 		authMode: *authMode, owner: *owner, ownerPW: *ownerPW, docgenDelay: *docgenDelay, qaDelay: *qaDelay, sweep: *sweep,
-		stateFile: *stateFile, workDir: *workDir, extraEnv: *extraEnv}); err != nil && !errors.Is(err, context.Canceled) {
+		stateFile: *stateFile, workDir: *workDir, extraEnv: *extraEnv, metrics: *metrics, synthetic: *synthetic}); err != nil && !errors.Is(err, context.Canceled) {
 		log.Fatal(err)
 	}
 }
 
 type runOpts struct {
-	hubBin, listen, control, llmListen, dbURL, authMode, owner, ownerPW, stateFile, workDir, extraEnv string
-	docgenDelay, qaDelay, sweep                                                                       time.Duration
+	hubBin, listen, control, llmListen, dbURL, authMode, owner, ownerPW, stateFile, workDir, extraEnv, metrics string
+	docgenDelay, qaDelay, sweep                                                                                time.Duration
+	synthetic                                                                                                  int
 }
 
 func run(ctx context.Context, o runOpts) error {
@@ -122,6 +127,9 @@ func run(ctx context.Context, o runOpts) error {
 	if err != nil {
 		return err
 	}
+	for i := 1; i <= o.synthetic; i++ {
+		repos[fmt.Sprintf("acme/svc-%02d", i)] = syntheticService(i)
+	}
 	gh := githubmock.New()
 	defer gh.Close()
 	names := fixtures.Seed(gh, repos)
@@ -141,10 +149,13 @@ func run(ctx context.Context, o runOpts) error {
 
 	hubURL := "http://" + o.listen
 	st := State{HubURL: hubURL, GitHubAPIURL: gh.APIURL(), GitHubBot: gh.BotLogin, LLMURL: llmURL + "/v1", OIDCIssuer: idp.URL,
-		Repos: names, AuthMode: o.authMode, HubLog: filepath.Join(o.workDir, "hub.log")}
+		Repos: names, AuthMode: o.authMode, HubLog: filepath.Join(o.workDir, "hub.log"), DatabaseURL: dbURL}
+	if o.metrics != "" {
+		st.MetricsURL = "http://" + o.metrics + "/metrics"
+	}
 
 	env := append(os.Environ(),
-		"DTH_DATABASE_URL="+dbURL, "DTH_LISTEN="+o.listen, "DTH_METRICS_LISTEN=", "DTH_PUBLIC_URL="+hubURL,
+		"DTH_DATABASE_URL="+dbURL, "DTH_LISTEN="+o.listen, "DTH_METRICS_LISTEN="+o.metrics, "DTH_PUBLIC_URL="+hubURL,
 		"DTH_LOCAL_KEY_FILE="+filepath.Join(o.workDir, "master.key"), "DTH_LOG_FORMAT=json", "DTH_LOG_LEVEL=info",
 		"DTH_PR_SWEEP_INTERVAL="+o.sweep.String(), "DTH_ALL_USERS_READ_ALL_REPOS=false", "DTH_AUTH_MODE="+o.authMode,
 		"DTH_GRAMMARS_DIR="+filepath.Join(o.workDir, "grammars"))
@@ -206,6 +217,38 @@ func run(ctx context.Context, o runOpts) error {
 		return nil
 	case err := <-hubDone:
 		return fmt.Errorf("hub exited: %v (log: %s)", err, st.HubLog)
+	}
+}
+
+// syntheticService is a small Go service for perf runs: a handler, a store, and a client.
+func syntheticService(n int) map[string]string {
+	name := fmt.Sprintf("svc%02d", n)
+	return map[string]string{
+		"README.md": fmt.Sprintf("# svc-%02d\n\nSynthetic service %d for load tests.\n", n, n),
+		"go.mod":    fmt.Sprintf("module example.com/%s\n\ngo 1.25\n", name),
+		"handler/handler.go": fmt.Sprintf(`// Package handler serves the %[1]s HTTP API.
+package handler
+
+import "net/http"
+
+// Health reports liveness for %[1]s.
+func Health(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) }
+
+// Orders lists orders for the caller.
+func Orders(w http.ResponseWriter, r *http.Request) { _ = r.URL.Query().Get("customer") }
+`, name),
+		"store/store.go": fmt.Sprintf(`// Package store persists %[1]s orders.
+package store
+
+// Order is one order.
+type Order struct {
+	ID    string
+	Total int64
+}
+
+// Save writes an order.
+func Save(o Order) error { return nil }
+`, name),
 	}
 }
 

@@ -126,7 +126,8 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 	a.rag = &rag.Engine{Store: a.qa, Index: a.index, GW: gw, Savings: store.NewSavings(st),
 		Cost: func(kind, model, feature string, in, out int64) (float64, bool) {
 			return a.enforcer.Guard().Cost(kind, model, feature, in, out)
-		}}
+		},
+		Observe: func(stage string, d time.Duration) { m.Retrieval.WithLabelValues(stage).Observe(d.Seconds()) }}
 	a.pipe = &pipeline.Pipeline{Repos: repos, Chunks: a.chunks, Graph: store.NewGraph(st), Docs: a.docs, Savings: store.NewSavings(st),
 		Hosts: a.hosts.Host, Lander: &push.Dispatcher{PRs: prs, Lifecycle: a.sweeper}, GW: gw, DocGen: &docgen.Generator{GW: gw},
 		Indexer: &pipeline.Indexer{GW: gw, Index: a.index}, Grammars: reg, Log: log.With("component", "pipeline")}
