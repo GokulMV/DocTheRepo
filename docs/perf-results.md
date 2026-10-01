@@ -91,3 +91,31 @@ To score a real model (report only, no gate):
 DTH_EVAL_BASE_URL=https://api.openai.com/v1 DTH_EVAL_API_KEY=… DTH_EVAL_MODEL=… DTH_EVAL_EMBED_MODEL=… \
   DTH_EVAL_REPORT=eval.json DTH_REQUIRE_DOCKER=1 go test ./cmd/hub -run TestRetrievalEval -v
 ```
+
+## Signal storm (Milestone 2)
+
+`test/perf/signal-storm.js` (`make perf-signals`) against `go run ./test/e2e/stack -auth local` on the same
+4-vCPU VM, with k6, PostgreSQL, and the hub sharing the machine. Two ingestion paths: Amazon Data Firehose
+deliveries (CloudWatch Logs subscription format) and generic-webhook batches, half the traffic each, with
+a fixed set of distinct fingerprints per path. After the run the script reads every issue back from the
+API: **accepted − stored** must be exactly 0, the issue count must equal the fingerprint count, and decode
+jobs must equal new issues (not events).
+
+| Run | Events | Accepted − stored | Issues (expected) | Decode jobs | Webhook p99 | Firehose p99 (after persistence) | Backpressure retries |
+|---|---|---|---|---|---|---|---|
+| 2,000 events/s × 60 s, 2 × 500 fingerprints | **120,200** | **0** | **1,000** (1,000) | **1,000** | **40 ms** | **1.44 s** | 0 |
+| 10,000 events/s × 30 s, 2 × 1,000 fingerprints | **290,000** (~9,700/s) | **0** | **2,000** (2,000) | **2,000** | 876 ms | 4.65 s | 73 |
+
+- At 2,000 events/s every target holds. Webhooks answer 202 once events are queued (the plan's 300 ms
+  budget). Firehose is answered only after its events are persisted, so a crash cannot lose a delivery
+  Firehose believes was delivered; that costs up to one 1-second aggregation window, hence the separate
+  2.5 s Firehose threshold.
+- At ~10,000 events/s on one shared 4-core VM the hub slows down instead of losing data: the aggregator's
+  backpressure answers 503, senders retry (73 deliveries here), and every accepted event is counted
+  exactly once. The latency thresholds fail at this rate on this hardware.
+- The plan's full target (20,000 events/s for 10 minutes on 3 api replicas of 2 vCPU / 4 GB, Postgres on
+  its own host) has not been run; this VM cannot host that topology. Pub/Sub was not part of the run (it
+  needs an emulator); its consumer acknowledges only after the same durable flush.
+
+A first run of the script had a bug (the run ID was computed per k6 VU, so each VU produced its own
+fingerprints: 19,000 issues instead of 1,000); the table is from the corrected script.

@@ -5,7 +5,10 @@ import type {
   Connector,
   DocNode,
   Entity,
+  Issue,
+  IssueDetail,
   Job,
+  KnownIssue,
   Me,
   Neighbourhood,
   Page,
@@ -15,6 +18,7 @@ import type {
   SavingsKind,
   Shelf,
   SpendLimit,
+  Suggestion,
   Thread,
   Token,
   TreeNode,
@@ -156,4 +160,37 @@ export const usePipelineStats = () =>
         triage_abort_rate: number;
         freshness: { repo_id: string; repo: string; last_processed_sha: string; last_success?: string }[];
       }>('/analytics/pipeline'),
+  });
+
+// --- signals ---
+
+export interface IssueFilters {
+  status?: string;
+  severity?: string;
+  source?: string;
+  service?: string;
+  env?: string;
+  kind?: string;
+  q?: string;
+  since?: string;
+}
+
+export const useIssues = (f: IssueFilters) =>
+  useQuery({
+    queryKey: ['issues', f],
+    queryFn: () => api.get<Page<Issue>>(`/issues${qs({ ...f, limit: 100 })}`),
+    refetchInterval: 30_000,
+  });
+
+export const useIssue = (id?: string) =>
+  useQuery({ queryKey: ['issue', id], queryFn: () => api.get<IssueDetail>(`/issues/${id}`), enabled: !!id });
+
+export const useKnownIssues = () =>
+  useQuery({ queryKey: ['known-issues'], queryFn: () => api.get<{ items: KnownIssue[] }>('/known-issues').then((r) => r.items) });
+
+export const useSuggestions = (status = 'pending', enabled = true) =>
+  useQuery({
+    queryKey: ['suggestions', status],
+    queryFn: () => api.get<{ items: Suggestion[] }>(`/known-issues/suggestions${qs({ status })}`).then((r) => r.items),
+    enabled,
   });

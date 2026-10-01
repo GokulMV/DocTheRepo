@@ -18,6 +18,9 @@ const Activity = lazy(() => import('@/pages/Activity'));
 const Users = lazy(() => import('@/pages/Users'));
 const Account = lazy(() => import('@/pages/Account'));
 const Setup = lazy(() => import('@/pages/Setup'));
+const Inbox = lazy(() => import('@/pages/Inbox'));
+const IssueDetail = lazy(() => import('@/pages/IssueDetail'));
+const KnownIssues = lazy(() => import('@/pages/KnownIssues'));
 
 const admin = (el: JSX.Element) => <RequireRole min="admin">{el}</RequireRole>;
 
@@ -36,6 +39,9 @@ export default function App() {
           <Route path="/palace/:entityId" element={<Palace />} />
           <Route path="/library" element={<Library />} />
           <Route path="/library/:slug" element={<Library />} />
+          <Route path="/inbox" element={<Inbox />} />
+          <Route path="/inbox/:id" element={<IssueDetail />} />
+          <Route path="/known-issues" element={<KnownIssues />} />
           <Route path="/repos" element={<Repos />} />
           <Route path="/activity" element={<Activity />} />
           <Route path="/analytics" element={<Analytics />} />
