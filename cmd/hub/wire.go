@@ -323,6 +323,8 @@ func (a *app) v1Routes() []func(chi.Router) {
 		api.BrowseRoutes(a.browse, a.auth),
 		api.AdminRoutes(admin),
 		api.OpsRoutes(a.q, a.browse, a.auth),
+		api.IssueRoutes(api.IssueDeps{Auth: a.auth, Issues: store.NewIssues(a.st, a.knownIssues), KnownIssues: a.knownIssues,
+			Suggestions: a.suggestions, Suggest: a.suggest, Queue: a.q, ReloadRules: a.signals.Reload}),
 	}
 }
 
