@@ -59,7 +59,7 @@ func TestUsagePartitions_CreatedForCurrentMonths(t *testing.T) {
 	err := st.Pool.QueryRow(context.Background(),
 		`SELECT count(*) FROM pg_inherits i JOIN pg_class p ON p.oid = i.inhparent WHERE p.relname = 'usage_events'`).Scan(&n)
 	require.NoError(t, err)
-	assert.Equal(t, 4, n, "current month plus three ahead")
+	assert.Equal(t, 5, n, "the previous month (late writes), the current month, and three ahead")
 	_, err = st.Pool.Exec(context.Background(), "SELECT ensure_month_partitions('usage_events', 3)")
 	require.NoError(t, err, "re-running partition maintenance is a no-op")
 }
