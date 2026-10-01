@@ -90,7 +90,11 @@ func (g *Gateway) decideJSON(ctx context.Context, meta CallMeta, q ports.Decisio
 	var out struct {
 		Probabilities map[string]float64 `json:"probabilities"`
 	}
-	prompt := "## Question\n" + q.Task + "\n\n## Options\n" + list.String() + "\n## Context\n" + q.Context
+	question := q.Question
+	if question == "" {
+		question = q.Task
+	}
+	prompt := "## Question\n" + question + "\n\n## Options\n" + list.String() + "\n## Context\n" + q.Context
 	res, err := g.ChatJSONResult(ctx, FeatureDecide, meta, ports.ChatRequest{System: DecideSystem,
 		Messages: []ports.ChatMessage{{Role: "user", Content: prompt}}}, schema, &out, nil)
 	if err != nil {

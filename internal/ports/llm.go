@@ -127,9 +127,11 @@ type DecisionOption struct {
 // DecisionQuestion is a typed classification question (plan Phase 11.5): pick one option given context.
 type DecisionQuestion struct {
 	// Task names the question (issue_actionability, change_cosmetic, …) for routing, prompts and evals.
-	Task    string           `json:"task"`
-	Context string           `json:"context"`
-	Options []DecisionOption `json:"options"`
+	Task string `json:"task"`
+	// Question is the instruction in plain language ("Does this issue need engineering attention?").
+	Question string           `json:"question,omitempty"`
+	Context  string           `json:"context"`
+	Options  []DecisionOption `json:"options"`
 }
 
 // Decision is a probability per option. Calibrated says the probabilities come from a model trained to be

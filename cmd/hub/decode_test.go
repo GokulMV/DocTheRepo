@@ -248,3 +248,42 @@ func TestDecisionGateEndToEnd(t *testing.T) {
 	require.NoError(t, st.Pool.QueryRow(ctx, `SELECT count(*) FROM savings_events WHERE kind = 'decision_gate'`).Scan(&saved))
 	assert.Equal(t, 1, saved)
 }
+
+// TestJevProviderEndToEnd: a Jev provider (fake System One server) serves the decide route only, and its
+// calibrated answer gates the decode.
+func TestJevProviderEndToEnd(t *testing.T) {
+	ctx := context.Background()
+	var calls int
+	jev := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		if r.URL.Path != "/v1/systemone" || r.Header.Get("Authorization") != "Bearer ts-test" {
+			http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write([]byte(`{"model":"jev-1.13.0","answers":{"decision":{"type":"choice","choice":"known_noise","confidence":0.95,
+			"probabilities":{"known_noise":0.97,"actionable":0.03}}},"usage":{"input_tokens":80,"output_tokens":6}}`))
+	}))
+	defer jev.Close()
+	env := newSignalEnv(t, "decode")
+	a, st, q, stub := env.a, env.st, env.q, env.stub
+	jevID := env.addProvider(t, "jev", jev.URL+"/v1", "ts-test")
+	code, out := env.c.call("PUT", "/routes/qa", map[string]any{"provider_id": jevID, "model": "jev-latest"})
+	assert.Equal(t, http.StatusBadRequest, code, "Jev cannot answer questions in prose: %v", out)
+	env.setRoute(t, "decide", jevID, "jev-latest")
+	code, out = env.c.call("POST", "/providers/"+jevID.(string)+"/test", map[string]any{"model": "jev-latest"})
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Equal(t, true, out["ok"], "the connection test is a minimal decision: %v", out)
+
+	require.NoError(t, a.signals.Ingest(ctx, []ports.SignalEvent{{Source: "alertmanager", Kind: ports.KindAlert, ExternalID: "n1",
+		Service: "lb", RuleID: "LBHealth", Title: "readiness probe failed during rolling deploy"}}))
+	require.NoError(t, a.agg.Flush(ctx))
+	runJob(t, a, q, ports.JobDecodeIssue)
+	assert.Equal(t, 0, stub.Calls(stubllm.Decode), "no full decode")
+	var provider, cause string
+	require.NoError(t, st.Pool.QueryRow(ctx, `SELECT d.provider, d.probable_cause FROM issues i JOIN decodes d ON d.id = i.decode_id`).Scan(&provider, &cause))
+	assert.Equal(t, "decide:jev", provider)
+	assert.Contains(t, cause, "p=0.97, calibrated probability")
+	var tokens int64
+	require.NoError(t, st.Pool.QueryRow(ctx, `SELECT input_tokens FROM usage_events WHERE feature = 'decide' AND provider_kind = 'jev' ORDER BY at DESC LIMIT 1`).Scan(&tokens))
+	assert.Equal(t, int64(80), tokens, "Jev's reported usage is on the ledger")
+}

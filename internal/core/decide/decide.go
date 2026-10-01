@@ -54,10 +54,12 @@ func IssueActionability(in IssueInput) ports.DecisionQuestion {
 	if len(in.Sources) > 0 {
 		fmt.Fprintf(&b, "Sources: %s\n", strings.Join(in.Sources, ", "))
 	}
-	return ports.DecisionQuestion{Task: TaskIssueActionability, Context: b.String(), Options: []ports.DecisionOption{
-		{ID: Actionable, Description: "a defect or outage the owning team should investigate and fix"},
-		{ID: KnownNoise, Description: "expected or recurring noise nobody needs to act on: health probes, deploy churn, expected retries, client aborts, third-party blips, test traffic"},
-	}}
+	return ports.DecisionQuestion{Task: TaskIssueActionability,
+		Question: "Does this production issue need engineering attention, or is it recurring noise nobody needs to act on?",
+		Context:  b.String(), Options: []ports.DecisionOption{
+			{ID: Actionable, Description: "a defect or outage the owning team should investigate and fix"},
+			{ID: KnownNoise, Description: "expected or recurring noise nobody needs to act on: health probes, deploy churn, expected retries, client aborts, third-party blips, test traffic"},
+		}}
 }
 
 // Accept reports whether a decision clears the gate.

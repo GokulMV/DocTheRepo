@@ -16,6 +16,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/adapters/llm/azureopenai"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/llm/bedrock"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/llm/externalcli"
+	"github.com/GokulMV/DocTheRepo/internal/adapters/llm/jev"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/llm/openai"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/llm/openaicompat"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/llm/vertex"
@@ -83,6 +84,8 @@ func init() {
 			return embedvertex.New(ctx, c, nil)
 		},
 	})
+	// TypeSafe Jev: decisions only (plan Phase 11.5); route it to the "decide" feature.
+	Register("jev", Factories{LLM: func(_ context.Context, c ports.ProviderConfig) (ports.LLM, error) { return jev.New(c) }})
 	Register("external_cli", Factories{DocGen: func(_ context.Context, c ports.ProviderConfig) (ports.DocGenerator, error) { return externalcli.New(c) }})
 }
 
