@@ -22,7 +22,7 @@ import (
 //
 // Default: the deterministic stub, gated against test/eval/decide_baseline.json. To score a real provider
 // (report only): DTH_DECIDE_EVAL_KIND (openai_compat, anthropic, …), DTH_DECIDE_EVAL_BASE_URL,
-// DTH_DECIDE_EVAL_API_KEY, DTH_DECIDE_EVAL_MODEL; DTH_EVAL_REPORT=path writes the JSON report;
+// DTH_DECIDE_EVAL_API_KEY, DTH_DECIDE_EVAL_MODEL (for TypeSafe Jev: DTH_DECIDE_EVAL_KIND=jev and the key); DTH_EVAL_REPORT=path writes the JSON report;
 // DTH_EVAL_DECODE_TOKENS overrides the full-decode size (default 8000).
 func TestDecisionEval(t *testing.T) {
 	ctx := context.Background()
@@ -32,10 +32,14 @@ func TestDecisionEval(t *testing.T) {
 
 	env := newSignalEnv(t) // no stub routes yet: the decide route is set below
 	mode, kind, base, key, model := "stub", "openai_compat", env.stub.URL+"/v1", "sk", "stub"
-	if u := os.Getenv("DTH_DECIDE_EVAL_BASE_URL"); u != "" {
-		mode, kind, base, key, model = "provider", os.Getenv("DTH_DECIDE_EVAL_KIND"), u, os.Getenv("DTH_DECIDE_EVAL_API_KEY"), os.Getenv("DTH_DECIDE_EVAL_MODEL")
+	if u, k := os.Getenv("DTH_DECIDE_EVAL_BASE_URL"), os.Getenv("DTH_DECIDE_EVAL_KIND"); u != "" || k != "" {
+		// e.g. DTH_DECIDE_EVAL_KIND=jev DTH_DECIDE_EVAL_API_KEY=… (base URL and model default for Jev)
+		mode, kind, base, key, model = "provider", k, u, os.Getenv("DTH_DECIDE_EVAL_API_KEY"), os.Getenv("DTH_DECIDE_EVAL_MODEL")
 		if kind == "" {
 			kind = "openai_compat"
+		}
+		if model == "" && kind == "jev" {
+			model = "jev-latest"
 		}
 	}
 	provID := env.addProvider(t, kind, base, key)

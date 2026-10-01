@@ -9,8 +9,9 @@ const FEATURE_HELP: Record<string, string> = {
   qa: 'Answers questions in Ask',
   embedding: 'Vectors for search (changing it requires a reindex)',
   triage: 'Classifies changes in files without a parser',
-  decode: 'Explains errors and alerts (milestone 2)',
-  suggest: 'Suggests known-issue rules (milestone 2)',
+  decode: 'Explains new errors and alerts',
+  suggest: 'Proposes known-issue rules from pasted text',
+  decide: 'Typed yes/no decisions behind confidence gates (e.g. skip decoding obvious noise); TypeSafe Jev or any chat model',
 };
 
 const KIND_HELP: Record<string, string> = {
@@ -22,6 +23,7 @@ const KIND_HELP: Record<string, string> = {
   openai_compat: 'Any OpenAI-compatible server (vLLM, LiteLLM…)',
   ollama: 'Local Ollama',
   external_cli: 'Headless agent CLI via the DocGen contract',
+  jev: 'TypeSafe Jev: calibrated decisions only — route it to "decide"',
 };
 
 function AddProvider({ kinds }: { kinds: string[] }) {

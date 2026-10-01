@@ -599,6 +599,16 @@ func (h *adminHandlers) putRoute(w http.ResponseWriter, r *http.Request) {
 		fail(w, r, errBadParam("effort must be low, medium, high, xhigh or max"))
 		return
 	}
+	// Decision-only providers (TypeSafe Jev) cannot write text; chat-only routes cannot use them.
+	for _, id := range []string{in.ProviderID, in.FallbackProviderID} {
+		if id == "" {
+			continue
+		}
+		if p, err := h.d.Providers.Get(r.Context(), id); err == nil && p.Kind == "jev" && feature != llmgateway.FeatureDecide {
+			fail(w, r, errBadParam("jev answers decisions only: route it to the decide feature"))
+			return
+		}
+	}
 	if in.MaxOutputTokens == 0 {
 		in.MaxOutputTokens = 8000
 	}
