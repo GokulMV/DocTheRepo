@@ -16,6 +16,15 @@ function Stat({ label, value, hint }: { label: string; value: string; hint?: str
   );
 }
 
+const SAVINGS_LABEL: Record<string, string> = {
+  triage_abort: 'Cosmetic pushes skipped',
+  answer_cache_hit: 'Answers served from cache',
+  rename_rekey: 'Renames re-keyed without re-embedding',
+  known_issue_suppressed: 'Known issues not decoded',
+  decode_reused: 'Explanations reused (code unchanged)',
+  decision_gate: 'Noise skipped by the decision gate',
+};
+
 export default function Analytics() {
   const [days, setDays] = useState(7);
   const [groupBy, setGroupBy] = useState('feature');
@@ -102,7 +111,7 @@ export default function Analytics() {
           <Table head={['How', 'Events', 'Tokens avoided', 'Cost avoided']}>
             {savings.data?.by_kind.map((k) => (
               <tr key={k.kind}>
-                <Td>{k.kind.replaceAll('_', ' ')}</Td>
+                <Td>{SAVINGS_LABEL[k.kind] ?? k.kind.replaceAll('_', ' ')}</Td>
                 <Td>{num(k.events)}</Td>
                 <Td>{num(k.tokens_avoided)}</Td>
                 <Td>{usd(k.cost_avoided_usd)}</Td>

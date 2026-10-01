@@ -283,3 +283,174 @@ export interface SavingsKind {
   tokens_avoided: number;
   cost_avoided_usd: number;
 }
+
+// --- signals: Inbox, known issues, suggestions (plan § 7.5) ---
+
+export type Severity = 'info' | 'warning' | 'error' | 'critical';
+export type IssueStatus = 'new' | 'decoded' | 'suppressed' | 'acknowledged' | 'resolved' | 'regressed';
+
+export interface Issue {
+  id: string;
+  fingerprint: string;
+  kind: 'error' | 'alert' | 'security_finding' | 'log_match' | 'event_bus';
+  title: string;
+  service: string;
+  environment: string;
+  status: IssueStatus;
+  severity: Severity;
+  occurrences: number;
+  suppressed_count: number;
+  sources: string[];
+  first_seen: string;
+  last_seen: string;
+  repo_id?: string;
+  known_issue_id?: string;
+  assignee_user_id?: string;
+  resolved_at?: string;
+  decode_summary?: string;
+  decode_confidence?: 'high' | 'medium' | 'low';
+  is_actionable?: boolean;
+  sparkline: number[];
+}
+
+export interface AffectedCode {
+  chunk_id: string;
+  repo_id?: string;
+  path: string;
+  symbol?: string;
+  start_line?: number;
+  end_line?: number;
+  reason: string;
+}
+
+export interface Commit {
+  sha: string;
+  author: string;
+  message: string;
+  at: string;
+  url?: string;
+}
+
+export interface Decode {
+  id: string;
+  summary: string;
+  probable_cause: string;
+  impact: string;
+  affected_code: AffectedCode[];
+  related_commits: Commit[];
+  related_docs: { chunk_id: string; path: string; symbol?: string; source: string }[];
+  next_steps: string[];
+  confidence: 'high' | 'medium' | 'low';
+  is_actionable: boolean;
+  suggest_known_issue: boolean;
+  provider: string;
+  model: string;
+  tokens: number;
+  cost_usd: number;
+  created_at: string;
+}
+
+export interface StackFrame {
+  module?: string;
+  function?: string;
+  file?: string;
+  line?: number;
+  in_app?: boolean;
+}
+
+export interface SignalEvent {
+  connector_id?: string;
+  source: string;
+  external_id: string;
+  occurred_at: string;
+  severity: Severity;
+  kind: string;
+  service: string;
+  environment: string;
+  title: string;
+  message: string;
+  exception_type?: string;
+  stack?: StackFrame[];
+  attrs?: Record<string, string>;
+}
+
+export interface Match {
+  fingerprints?: string[];
+  message_regex?: string;
+  sources?: string[];
+  services?: string[];
+  environments?: string[];
+  attrs?: Record<string, string>;
+  min_severity?: Severity | '';
+  max_severity?: Severity | '';
+}
+
+export interface KnownIssue {
+  id: string;
+  title: string;
+  description: string;
+  explanation: string;
+  reason: string;
+  match: Match;
+  action: 'suppress' | 'label_only';
+  enabled: boolean;
+  expires_at?: string;
+  source: string;
+  owner_user_id?: string;
+  ticket_url?: string;
+  hits: number;
+  last_hit_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IssueDetail extends Issue {
+  decode?: Decode;
+  events: SignalEvent[];
+  hourly: { t: string; count: number; suppressed: number }[];
+  known_issue?: KnownIssue;
+  similar_issues: { id: string; title: string; status: IssueStatus }[];
+}
+
+export interface Suggestion {
+  id: string;
+  issue_ids: string[];
+  proposed_match: Match;
+  rationale: string;
+  status: 'pending' | 'accepted' | 'rejected';
+  decided_by?: string;
+  decided_at?: string;
+  created_at: string;
+  known_issue_id?: string;
+}
+
+export interface RuleTest {
+  would_match_last_7d: number;
+  sample_issue_ids: string[];
+}
+
+export interface Candidate {
+  issue_id: string;
+  fingerprint: string;
+  kind: string;
+  title: string;
+  service: string;
+  environment: string;
+  status: string;
+  occurrences: number;
+  last_seen: string;
+  decode_summary?: string;
+}
+
+export interface TextSuggestion {
+  explanation: string;
+  reason: string;
+  proposed_match: Match;
+  confidence: 'high' | 'medium' | 'low';
+  candidates: Candidate[];
+  extracted: { exceptions?: string[]; error_codes?: string[]; quoted_messages?: string[]; services?: string[]; resources?: string[] };
+  matching_issues_last_7d: number;
+  sample_issue_ids: string[];
+}
+
+export const KNOWN_REASONS = ['known_bug', 'wont_fix', 'third_party', 'expected_noise', 'cannot_action', 'in_progress'] as const;

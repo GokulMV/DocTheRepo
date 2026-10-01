@@ -88,7 +88,15 @@ Under construction, milestone by milestone (plan § 14). Implemented so far:
   Jev plugs in by implementing `ports.Decider`, which the gateway then calls directly with the same
   scrubbing, spend guard, and ledger. `go test ./cmd/hub -run TestDecisionEval` scores a provider on
   100 labelled issues: accuracy, calibration (ECE, reliability curve, Brier), gate coverage, defects the
-  gate would skip, and net tokens saved per issue.
+  gate would skip, and net tokens saved per issue. Jev is supported as provider kind `jev`
+  ([`docs/jev.md`](docs/jev.md)).
+- **Phase 12 — Inbox UI and API**: the Inbox (filters, sparklines, multi-select "mark as known"), issue
+  pages (explanation with blamed code and recent commits, events with stacks, hourly chart, actions),
+  Known issues (rules, a dry-run tester, suggestions to accept or reject, propose-from-text), signal
+  sources on the Connectors page (webhook URL and secret shown once), and savings by kind on Analytics.
+  Playwright covers the error flow (Sentry webhook → explained → mark as known → next one suppressed);
+  the signal-storm k6 run checks zero lost events at 2,000 events/s
+  ([`docs/perf-results.md`](docs/perf-results.md)).
 
 ## Install
 

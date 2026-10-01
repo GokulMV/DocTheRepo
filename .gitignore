@@ -18,3 +18,4 @@ web/dist/
 terraform.tfvars
 .proxy-ca.crt
 /.perf/
+signal-storm-summary.json

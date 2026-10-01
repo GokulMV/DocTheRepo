@@ -22,6 +22,13 @@ export const NAV: { section: string; items: NavItem[] }[] = [
     ],
   },
   {
+    section: 'Signals',
+    items: [
+      { to: '/inbox', label: 'Inbox', min: 'viewer' },
+      { to: '/known-issues', label: 'Known issues', min: 'viewer' },
+    ],
+  },
+  {
     section: 'Operations',
     items: [
       { to: '/activity', label: 'Activity', min: 'viewer' },

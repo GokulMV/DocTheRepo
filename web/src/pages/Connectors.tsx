@@ -4,6 +4,7 @@ import { keys, useConnectors, useInvalidating } from '@/api/hooks';
 import type { Check, Connector } from '@/api/types';
 import { Badge, Button, Card, Dialog, Empty, ErrorNote, Field, Input, PageHeader, Select, Spinner, Table, Td, Textarea, statusTone } from '@/components/ui';
 import { relTime } from '@/lib/format';
+import { SOURCES, sourceSpec } from './signalSources';
 
 function randomSecret() {
   const b = new Uint8Array(24);
@@ -105,16 +106,93 @@ function TestResult({ id, onClose }: { id: string; onClose: () => void }) {
   );
 }
 
+function AddSignal({ onCreated }: { onCreated: (c: { id: string; type: string; secret: string; path: string }) => void }) {
+  const [open, setOpen] = useState(false);
+  const [type, setType] = useState('sentry');
+  const spec = sourceSpec(type)!;
+  const [name, setName] = useState('');
+  const [mode, setMode] = useState<string>('');
+  const [config, setConfig] = useState<Record<string, string>>({});
+  const [creds, setCreds] = useState('');
+  const create = useInvalidating((b: object) => api.post<{ id: string; webhook_path: string }>('/connectors', b), keys.connectors);
+  const pick = (t: string) => { setType(t); setConfig({}); setMode(''); };
+  return (
+    <>
+      <Button variant="secondary" onClick={() => setOpen(true)}>Add signal source</Button>
+      <Dialog open={open} onOpenChange={setOpen} title="Add a signal source" description="Errors, alerts, logs, and event platforms. Read-only: the Hub never changes anything in these tools.">
+        <form
+          className="space-y-3"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const secret = spec.secret ? randomSecret() : '';
+            const m = mode || spec.modes[0];
+            const cfg = Object.fromEntries(Object.entries(config).filter(([, v]) => v.trim() !== ''));
+            const r = await create.mutateAsync({ type, name: name || spec.label, mode: m, config: cfg, credentials: creds || undefined, webhook_secret: secret || undefined });
+            onCreated({ id: r.id, type, secret, path: r.webhook_path });
+            setOpen(false);
+          }}
+        >
+          <Field label="Source" hint={spec.help}>
+            <Select value={type} onChange={(e) => pick(e.target.value)}>
+              {(['Errors & alerts', 'Cloud logs & alarms', 'Event platforms'] as const).map((g) => (
+                <optgroup key={g} label={g}>{SOURCES.filter((s) => s.group === g).map((s) => <option key={s.type} value={s.type}>{s.label}</option>)}</optgroup>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder={spec.label} /></Field>
+          {spec.modes.length > 1 && (
+            <Field label="How events arrive">
+              <Select value={mode || spec.modes[0]} onChange={(e) => setMode(e.target.value)}>{spec.modes.map((m) => <option key={m} value={m}>{m}</option>)}</Select>
+            </Field>
+          )}
+          {spec.config?.map((c) => (
+            <Field key={c.key} label={c.key + (c.required ? '' : ' (optional)')} hint={c.hint || undefined}>
+              <Input value={config[c.key] ?? ''} required={c.required} onChange={(e) => setConfig({ ...config, [c.key]: e.target.value })} />
+            </Field>
+          ))}
+          {spec.credentials && (
+            <Field label="Credentials (optional)" hint={spec.credentials + '. Stored encrypted; never shown again.'}>
+              <Textarea rows={3} className="font-mono text-xs" value={creds} onChange={(e) => setCreds(e.target.value)} />
+            </Field>
+          )}
+          <ErrorNote error={create.error} />
+          <Button type="submit" disabled={create.isPending}>Add</Button>
+        </form>
+      </Dialog>
+    </>
+  );
+}
+
 export default function Connectors() {
   const conns = useConnectors();
   const [testing, setTesting] = useState<string>();
   const [created, setCreated] = useState<{ id: string; type: string; secret: string }>();
+  const [signal, setSignal] = useState<{ id: string; type: string; secret: string; path: string }>();
   const sync = useInvalidating((id: string) => api.post<{ job_ids: string[] }>(`/connectors/${id}/sync`));
   const del = useInvalidating((id: string) => api.del(`/connectors/${id}`), keys.connectors, keys.repos);
   const toggle = useInvalidating((c: Connector) => api.patch(`/connectors/${c.id}`, { enabled: !c.enabled }), keys.connectors);
   return (
     <>
-      <PageHeader title="Connectors" description="Git hosts now; logs, alerts, event buses, Confluence, Jira, Wiz and Splunk arrive in the next milestones." actions={<AddGit onCreated={(id, type, secret) => setCreated({ id, type, secret })} />} />
+      <PageHeader title="Connectors" description="Git hosts, plus the error, alert, log, and event-platform sources the Inbox reads. Confluence, Jira, Wiz and Splunk arrive next."
+        actions={<div className="flex gap-2"><AddSignal onCreated={setSignal} /><AddGit onCreated={(id, type, secret) => setCreated({ id, type, secret })} /></div>} />
+      {signal && (
+        <Card title="Finish setup" className="mb-4">
+          {signal.path ? (
+            <>
+              <p className="text-sm">Point {sourceSpec(signal.type)?.label ?? signal.type} at this URL{signal.secret && ' and give it the secret'} ({sourceSpec(signal.type)?.help})</p>
+              <dl aria-label="Webhook details" className="mt-2 grid grid-cols-[8rem_1fr] gap-y-1 text-sm">
+                <dt className="text-slate-500">URL</dt>
+                <dd className="font-mono text-xs">{window.location.origin}{signal.path}</dd>
+                {signal.secret && <><dt className="text-slate-500">Secret</dt><dd className="font-mono text-xs">{signal.secret}</dd></>}
+              </dl>
+              {signal.secret && <p className="mt-2 text-xs text-slate-500">The secret is shown once.</p>}
+            </>
+          ) : (
+            <p className="text-sm">Saved. The Hub starts reading {sourceSpec(signal.type)?.label ?? signal.type} within a minute; its health shows here after the first poll.</p>
+          )}
+          <Button size="sm" variant="secondary" className="mt-2" onClick={() => setSignal(undefined)}>Done</Button>
+        </Card>
+      )}
       {created && (
         <Card title="Finish webhook setup" className="mb-4">
           <p className="text-sm">The Hub registers this webhook on each repository you track. To add it by hand instead (for example on the whole organisation), use push{created.type === 'github' ? ' and pull request review' : ' and merge request'} events:</p>
@@ -130,7 +208,7 @@ export default function Connectors() {
       )}
       {conns.isLoading && <Spinner />}
       <ErrorNote error={conns.error ?? sync.error ?? del.error} />
-      {conns.data?.length === 0 && <Empty title="No connectors yet">Connect GitHub or GitLab to start.</Empty>}
+      {conns.data?.length === 0 && <Empty title="No connectors yet">Connect GitHub or GitLab to start, then add the tools that report your errors and alerts.</Empty>}
       {!!conns.data?.length && (
         <Card>
           <Table head={['Name', 'Type', 'Mode', 'Health', 'Last sync', '']}>
@@ -140,11 +218,15 @@ export default function Connectors() {
                 <Td>{c.type}</Td>
                 <Td>{c.mode}</Td>
                 <Td><Badge tone={statusTone(c.health)}>{c.health}</Badge>{c.last_error && <p className="max-w-xs truncate text-xs text-red-600" title={c.last_error}>{c.last_error}</p>}</Td>
-                <Td>{relTime(c.last_sync_at)}</Td>
+                <Td>{relTime(c.last_sync_at)}{c.mode !== 'webhook' && sourceSpec(c.type) && <p className="text-xs text-slate-500">polled every {c.poll_seconds}s</p>}</Td>
                 <Td>
                   <div className="flex flex-wrap gap-1">
-                    <Button size="sm" variant="secondary" onClick={() => setTesting(c.id)}>Test</Button>
-                    <Button size="sm" variant="secondary" onClick={() => sync.mutate(c.id)}>Sync now</Button>
+                    {(c.type === 'github' || c.type === 'gitlab') && (
+                      <>
+                        <Button size="sm" variant="secondary" onClick={() => setTesting(c.id)}>Test</Button>
+                        <Button size="sm" variant="secondary" onClick={() => sync.mutate(c.id)}>Sync now</Button>
+                      </>
+                    )}
                     <Button size="sm" variant="ghost" onClick={() => toggle.mutate(c)}>{c.enabled ? 'Disable' : 'Enable'}</Button>
                     <Button size="sm" variant="ghost" onClick={() => confirm(`Remove ${c.name} and its repositories?`) && del.mutate(c.id)}>Remove</Button>
                   </div>
