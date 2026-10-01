@@ -326,6 +326,7 @@ func TestOpenAPICoversEveryRoute(t *testing.T) {
 	require.NoError(t, chi.Walk(h.(chi.Routes), func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {
 		route = strings.TrimSuffix(strings.ReplaceAll(route, "/*", ""), "/")
 		route = strings.Replace(route, "{kind:github|gitlab}", "{kind}", 1)
+		route = strings.Replace(route, "{decision:accept|reject}", "{decision}", 1)
 		if route == "" {
 			return nil
 		}
