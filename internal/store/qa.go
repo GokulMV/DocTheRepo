@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -33,10 +35,59 @@ func scopeArgs(sc rag.Scope) (bool, []string, []string) {
 
 // FullText returns keyword candidates.
 func (q *QA) FullText(ctx context.Context, question string, sc rag.Scope, k int) ([]ports.VectorHit, error) {
+	out, err := q.fullText(ctx, question, sc, k)
+	if err != nil {
+		return nil, err
+	}
+	// Every word must match at first. A broad or wordy question ("explain how this repo works") then
+	// finds little, so widen to any of its words, ranked by how many and how well they match.
+	if len(out) < k/2 {
+		if alt := anyWords(question); alt != "" && alt != question {
+			more, err := q.fullText(ctx, alt, sc, k)
+			if err != nil {
+				return nil, err
+			}
+			seen := map[string]bool{}
+			for _, h := range out {
+				seen[h.ChunkID] = true
+			}
+			for _, h := range more {
+				if !seen[h.ChunkID] && len(out) < k {
+					out = append(out, h)
+				}
+			}
+		}
+	}
+	return out, nil
+}
+
+func (q *QA) fullText(ctx context.Context, question string, sc rag.Scope, k int) ([]ports.VectorHit, error) {
 	all, ids, srcs := scopeArgs(sc)
 	rows, err := q.s.Q.SearchChunksFTS(ctx, gen.SearchChunksFTSParams{Question: question, AllRepos: all, RepoIds: ids, Sources: srcs, Lim: int32(k)})
 	if err != nil {
 		return nil, fmt.Errorf("full-text search: %w", err)
+	}
+	out := make([]ports.VectorHit, len(rows))
+	for i, r := range rows {
+		out[i] = ports.VectorHit{ChunkID: r.ChunkID, Score: r.Rank}
+	}
+	return out, nil
+}
+
+var wordRE = regexp.MustCompile(`[\p{L}\p{N}_]{2,}`)
+
+// anyWords rewrites a question as "w1 or w2 or …" for websearch_to_tsquery (stop words drop out there).
+func anyWords(question string) string {
+	return strings.Join(wordRE.FindAllString(question, 24), " or ")
+}
+
+// Overview finds material that describes repositories as a whole (READMEs, architecture docs, docs of
+// entry points), for broad questions.
+func (q *QA) Overview(ctx context.Context, sc rag.Scope, k int) ([]ports.VectorHit, error) {
+	all, ids, srcs := scopeArgs(sc)
+	rows, err := q.s.Q.OverviewChunks(ctx, gen.OverviewChunksParams{AllRepos: all, RepoIds: ids, Sources: srcs, Lim: int32(k)})
+	if err != nil {
+		return nil, fmt.Errorf("overview chunks: %w", err)
 	}
 	out := make([]ports.VectorHit, len(rows))
 	for i, r := range rows {

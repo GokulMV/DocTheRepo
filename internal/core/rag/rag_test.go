@@ -61,3 +61,17 @@ func TestCacheKeyAndSources(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, Prompt("q?", []ports.Chunk{{Scope: "r", Path: "p", Content: "c"}}), `<source n="1"`)
 }
+
+func TestIsOverviewQuestion(t *testing.T) {
+	for q, want := range map[string]bool{
+		"explain me about how this repo works":      true,
+		"explain how the docthe repo works":         true,
+		"What does this service do?":                true,
+		"give me an overview of the project":        true,
+		"how is the system structured":              true,
+		"Why does HandleChargeback freeze refunds?": false,
+		"where is the rate limiter configured":      false,
+	} {
+		assert.Equal(t, want, IsOverviewQuestion(q), q)
+	}
+}

@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { API, ApiError, api, getCSRF, toApiError } from '@/api/client';
 import { keys, useRepos, useThread, useThreads } from '@/api/hooks';
 import type { AskResponse, Citation, Message } from '@/api/types';
@@ -37,6 +37,22 @@ export function Citations({ items }: { items: Citation[] }) {
         </li>
       ))}
     </ol>
+  );
+}
+
+const NOT_FOUND = 'I could not find this in the connected sources.';
+
+/** NotFoundTips says what to try when no source answered the question. */
+function NotFoundTips() {
+  return (
+    <div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-600 dark:bg-white/[0.04] dark:text-slate-400">
+      <p className="font-medium text-slate-700 dark:text-slate-300">Nothing in your sources answered this. Things that help:</p>
+      <ul className="mt-1 list-disc space-y-0.5 pl-4">
+        <li>Name what you mean: a file, function, endpoint, service or error message.</li>
+        <li>Check the repository has docs under <Link className="underline" to="/docs">Docs</Link>; answers draw on code, docs and READMEs.</li>
+        <li>Search by meaning, not just words, by routing <b>embedding</b> to a provider under <Link className="underline" to="/providers">Providers &amp; routing</Link>.</li>
+      </ul>
+    </div>
   );
 }
 
@@ -265,6 +281,7 @@ export default function Ask() {
                 ) : (
                   <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-white/[0.07] dark:bg-slate-900/60">
                     <Markdown>{m.content}</Markdown>
+                    {m.content.trim() === NOT_FOUND && <NotFoundTips />}
                     <Citations items={m.citations} />
                     <Feedback m={m} />
                   </div>

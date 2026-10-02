@@ -227,6 +227,61 @@ func (q *Queries) ListThreads(ctx context.Context, arg ListThreadsParams) ([]QaT
 	return items, nil
 }
 
+const overviewChunks = `-- name: OverviewChunks :many
+SELECT c.chunk_id,
+       (CASE WHEN lower(c.path) ~ '(^|/)readme' THEN 3
+             WHEN lower(c.path) ~ '(architecture|overview|design|getting[-_]started|introduction)' THEN 2
+             ELSE 1 END)::float8 AS rank
+FROM chunks c
+WHERE c.deleted_at IS NULL
+  AND ($1::boolean OR c.repo_id = ANY($2::uuid[]))
+  AND (cardinality($3::text[]) = 0 OR c.source::text = ANY($3::text[]))
+  AND (lower(c.path) ~ '(^|/)readme'
+       OR lower(c.path) ~ '(architecture|overview|design|getting[-_]started|introduction)'
+       OR (c.source = 'generated_doc' AND lower(c.path) ~ '(^|/)(main|index|app|server|cli|cmd)[^/]*\.md$'))
+ORDER BY rank DESC, length(c.path), c.chunk_id
+LIMIT $4
+`
+
+type OverviewChunksParams struct {
+	AllRepos bool     `json:"all_repos"`
+	RepoIds  []string `json:"repo_ids"`
+	Sources  []string `json:"sources"`
+	Lim      int32    `json:"lim"`
+}
+
+type OverviewChunksRow struct {
+	ChunkID string  `json:"chunk_id"`
+	Rank    float64 `json:"rank"`
+}
+
+// Material that describes a repository as a whole, for broad questions ("how does this repo work?"):
+// READMEs and architecture/overview docs first, then generated docs of entry points.
+func (q *Queries) OverviewChunks(ctx context.Context, arg OverviewChunksParams) ([]OverviewChunksRow, error) {
+	rows, err := q.db.Query(ctx, overviewChunks,
+		arg.AllRepos,
+		arg.RepoIds,
+		arg.Sources,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []OverviewChunksRow{}
+	for rows.Next() {
+		var i OverviewChunksRow
+		if err := rows.Scan(&i.ChunkID, &i.Rank); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const putCachedAnswer = `-- name: PutCachedAnswer :exec
 INSERT INTO answer_cache (key, answer, citations) VALUES ($1, $2, $3)
 ON CONFLICT (key) DO UPDATE SET answer = EXCLUDED.answer, citations = EXCLUDED.citations, created_at = now()
