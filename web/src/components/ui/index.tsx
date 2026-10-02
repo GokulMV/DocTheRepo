@@ -1,16 +1,19 @@
 // Small, accessible UI kit on Tailwind (shadcn/ui-style primitives; Radix for the dialog).
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { useInRouterContext, useLocation } from 'react-router-dom';
+import { CircleDashed, type LucideIcon } from 'lucide-react';
 import { ApiError } from '@/api/client';
+import { navItemFor } from '@/layouts/nav';
 
 const cx = (...c: (string | false | undefined | null)[]) => c.filter(Boolean).join(' ');
 export { cx };
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 const variants: Record<Variant, string> = {
-  primary: 'bg-brand-600 text-white hover:bg-brand-700 disabled:bg-brand-600/50',
-  secondary: 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800',
-  ghost: 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
+  primary: 'bg-brand-600 text-white shadow-sm shadow-brand-600/20 hover:bg-brand-700 disabled:bg-brand-600/50 dark:bg-brand-500 dark:hover:bg-brand-400',
+  secondary: 'border border-slate-200 bg-white text-slate-800 shadow-sm hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100 dark:hover:bg-white/[0.08]',
+  ghost: 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/[0.06]',
   danger: 'bg-red-600 text-white hover:bg-red-700 disabled:bg-red-600/50',
 };
 
@@ -20,7 +23,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
       ref={ref}
       type={type}
       className={cx(
-        'inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed',
+        'inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed',
         size === 'sm' ? 'h-8 px-2.5 text-xs' : 'h-9 px-3.5 text-sm',
         variants[variant],
         className,
@@ -31,21 +34,25 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
 );
 Button.displayName = 'Button';
 
-const field =
-  'w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500 dark:border-slate-700 dark:bg-slate-900';
+const fieldBase =
+  'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-white/10 dark:bg-white/[0.03] dark:placeholder:text-slate-500';
+
+// field is full width unless the caller sets a width (w-48, min-w-…): Tailwind cannot tell which of two
+// width classes was meant, so only one may be present.
+const field = (className?: string) => cx(fieldBase, !/(^|\s)w-/.test(className ?? '') && 'w-full');
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(({ className, ...p }, ref) => (
-  <input ref={ref} className={cx(field, 'h-9', className)} {...p} />
+  <input ref={ref} className={cx(field(className), 'h-9', className)} {...p} />
 ));
 Input.displayName = 'Input';
 
 export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<HTMLTextAreaElement>>(({ className, ...p }, ref) => (
-  <textarea ref={ref} className={cx(field, className)} {...p} />
+  <textarea ref={ref} className={cx(field(className), className)} {...p} />
 ));
 Textarea.displayName = 'Textarea';
 
 export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement>>(({ className, ...p }, ref) => (
-  <select ref={ref} className={cx(field, 'h-9', className)} {...p} />
+  <select ref={ref} className={cx(field(className), 'h-9', className)} {...p} />
 ));
 Select.displayName = 'Select';
 
@@ -75,9 +82,9 @@ export function Field({ label, hint, children, htmlFor }: { label: string; hint?
 
 export function Card({ title, actions, children, className }: { title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <section className={cx('rounded-lg border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900', className)}>
+    <section className={cx('rounded-xl border border-slate-200/80 bg-white shadow-card dark:border-white/[0.07] dark:bg-slate-900/60', className)}>
       {(title || actions) && (
-        <header className="flex items-center justify-between gap-2 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
+        <header className="flex items-center justify-between gap-2 border-b border-slate-200/80 px-4 py-3 dark:border-white/[0.06]">
           <h2 className="text-sm font-semibold">{title}</h2>
           <div className="flex items-center gap-2">{actions}</div>
         </header>
@@ -88,16 +95,16 @@ export function Card({ title, actions, children, className }: { title?: ReactNod
 }
 
 const tones = {
-  gray: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
-  green: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
-  amber: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
-  red: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
-  blue: 'bg-brand-100 text-brand-700 dark:bg-brand-700/30 dark:text-brand-100',
+  gray: 'bg-slate-100 text-slate-700 dark:bg-white/[0.06] dark:text-slate-300',
+  green: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300',
+  amber: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300',
+  red: 'bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300',
+  blue: 'bg-brand-100 text-brand-700 dark:bg-brand-500/20 dark:text-brand-200',
 };
 export type Tone = keyof typeof tones;
 
 export function Badge({ tone = 'gray', children }: { tone?: Tone; children: ReactNode }) {
-  return <span className={cx('inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium', tones[tone])}>{children}</span>;
+  return <span className={cx('inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium', tones[tone])}>{children}</span>;
 }
 
 export function statusTone(status: string): Tone {
@@ -107,12 +114,43 @@ export function statusTone(status: string): Tone {
   return 'gray';
 }
 
-export function PageHeader({ title, description, actions }: { title: string; description?: ReactNode; actions?: ReactNode }) {
+/** IconTile is an icon in a tinted rounded square. */
+export function IconTile({ icon: Icon, tone = 'brand', size = 'md' }: { icon: LucideIcon; tone?: 'brand' | 'green' | 'amber' | 'slate' | 'violet'; size?: 'sm' | 'md' | 'lg' }) {
+  const t = {
+    brand: 'bg-brand-50 text-brand-600 ring-brand-100 dark:bg-brand-500/15 dark:text-brand-300 dark:ring-brand-400/20',
+    green: 'bg-emerald-50 text-emerald-600 ring-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-400/20',
+    amber: 'bg-amber-50 text-amber-600 ring-amber-100 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-400/20',
+    violet: 'bg-violet-50 text-violet-600 ring-violet-100 dark:bg-violet-500/15 dark:text-violet-300 dark:ring-violet-400/20',
+    slate: 'bg-slate-100 text-slate-500 ring-slate-200 dark:bg-white/[0.06] dark:text-slate-400 dark:ring-white/10',
+  }[tone];
+  const box = { sm: 'h-8 w-8 rounded-lg', md: 'h-10 w-10 rounded-xl', lg: 'h-12 w-12 rounded-2xl' }[size];
+  const ic = { sm: 'h-4 w-4', md: 'h-5 w-5', lg: 'h-6 w-6' }[size];
   return (
-    <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">{title}</h1>
-        {description && <p className="mt-1 max-w-3xl text-sm text-slate-500">{description}</p>}
+    <span className={cx('grid shrink-0 place-items-center ring-1 ring-inset', t, box)}>
+      <Icon className={ic} aria-hidden />
+    </span>
+  );
+}
+
+function usePageIcon(): LucideIcon | undefined {
+  const inRouter = useInRouterContext();
+  // Hooks run unconditionally; outside a router (some tests) there is no location to read.
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const path = inRouter ? useLocation().pathname : '';
+  return navItemFor(path)?.icon;
+}
+
+export function PageHeader({ title, description, actions, icon }: { title: string; description?: ReactNode; actions?: ReactNode; icon?: LucideIcon }) {
+  const fromNav = usePageIcon();
+  const Icon = icon ?? fromNav;
+  return (
+    <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+      <div className="flex items-start gap-4">
+        {Icon && <IconTile icon={Icon} size="lg" />}
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          {description && <p className="mt-1 max-w-3xl text-sm leading-relaxed text-slate-500 dark:text-slate-400">{description}</p>}
+        </div>
       </div>
       {actions && <div className="flex items-center gap-2">{actions}</div>}
     </div>
@@ -139,11 +177,15 @@ export function ErrorNote({ error }: { error: unknown }) {
   );
 }
 
-export function Empty({ title, children }: { title: string; children?: ReactNode }) {
+export function Empty({ title, children, icon: Icon = CircleDashed, action }: { title: string; children?: ReactNode; icon?: LucideIcon; action?: ReactNode }) {
   return (
-    <div className="rounded-lg border border-dashed border-slate-300 p-8 text-center dark:border-slate-700">
-      <p className="text-sm font-medium">{title}</p>
-      {children && <div className="mt-1 text-sm text-slate-500">{children}</div>}
+    <div className="flex flex-col items-center rounded-xl border border-dashed border-slate-300 bg-white/50 px-8 py-12 text-center dark:border-white/10 dark:bg-white/[0.02]">
+      <span className="grid h-12 w-12 place-items-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-white/[0.05] dark:text-slate-500">
+        <Icon className="h-6 w-6" aria-hidden />
+      </span>
+      <p className="mt-4 text-sm font-semibold">{title}</p>
+      {children && <div className="mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">{children}</div>}
+      {action && <div className="mt-4">{action}</div>}
     </div>
   );
 }
@@ -152,7 +194,7 @@ export function Table({ head, children }: { head: ReactNode[]; children: ReactNo
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-sm">
-        <thead className="border-b border-slate-200 text-xs uppercase text-slate-500 dark:border-slate-800">
+        <thead className="border-b border-slate-200/80 text-[11px] uppercase tracking-wide text-slate-500 dark:border-white/[0.06]">
           <tr>
             {head.map((h, i) => (
               <th key={i} className="px-3 py-2 font-medium">
@@ -161,7 +203,7 @@ export function Table({ head, children }: { head: ReactNode[]; children: ReactNo
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100 dark:divide-slate-800">{children}</tbody>
+        <tbody className="divide-y divide-slate-100 dark:divide-white/[0.05]">{children}</tbody>
       </table>
     </div>
   );
@@ -181,8 +223,8 @@ export function Dialog({ open, onOpenChange, title, description, children }: {
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/40" />
-        <DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[min(36rem,95vw)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg bg-white p-5 shadow-xl dark:bg-slate-900">
+        <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm" />
+        <DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[min(36rem,95vw)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-slate-200/80 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-slate-900">
           <DialogPrimitive.Title className="text-base font-semibold">{title}</DialogPrimitive.Title>
           {description ? (
             <DialogPrimitive.Description className="mt-1 text-sm text-slate-500">{description}</DialogPrimitive.Description>

@@ -1,3 +1,4 @@
+import { FolderGit2 } from 'lucide-react';
 import { useState } from 'react';
 import { api } from '@/api/client';
 import { keys, useConnectors, useInvalidating, useMe, useRepos } from '@/api/hooks';
@@ -152,7 +153,7 @@ export default function Repos() {
       )}
       {repos.isLoading && <Spinner />}
       <ErrorNote error={repos.error ?? imp.error} />
-      {repos.data?.length === 0 && <Empty title="No repositories tracked">{admin ? 'Track one to start generating docs.' : 'Ask an admin to track repositories.'}</Empty>}
+      {repos.data?.length === 0 && <Empty icon={FolderGit2} title="No repositories tracked">{admin ? 'Track one to start generating docs.' : 'Ask an admin to track repositories.'}</Empty>}
       {!!repos.data?.length && (
         <Card>
           <Table head={['Repository', 'Branch', 'Docs path', 'Landing', 'Processed', '', '']}>

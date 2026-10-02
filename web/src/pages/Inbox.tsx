@@ -1,3 +1,4 @@
+import { Inbox as InboxIcon } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '@/api/client';
@@ -65,7 +66,7 @@ export default function Inbox() {
       <Card>
         <div className="mb-3 flex flex-wrap gap-2">
           <Input aria-label="Search" placeholder="Search titles and explanations" className="w-64" value={f.q ?? ''} onChange={(e) => set({ q: e.target.value })} />
-          <Select aria-label="Status" className="w-36" value={f.status ?? ''} onChange={(e) => set({ status: e.target.value })}>
+          <Select aria-label="Status" className="w-44" value={f.status ?? ''} onChange={(e) => set({ status: e.target.value })}>
             {STATUSES.map((s) => <option key={s} value={s}>{s || 'open (not known)'}</option>)}
           </Select>
           <Select aria-label="Severity" className="w-36" value={f.severity ?? ''} onChange={(e) => set({ severity: e.target.value })}>
@@ -92,7 +93,7 @@ export default function Inbox() {
         </div>
         {issues.isLoading && <Spinner />}
         <ErrorNote error={issues.error} />
-        {issues.data?.items.length === 0 && <Empty title="Nothing here">No issues match. New errors and alerts appear within seconds of arriving.</Empty>}
+        {issues.data?.items.length === 0 && <Empty icon={InboxIcon} title="Nothing here">No issues match. New errors and alerts appear within seconds of arriving.</Empty>}
         {!!issues.data?.items.length && (
           <Table head={[canEdit ? '' : null, 'Issue', 'Service', 'Status', 'Events', 'Last 24h', 'Last seen'].filter((h) => h !== null)}>
             {issues.data.items.map((i) => (

@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { RequireRole, Shell } from '@/layouts/Shell';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Spinner } from '@/components/ui';
 import Login from '@/pages/Login';
 
@@ -26,6 +27,7 @@ const admin = (el: JSX.Element) => <RequireRole min="admin">{el}</RequireRole>;
 
 export default function App() {
   return (
+    <ErrorBoundary>
     <Suspense fallback={<Spinner />}>
       <Routes>
         <Route path="/login" element={<Login />} />
@@ -55,5 +57,6 @@ export default function App() {
         </Route>
       </Routes>
     </Suspense>
+    </ErrorBoundary>
   );
 }

@@ -1,3 +1,4 @@
+import { BookOpen, FileText } from 'lucide-react';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useDocNode, useTree } from '@/api/hooks';
@@ -74,7 +75,7 @@ export default function Docs() {
         <Card title="Tree">
           {roots.isLoading && <Spinner />}
           <ErrorNote error={roots.error} />
-          {roots.data?.length === 0 && <Empty title="No docs yet">Track a repository and push, or import existing Markdown.</Empty>}
+          {roots.data?.length === 0 && <Empty icon={BookOpen} title="No docs yet">Track a repository and push, or import existing Markdown.</Empty>}
           <ul className="space-y-0.5">
             {roots.data?.map((r) => (
               <RepoTree key={r.id} root={r} selected={nodeId} onSelect={(n) => nav(`/docs/${n.id}`)} />
@@ -82,7 +83,7 @@ export default function Docs() {
           </ul>
         </Card>
         <div className="min-w-0">
-          {!nodeId && <Empty title="Pick a document">Choose a file in the tree.</Empty>}
+          {!nodeId && <Empty icon={FileText} title="Pick a document">Choose a file in the tree.</Empty>}
           {node.isLoading && <Spinner />}
           <ErrorNote error={node.error} />
           {node.data && (

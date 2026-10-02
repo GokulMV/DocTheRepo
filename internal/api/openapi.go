@@ -42,6 +42,7 @@ var Operations = []op{
 	{"GET", "/api/v1/docs/node/{id}", "Docs", "A doc file or section with Markdown", "viewer", false, false},
 	{"GET", "/api/v1/palace/entities", "Palace", "Search knowledge-graph entities", "viewer", false, false},
 	{"GET", "/api/v1/palace/entities/{id}/graph", "Palace", "Entity neighbourhood (depth 1-3)", "viewer", false, false},
+	{"GET", "/api/v1/palace/overview", "Palace", "High-level map: the most connected repos, services, topics, datastores, endpoints (kinds=, limit=), edges lifted to repositories, counts per kind", "viewer", false, false},
 	{"GET", "/api/v1/library/shelves", "Library", "Library shelves", "viewer", false, false},
 	{"GET", "/api/v1/library/shelves/{slug}", "Library", "A shelf with its items", "viewer", false, false},
 	{"POST", "/api/v1/library/shelves", "Library", "Create a shelf", "editor", true, false},

@@ -1,9 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { API, ApiError, api, getCSRF, toApiError } from '@/api/client';
 import { keys, useRepos, useThread, useThreads } from '@/api/hooks';
 import type { AskResponse, Citation, Message } from '@/api/types';
+import { Bug, GitBranch, Network, Send, ShieldCheck, Sparkles } from 'lucide-react';
 import { Markdown } from '@/components/Markdown';
 import { Badge, Button, ErrorNote, Textarea, Toggle, cx } from '@/components/ui';
 import { readSSE } from '@/lib/sse';
@@ -59,6 +60,13 @@ function Feedback({ m }: { m: Message }) {
   );
 }
 
+const EXAMPLES = [
+  { q: 'How does checkout handle a failed payment?', icon: GitBranch },
+  { q: 'Which services publish to the orders topic?', icon: Network },
+  { q: 'What is the runbook for a database failover?', icon: ShieldCheck },
+  { q: 'Why is the refund job throwing NullPointerException?', icon: Bug },
+];
+
 export default function Ask() {
   const { threadId } = useParams();
   const nav = useNavigate();
@@ -66,7 +74,8 @@ export default function Ask() {
   const threads = useThreads();
   const thread = useThread(threadId);
   const repos = useRepos();
-  const [question, setQuestion] = useState('');
+  const [params] = useSearchParams();
+  const [question, setQuestion] = useState(() => params.get('q') ?? '');
   const [repoIds, setRepoIds] = useState<string[]>([]);
   const [include, setInclude] = useState<string[]>([]);
   const [streaming, setStreaming] = useState('');
@@ -145,15 +154,31 @@ export default function Ask() {
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex-1 space-y-4 overflow-y-auto pb-4">
           {!threadId && !pending && (
-            <div className="mx-auto mt-16 max-w-xl text-center">
-              <h1 className="text-xl font-semibold">Ask about your systems</h1>
-              <p className="mt-2 text-sm text-slate-500">
+            <div className="mx-auto mt-12 max-w-2xl text-center">
+              <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-violet-600 text-white shadow-lg shadow-brand-500/30">
+                <Sparkles className="h-7 w-7" aria-hidden />
+              </span>
+              <h1 className="mt-5 text-2xl font-semibold tracking-tight">Ask about your systems</h1>
+              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
                 Answers come from your connected repositories and docs, with citations. Nothing outside your access is used.
               </p>
+              <div className="mt-8 grid gap-2 text-left sm:grid-cols-2">
+                {EXAMPLES.map((ex) => (
+                  <button
+                    key={ex.q}
+                    type="button"
+                    onClick={() => setQuestion(ex.q)}
+                    className="group flex items-start gap-3 rounded-xl border border-slate-200/80 bg-white p-3 text-sm shadow-card transition hover:border-brand-300 hover:shadow-md dark:border-white/[0.07] dark:bg-slate-900/60 dark:hover:border-brand-400/40"
+                  >
+                    <ex.icon className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" aria-hidden />
+                    <span className="text-left text-slate-700 group-hover:text-slate-900 dark:text-slate-300 dark:group-hover:text-white">{ex.q}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           {messages.map((m) => (
-            <div key={m.id} className={cx('rounded-lg p-4', m.role === 'user' ? 'bg-brand-50 dark:bg-brand-700/20' : 'border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900')}>
+            <div key={m.id} className={cx('rounded-2xl p-4', m.role === 'user' ? 'ml-auto max-w-[85%] bg-brand-600 text-white dark:bg-brand-500' : 'border border-slate-200/80 bg-white shadow-card dark:border-white/[0.07] dark:bg-slate-900/60')}>
               {m.role === 'user' ? (
                 <p className="text-sm font-medium">{m.content}</p>
               ) : (
@@ -167,8 +192,8 @@ export default function Ask() {
           ))}
           {pending && (
             <>
-              <div className="rounded-lg bg-brand-50 p-4 text-sm font-medium dark:bg-brand-700/20">{pending}</div>
-              <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900" aria-live="polite">
+              <div className="ml-auto max-w-[85%] rounded-2xl bg-brand-600 p-4 text-sm font-medium text-white dark:bg-brand-500">{pending}</div>
+              <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-white/[0.07] dark:bg-slate-900/60" aria-live="polite">
                 {streaming ? <Markdown>{streaming}</Markdown> : <p className="text-sm text-slate-500">Searching your sources…</p>}
               </div>
             </>
@@ -176,7 +201,7 @@ export default function Ask() {
           <ErrorNote error={error} />
           <div ref={bottom} />
         </div>
-        <form onSubmit={ask} className="space-y-2 border-t border-slate-200 pt-3 dark:border-slate-800">
+        <form onSubmit={ask} className="space-y-2 rounded-2xl border border-slate-200/80 bg-white p-3 shadow-card dark:border-white/[0.07] dark:bg-slate-900/60">
           <Textarea
             aria-label="Question"
             rows={3}
@@ -212,7 +237,7 @@ export default function Ask() {
             ))}
             <span className="text-xs text-slate-400">No selection = all you can read. Ctrl/⌘+Enter to send.</span>
             <Button type="submit" className="ml-auto" disabled={!!pending || !question.trim()}>
-              {pending ? 'Answering…' : 'Ask'}
+              <Send className="h-4 w-4" aria-hidden /> {pending ? 'Answering…' : 'Ask'}
             </Button>
           </div>
         </form>

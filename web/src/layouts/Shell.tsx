@@ -1,52 +1,20 @@
+import { Suspense } from 'react';
 import { NavLink, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
+import { Hexagon, LogOut } from 'lucide-react';
 import { api, ApiError } from '@/api/client';
 import { useMe } from '@/api/hooks';
 import { atLeast, type Role } from '@/api/types';
-import { Button, Spinner, cx } from '@/components/ui';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { Spinner, cx } from '@/components/ui';
+import { NAV } from './nav';
 
-interface NavItem {
-  to: string;
-  label: string;
-  min: Role;
+export { NAV } from './nav';
+
+function initials(s: string) {
+  const parts = s.replace(/@.*/, '').split(/[\s._-]+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? '?') + (parts[1]?.[0] ?? '')).toUpperCase();
 }
-
-export const NAV: { section: string; items: NavItem[] }[] = [
-  {
-    section: 'Knowledge',
-    items: [
-      { to: '/ask', label: 'Ask', min: 'viewer' },
-      { to: '/docs', label: 'Docs', min: 'viewer' },
-      { to: '/palace', label: 'Palace', min: 'viewer' },
-      { to: '/library', label: 'Library', min: 'viewer' },
-    ],
-  },
-  {
-    section: 'Signals',
-    items: [
-      { to: '/inbox', label: 'Inbox', min: 'viewer' },
-      { to: '/known-issues', label: 'Known issues', min: 'viewer' },
-    ],
-  },
-  {
-    section: 'Operations',
-    items: [
-      { to: '/activity', label: 'Activity', min: 'viewer' },
-      { to: '/analytics', label: 'Analytics', min: 'viewer' },
-      { to: '/repos', label: 'Repositories', min: 'viewer' },
-    ],
-  },
-  {
-    section: 'Administration',
-    items: [
-      { to: '/connectors', label: 'Connectors', min: 'admin' },
-      { to: '/providers', label: 'Providers & routing', min: 'admin' },
-      { to: '/spend', label: 'Spend limits', min: 'admin' },
-      { to: '/users', label: 'Users & access', min: 'admin' },
-      { to: '/setup', label: 'Setup', min: 'admin' },
-    ],
-  },
-];
 
 /** Shell is the authenticated layout: sidebar navigation filtered by role, and the page outlet. */
 export function Shell() {
@@ -64,50 +32,85 @@ export function Shell() {
     qc.clear();
     window.location.assign('/login');
   };
+  const who = user.name || user.email;
   return (
     <div className="flex min-h-screen">
-      <aside className="flex w-60 shrink-0 flex-col border-r border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-        <div className="px-4 py-4">
-          <span className="text-base font-semibold">DocTheRepo</span>
-          <span className="ml-1 text-xs text-slate-500">Hub</span>
+      <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col border-r border-slate-200/80 bg-white/80 backdrop-blur dark:border-white/[0.06] dark:bg-slate-950/70">
+        <div className="flex items-center gap-2.5 px-5 py-5">
+          <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-brand-500 to-violet-600 text-white shadow-md shadow-brand-500/30">
+            <Hexagon className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden />
+          </span>
+          <div className="leading-tight">
+            <span className="block text-[15px] font-semibold tracking-tight">DocTheRepo</span>
+            <span className="block text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">Hub</span>
+          </div>
         </div>
-        <nav className="flex-1 space-y-5 px-2" aria-label="Main">
+        <nav className="flex-1 space-y-6 overflow-y-auto px-3 pb-4" aria-label="Main">
           {NAV.map((sec) => {
-            const items = sec.items.filter((i) => atLeast(user.role, i.min));
+            const items = sec.items.filter((i) => atLeast(user.role, i.min as Role));
             if (!items.length) return null;
             return (
               <div key={sec.section}>
-                <p className="px-2 pb-1 text-xs font-semibold uppercase tracking-wide text-slate-400">{sec.section}</p>
-                {items.map((i) => (
-                  <NavLink
-                    key={i.to}
-                    to={i.to}
-                    className={({ isActive }) =>
-                      cx(
-                        'block rounded-md px-2 py-1.5 text-sm',
-                        isActive ? 'bg-brand-50 font-medium text-brand-700 dark:bg-brand-700/20 dark:text-brand-100' : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800',
-                      )
-                    }
-                  >
-                    {i.label}
-                  </NavLink>
-                ))}
+                <p className="px-3 pb-1.5 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-400 dark:text-slate-500">{sec.section}</p>
+                <div className="space-y-0.5">
+                  {items.map((i) => (
+                    <NavLink
+                      key={i.to}
+                      to={i.to}
+                      className={({ isActive }) =>
+                        cx(
+                          'group relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors',
+                          isActive
+                            ? 'bg-brand-50 font-medium text-brand-700 dark:bg-brand-500/15 dark:text-white'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/[0.04] dark:hover:text-slate-100',
+                        )
+                      }
+                    >
+                      {({ isActive }) => (
+                        <>
+                          {isActive && <span className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-brand-500" aria-hidden />}
+                          <i.icon
+                            className={cx('h-4 w-4 shrink-0', isActive ? 'text-brand-600 dark:text-brand-300' : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300')}
+                            aria-hidden
+                          />
+                          {i.label}
+                        </>
+                      )}
+                    </NavLink>
+                  ))}
+                </div>
               </div>
             );
           })}
         </nav>
-        <div className="border-t border-slate-200 p-3 text-xs dark:border-slate-800">
-          <NavLink to="/account" className="block truncate font-medium hover:underline">
-            {user.name || user.email}
+        <div className="flex items-center gap-3 border-t border-slate-200/80 px-4 py-3 dark:border-white/[0.06]">
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-slate-200 to-slate-300 text-xs font-semibold text-slate-700 dark:from-slate-700 dark:to-slate-800 dark:text-slate-200">
+            {initials(who)}
+          </span>
+          <NavLink to="/account" className="min-w-0 flex-1 text-xs">
+            <span className="block truncate font-medium text-slate-800 hover:underline dark:text-slate-100">{who}</span>
+            <span className="block capitalize text-slate-500">{user.role}</span>
           </NavLink>
-          <p className="text-slate-500">{user.role}</p>
-          <Button variant="ghost" size="sm" className="mt-2 w-full" onClick={logout}>
-            Sign out
-          </Button>
+          <button
+            type="button"
+            onClick={logout}
+            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/[0.06] dark:hover:text-slate-200"
+            aria-label="Sign out"
+            title="Sign out"
+          >
+            <LogOut className="h-4 w-4" aria-hidden />
+          </button>
         </div>
       </aside>
-      <main className="min-w-0 flex-1 p-6 lg:p-8">
-        <Outlet context={user} />
+      <main className="min-w-0 flex-1">
+        <div className="mx-auto max-w-7xl px-6 py-8 lg:px-10">
+          {/* Keyed by path: a page that failed does not keep the next one from rendering. */}
+          <ErrorBoundary key={loc.pathname}>
+            <Suspense fallback={<Spinner />}>
+              <Outlet context={user} />
+            </Suspense>
+          </ErrorBoundary>
+        </div>
       </main>
     </div>
   );

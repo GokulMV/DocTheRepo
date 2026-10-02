@@ -1,3 +1,4 @@
+import { Lightbulb, ShieldCheck } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '@/api/client';
@@ -67,7 +68,7 @@ function Rules({ canEdit }: { canEdit: boolean }) {
     <Card title="Rules" actions={canEdit && <Button size="sm" onClick={() => setCreating(true)}>New rule</Button>}>
       {rules.isLoading && <Spinner />}
       <ErrorNote error={rules.error ?? toggle.error ?? del.error} />
-      {rules.data?.length === 0 && <Empty title="No rules yet">Mark issues as known from the Inbox, paste a runbook under “From text”, or accept a suggestion.</Empty>}
+      {rules.data?.length === 0 && <Empty icon={ShieldCheck} title="No rules yet">Mark issues as known from the Inbox, paste a runbook under “From text”, or accept a suggestion.</Empty>}
       {!!rules.data?.length && (
         <Table head={['Rule', 'Matches', 'Hits', 'Status', '']}>
           {rules.data.map((k) => (
@@ -135,7 +136,7 @@ function Suggestions() {
     <Card title="Suggestions" actions={<span className="text-xs text-slate-500">Issues decoded as noise, frequent, unacknowledged for 3+ days</span>}>
       {sugg.isLoading && <Spinner />}
       <ErrorNote error={sugg.error} />
-      {sugg.data?.length === 0 && <Empty title="No suggestions">The Hub proposes rules once a day. Nothing is suppressed until someone accepts.</Empty>}
+      {sugg.data?.length === 0 && <Empty icon={Lightbulb} title="No suggestions">The Hub proposes rules once a day. Nothing is suppressed until someone accepts.</Empty>}
       <ul className="divide-y divide-slate-100 dark:divide-slate-800">{sugg.data?.map((s) => <SuggestionCard key={s.id} s={s} />)}</ul>
     </Card>
   );

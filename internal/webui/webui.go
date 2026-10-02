@@ -46,6 +46,13 @@ func Handler() http.Handler {
 				return
 			}
 		}
+		// A missing fingerprinted asset (a tab still open from before a redeploy) is a real 404: answering
+		// with the app shell would make the browser fail on a script with an HTML MIME type.
+		if strings.HasPrefix(p, "assets/") {
+			w.Header().Set("Cache-Control", "no-store")
+			http.NotFound(w, r)
+			return
+		}
 		// Client-side routes (/docs/123, /ask/…) get the app shell; it must never be cached so a new
 		// deploy's assets are picked up.
 		index, err := fs.ReadFile(sub, "index.html")

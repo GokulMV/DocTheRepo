@@ -1,3 +1,4 @@
+import { Library as LibraryIcon } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { api } from '@/api/client';
@@ -78,7 +79,7 @@ export default function Library() {
         <Card title={shelf.data?.title ?? slug} actions={<Link to="/library" className="text-sm text-brand-600">All shelves</Link>}>
           {shelf.isLoading && <Spinner />}
           <ErrorNote error={shelf.error} />
-          {shelf.data?.items?.length === 0 && <Empty title="Nothing on this shelf yet" />}
+          {shelf.data?.items?.length === 0 && <Empty icon={LibraryIcon} title="Nothing on this shelf yet" />}
           <ul className="divide-y divide-slate-100 dark:divide-slate-800">
             {shelf.data?.items?.map((i) => (
               <li key={i.type + i.id} className="py-2 text-sm">

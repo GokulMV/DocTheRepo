@@ -27,3 +27,10 @@ func TestHandlerServesShellForClientRoutes(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/", nil))
 	assert.Equal(t, http.StatusMethodNotAllowed, rec.Code)
 }
+
+func TestMissingAssetIs404(t *testing.T) {
+	rec := httptest.NewRecorder()
+	Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/assets/Docs-stale123.js", nil))
+	assert.Equal(t, http.StatusNotFound, rec.Code, "a stale chunk must not be answered with the HTML shell")
+	assert.NotContains(t, rec.Body.String(), `<div id="root">`)
+}
