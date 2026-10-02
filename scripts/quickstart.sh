@@ -305,6 +305,11 @@ ENV_FILE="$STATE_DIR/.env"
 if [ ! -f "$ENV_FILE" ] && "${DOCKER[@]}" volume inspect "${PROJECT}_pgdata" >/dev/null 2>&1; then
   die "found a database from an earlier quickstart, but its credentials ($ENV_FILE) are gone: run '$0 --down --wipe' to start fresh"
 fi
+# Native mode keeps the master key (which encrypts every stored API key and token) next to .env. Without it
+# the database's secrets cannot be read, so refuse rather than start with connectors that silently fail.
+if [ "$MODE" = native ] && [ -f "$ENV_FILE" ] && [ ! -f "$STATE_DIR/master.key" ] && "${DOCKER[@]}" volume inspect "${PROJECT}_pgdata" >/dev/null 2>&1; then
+  die "the master key ($STATE_DIR/master.key) that encrypts your stored keys is missing: restore it from a backup, or run '$0 --down --wipe' to start fresh"
+fi
 get_env() { if [ -f "$ENV_FILE" ]; then sed -n "s/^$1=//p" "$ENV_FILE" | tail -1; fi; }
 DB_PW="$(get_env DTH_DB_PASSWORD)"; [ -n "$DB_PW" ] || DB_PW="$(openssl rand -hex 24)"
 OWNER_PW="$(get_env DTH_OWNER_PASSWORD)"; [ -n "$OWNER_PW" ] || OWNER_PW="$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-20)"
@@ -430,7 +435,17 @@ ensure_provider() { # kind name key → id
   fi
   printf '%s' "$id"
 }
-route() { api PUT "/routes/$1" "{\"provider_id\":\"$2\",\"model\":\"$3\"}" >/dev/null && echo "    route $1 → $3"; }
+ROUTED=""
+routed() { # feature → true if it already has a route (set in the UI or by an earlier run)
+  [ -n "$ROUTED" ] || ROUTED="$(api GET /routes | tr '{' '\n' | sed -n 's/.*"feature":"\([^"]*\)".*/\1/p' | tr '\n' ' ')"
+  case " $ROUTED " in *" $1 "*) return 0 ;; esac
+  return 1
+}
+# route sets a feature's model only if it has none: re-running never overwrites routing changed in the UI.
+route() {
+  if routed "$1"; then echo "    route $1: kept as configured"; return 0; fi
+  api PUT "/routes/$1" "{\"provider_id\":\"$2\",\"model\":\"$3\"}" >/dev/null && echo "    route $1 → $3"
+}
 
 if [ -n "${ANTHROPIC_API_KEY:-}${OPENAI_API_KEY:-}" ]; then
   if api_login; then
