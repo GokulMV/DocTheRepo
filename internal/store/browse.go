@@ -83,6 +83,8 @@ type NodeDetail struct {
 	UpdatedAt time.Time        `json:"updated_at"`
 	Chunks    []map[string]any `json:"chunks"`
 	ParentID  string           `json:"parent_id,omitempty"`
+	// Ancestors are the ids from the repo node down to the parent, so the explorer can reveal the node.
+	Ancestors []string `json:"ancestors"`
 }
 
 // Node loads a Tree node; section nodes show their parent file's content. Callers check the repo ACL.
@@ -98,6 +100,12 @@ func (b *Browse) Node(ctx context.Context, id string) (NodeDetail, error) {
 		Markdown: n.Content, CommitSHA: n.CommitSha, UpdatedAt: n.UpdatedAt, Chunks: []map[string]any{}}
 	if n.ParentID != nil {
 		d.ParentID = *n.ParentID
+	}
+	if d.Ancestors, err = b.s.Q.DocAncestors(ctx, n.ID); err != nil {
+		return d, err
+	}
+	if d.Ancestors == nil {
+		d.Ancestors = []string{}
 	}
 	fileID := n.ID
 	if n.Kind == gen.DocNodeKindSection && n.ParentID != nil {

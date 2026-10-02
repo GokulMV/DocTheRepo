@@ -1,5 +1,5 @@
-import { BookOpen, ChevronRight, FileText, Folder, FolderGit2, FolderOpen, Hash, Plug, Sparkles } from 'lucide-react';
-import { useState } from 'react';
+import { BookOpen, ChevronRight, ChevronsDownUp, ChevronsUpDown, FileText, Folder, FolderGit2, FolderOpen, Hash, LocateFixed, Plug, Sparkles } from 'lucide-react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '@/api/client';
 import { useDocNode, useJobs, useMe, useRepos, useRoutes, useTree } from '@/api/hooks';
@@ -19,23 +19,78 @@ function NodeIcon({ node, open }: { node: TreeNode; open: boolean }) {
   return <FileText className={cx(cls, 'text-slate-400')} aria-hidden />;
 }
 
+/**
+ * Explorer state lives above the tree, so Expand all / Collapse all and "locate" can open any row, and rows keep
+ * their state while folders load. A row is open when the default for its kind (folders are open after Expand all)
+ * is flipped by the user, or not.
+ */
+interface Explorer {
+  isOpen: (n: TreeNode) => boolean;
+  toggle: (n: TreeNode) => void;
+  /** Bumped by "locate"; the selected row scrolls into view when it changes. */
+  reveal: number;
+}
+const ExplorerCtx = createContext<Explorer>({ isOpen: () => false, toggle: () => undefined, reveal: 0 });
+
+const isFolder = (n: TreeNode) => n.kind === 'repo' || n.kind === 'dir';
+
+function useExplorer(defaultOpen: string[]) {
+  const [all, setAll] = useState(false);
+  const [flipped, setFlipped] = useState<Set<string>>(() => new Set(defaultOpen));
+  const [reveal, setReveal] = useState(0);
+  const openByDefault = (n: TreeNode) => all && isFolder(n);
+  const ctx: Explorer = {
+    isOpen: (n) => openByDefault(n) !== flipped.has(n.id),
+    toggle: (n) => setFlipped((f) => {
+      const next = new Set(f);
+      if (next.has(n.id)) next.delete(n.id);
+      else next.add(n.id);
+      return next;
+    }),
+    reveal,
+  };
+  return {
+    ctx,
+    expandAll: () => { setAll(true); setFlipped(new Set()); },
+    collapseAll: () => { setAll(false); setFlipped(new Set()); },
+    /** Opens every ancestor (ids root first; the ancestors are repos and folders) and scrolls to the selected row. */
+    locate: (ancestors: string[]) => {
+      setFlipped((f) => {
+        const next = new Set(f);
+        // Opening means: flipped when closed by default, not flipped when open by default.
+        for (const id of ancestors) {
+          if (all) next.delete(id);
+          else next.add(id);
+        }
+        return next;
+      });
+      setReveal((r) => r + 1);
+    },
+  };
+}
+
 /** Branch is one row of the explorer; folders load their children when opened. */
-function Branch({ node, repoId, selected, onSelect, depth, defaultOpen = false }: {
+function Branch({ node, repoId, selected, onSelect, depth }: {
   node: TreeNode;
   repoId: string;
   selected?: string;
   onSelect: (n: TreeNode) => void;
   depth: number;
-  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const ex = useContext(ExplorerCtx);
+  const open = ex.isOpen(node);
   const isRepo = node.kind === 'repo';
   const expandable = isRepo || (node.has_children && node.kind !== 'file');
   const children = useTree(open && expandable ? repoId : undefined, open && expandable && !isRepo ? node.id : undefined);
   const active = selected === node.id;
+  const row = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (active && ex.reveal) row.current?.scrollIntoView({ block: 'nearest' });
+  }, [active, ex.reveal]);
   return (
     <li>
       <button
+        ref={row}
         type="button"
         className={cx(
           rowCls,
@@ -43,8 +98,9 @@ function Branch({ node, repoId, selected, onSelect, depth, defaultOpen = false }
           active ? 'bg-brand-50 font-medium text-brand-800 dark:bg-brand-500/15 dark:text-white' : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/[0.05]',
         )}
         style={{ paddingLeft: depth * 14 + 6 }}
-        onClick={() => (expandable ? setOpen(!open) : onSelect(node))}
+        onClick={() => (expandable ? ex.toggle(node) : onSelect(node))}
         aria-expanded={expandable ? open : undefined}
+        aria-current={active ? 'page' : undefined}
         title={node.path || node.title}
       >
         <ChevronRight className={cx('h-3.5 w-3.5 shrink-0 text-slate-400 transition-transform', open && 'rotate-90', !expandable && 'invisible')} aria-hidden />
@@ -178,21 +234,56 @@ export default function Docs() {
   const nav = useNavigate();
   const roots = useTree();
   const node = useDocNode(nodeId);
-  return (
+  const roots0 = roots.data;
+  return roots0?.length ? <DocsBrowser roots={roots0} nodeId={nodeId} node={node} onSelect={(n) => nav(`/docs/${n.id}`)} /> : (
     <>
-      <PageHeader title="Docs" description="Generated and imported documentation, per repository. Edit generated files only inside dth:human blocks — those survive regeneration." />
+      <PageHeader title="Docs" description={DESCRIPTION} />
       {roots.isLoading && <Spinner />}
       <ErrorNote error={roots.error} />
       {roots.data?.length === 0 && <NoDocs />}
-      {!!roots.data?.length && (
+    </>
+  );
+}
+
+const DESCRIPTION = 'Generated and imported documentation, per repository. Edit generated files only inside dth:human blocks — those survive regeneration.';
+
+const toolBtn = 'grid h-6 w-6 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/[0.06] dark:hover:text-slate-200';
+
+function DocsBrowser({ roots, nodeId, node, onSelect }: {
+  roots: TreeNode[];
+  nodeId?: string;
+  node: ReturnType<typeof useDocNode>;
+  onSelect: (n: TreeNode) => void;
+}) {
+  const ex = useExplorer(roots.length === 1 ? [roots[0].id] : []);
+  // Opening a link to a page reveals it in the tree, once.
+  const revealed = useRef<string>();
+  useEffect(() => {
+    if (node.data && revealed.current !== node.data.id && !revealed.current) ex.locate(node.data.ancestors ?? []);
+    if (node.data) revealed.current = node.data.id;
+  }, [node.data]);
+  return (
+    <>
+      <PageHeader title="Docs" description={DESCRIPTION} />
+      <ExplorerCtx.Provider value={ex.ctx}>
         <div className="grid gap-6 lg:grid-cols-[17rem_minmax(0,1fr)]">
           <nav aria-label="Documentation" className="self-start rounded-2xl border border-slate-200/80 bg-white/70 shadow-card lg:sticky lg:top-6 dark:border-white/[0.06] dark:bg-slate-900/40">
-            <div className="border-b border-slate-200/80 p-2 dark:border-white/[0.06]">
-              <p className="px-2 pb-1.5 pt-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">Explorer</p>
+            <div className="flex items-center gap-0.5 border-b border-slate-200/80 px-2 py-1.5 dark:border-white/[0.06]">
+              <p className="flex-1 px-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">Explorer</p>
+              <button type="button" className={toolBtn} onClick={() => node.data && ex.locate(node.data.ancestors ?? [])} disabled={!node.data}
+                aria-label="Show the open page in the tree" title="Show the open page in the tree">
+                <LocateFixed className="h-3.5 w-3.5" aria-hidden />
+              </button>
+              <button type="button" className={toolBtn} onClick={ex.expandAll} aria-label="Expand all folders" title="Expand all folders">
+                <ChevronsUpDown className="h-3.5 w-3.5" aria-hidden />
+              </button>
+              <button type="button" className={toolBtn} onClick={ex.collapseAll} aria-label="Collapse all folders" title="Collapse all folders">
+                <ChevronsDownUp className="h-3.5 w-3.5" aria-hidden />
+              </button>
             </div>
             <ul className="max-h-[calc(100vh-12rem)] overflow-y-auto p-2">
-              {roots.data.map((r) => (
-                <Branch key={r.id} node={r} repoId={r.repo_id!} selected={nodeId} onSelect={(n) => nav(`/docs/${n.id}`)} depth={0} defaultOpen={roots.data!.length === 1} />
+              {roots.map((r) => (
+                <Branch key={r.id} node={r} repoId={r.repo_id!} selected={nodeId} onSelect={onSelect} depth={0} />
               ))}
             </ul>
           </nav>
@@ -211,8 +302,12 @@ export default function Docs() {
             {node.data && (
               <Card
                 title={
-                  <span className="font-mono text-xs">
-                    {node.data.repo} / {node.data.path}
+                  <span className="flex items-center gap-1.5">
+                    <span className="font-mono text-xs">{node.data.repo} / {node.data.path}</span>
+                    <button type="button" className={toolBtn} onClick={() => ex.locate(node.data!.ancestors ?? [])}
+                      aria-label="Show this file in the tree" title="Show this file in the tree">
+                      <LocateFixed className="h-3.5 w-3.5" aria-hidden />
+                    </button>
                   </span>
                 }
                 actions={
@@ -236,7 +331,7 @@ export default function Docs() {
             )}
           </div>
         </div>
-      )}
+      </ExplorerCtx.Provider>
     </>
   );
 }
