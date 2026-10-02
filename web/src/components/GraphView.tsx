@@ -1,5 +1,6 @@
 import cytoscape, { type Core, type ElementDefinition } from 'cytoscape';
 import { useEffect, useRef } from 'react';
+import { useTheme } from '@/theme';
 import { kindMeta } from './palaceKinds';
 
 export interface GNode {
@@ -56,10 +57,10 @@ export function GraphView({ nodes, edges, focus, selected, layout = 'force', que
   const cy = useRef<Core>();
   const select = useRef(onSelect);
   select.current = onSelect;
+  const { dark } = useTheme();
 
   useEffect(() => {
     if (!el.current) return;
-    const dark = document.documentElement.classList.contains('dark');
     const ink = dark ? '#cbd5e1' : '#334155';
     const paper = dark ? '#0b1120' : '#f8fafc';
     const maxDeg = Math.max(1, ...nodes.map((n) => n.degree ?? 0));
@@ -148,7 +149,7 @@ export function GraphView({ nodes, edges, focus, selected, layout = 'force', que
     });
     cy.current = c;
     return () => c.destroy();
-  }, [nodes, edges, focus, layout]);
+  }, [nodes, edges, focus, layout, dark]);
 
   useEffect(() => {
     const c = cy.current;

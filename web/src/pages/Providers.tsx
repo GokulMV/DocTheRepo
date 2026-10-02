@@ -117,15 +117,15 @@ function RouteRow({ feature, route, providers }: { feature: string; route?: Rout
     <tr>
       <Td><span className="font-medium">{feature}</span><p className="text-xs text-slate-500">{FEATURE_HELP[feature]}</p></Td>
       <Td>
-        <Select aria-label={`${feature} provider`} value={providerId} onChange={(e) => setProviderId(e.target.value)}>
+        <Select className="w-44" aria-label={`${feature} provider`} value={providerId} onChange={(e) => setProviderId(e.target.value)}>
           <option value="">— not routed —</option>
           {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </Select>
       </Td>
-      <Td><Input aria-label={`${feature} model`} value={model} onChange={(e) => setModel(e.target.value)} placeholder="e.g. claude-opus-5-5" /></Td>
+      <Td><Input className="w-56" aria-label={`${feature} model`} value={model} onChange={(e) => setModel(e.target.value)} placeholder="e.g. claude-opus-5-5" /></Td>
       <Td>
         {feature !== 'embedding' && (
-          <Select aria-label={`${feature} effort`} value={effort} onChange={(e) => setEffort(e.target.value)}>
+          <Select className="w-28" aria-label={`${feature} effort`} value={effort} onChange={(e) => setEffort(e.target.value)}>
             <option value="">default</option>
             {['low', 'medium', 'high', 'xhigh', 'max'].map((x) => <option key={x}>{x}</option>)}
           </Select>
@@ -133,11 +133,11 @@ function RouteRow({ feature, route, providers }: { feature: string; route?: Rout
       </Td>
       <Td>
         <div className="flex gap-1">
-          <Select aria-label={`${feature} fallback`} value={fallbackId} onChange={(e) => setFallbackId(e.target.value)}>
+          <Select className="w-32" aria-label={`${feature} fallback`} value={fallbackId} onChange={(e) => setFallbackId(e.target.value)}>
             <option value="">none</option>
             {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </Select>
-          {fallbackId && <Input aria-label={`${feature} fallback model`} value={fallbackModel} onChange={(e) => setFallbackModel(e.target.value)} placeholder="model" />}
+          {fallbackId && <Input className="w-40" aria-label={`${feature} fallback model`} value={fallbackModel} onChange={(e) => setFallbackModel(e.target.value)} placeholder="model" />}
         </div>
       </Td>
       <Td>
