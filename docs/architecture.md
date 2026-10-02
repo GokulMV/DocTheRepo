@@ -1,4 +1,4 @@
-# DocTheRepo Hub — architecture (as built, through Phase 13a)
+# DocTheRepo Hub — architecture (as built, through Phase 13)
 
 This page describes what is implemented today, not the full plan (`docs/plan-doctherepo-hub.md`). Where
 the code differs from the plan, it says so at the end.
@@ -52,7 +52,7 @@ root that builds every adapter and service once.
 | | `adapters/llm/*`, `embed/*` | Model providers (incl. Jev for decisions) |
 | | `adapters/signal/*` | Webhooks (Sentry, PagerDuty, Opsgenie, Datadog, Alertmanager/Grafana, AWS, GCP, generic), Firehose, Pub/Sub, CloudWatch/GCP pollers, Kafka/SQS/SNS/EventBridge/Kinesis/Pub/Sub/RabbitMQ inspectors |
 | | `adapters/vector/{pgvector,qdrant}`, `secrets/{localfile,awskms,gcpkms}` | Vector index, envelope-encryption keys |
-| | `adapters/knowledge/{confluence,jira}` | Phase 13a — read-only REST + Markdown conversion (**not wired yet**) |
+| | `adapters/knowledge/{confluence,jira}` | Read-only Confluence (CQL) and Jira (JQL) sync, storage-XHTML/ADF → Markdown |
 | App | `ingest`, `api`, `auth`, `queue`, `scheduler`, `store`, `config`, `observability`, `bootstrap`, `webui` | Job/ingress orchestration, HTTP, identity, Postgres queue, leader tasks, sqlc store, config, logs/metrics, `dth up`, embedded UI |
 
 ## 3. Flows
@@ -70,6 +70,15 @@ skips only confident "known noise") → full decode (12k-token context: samples,
 issues, runbooks) → indexed as `issue_decode`. Daily auto-suggestions and paste-text proposals create rules
 that a human enables.
 
+**D. Confluence & Jira**
+Scheduler (`sync_knowledge_connectors`, every 30 s, per-connector interval 15 min) → `knowledge_sync` job →
+`ingest.KnowledgeSync`: per space/project, changed documents since the cursor → `store.Knowledge.Apply`
+(chunks without a repo — readable by every viewer — via the manifest diff, `knowledge_docs`, Palace entity
+plus `documented_in`/`runbook_for` links to mentioned services, repos, endpoints, Library shelves) → embed →
+known-issue upstream check (Jira Done flips a suppressing rule to label only) → cursor stored. Daily
+reconcile removes deleted pages; the `known-issue` label query creates disabled draft rules (match proposed
+by the suggest route). `POST /known-issues/from-link` fetches a URL through the owning connector.
+
 **C. Q&A**
 `POST /api/v1/ask` (SSE) → answer cache (question + scope + index version) → embed + vector search and
 full-text search → reciprocal rank fusion → ACL-scoped chunks → one-hop graph expansion → budget packing →
@@ -77,10 +86,10 @@ model (route `qa`) → citation check → cache.
 
 ## 4. Data
 
-PostgreSQL 16 + pgvector, migrations `0001`–`0013`: identity and audit; connectors, cursors, repos, ACLs,
+PostgreSQL 16 + pgvector, migrations `0001`–`0014`: identity and audit; connectors, cursors, repos, ACLs,
 providers, routes, prices; the job queue; chunks (+ tsvector) and index version; month-partitioned usage
 and savings; Tree / Palace / Library / PRs; Q&A threads and cache; known issues, issues, decodes, samples,
-minute/hour counts, suggestions; decision-gate and Jev columns. Vectors live in pgvector (default) or
+minute/hour counts, suggestions; decision-gate and Jev columns; synced Confluence/Jira documents (`knowledge_docs`) and upstream state on imported rules. Vectors live in pgvector (default) or
 Qdrant. Secrets (connector credentials, provider keys) are AES-GCM envelope-encrypted with a local, AWS KMS,
 or GCP KMS key.
 
@@ -104,8 +113,7 @@ or GCP KMS key.
 
 ## 7. Not built yet / differs from the plan
 
-- Confluence & Jira: adapters exist; the `knowledge_sync` job, Palace links, label-based known-issue
-  import, `POST /known-issues/from-link`, and Library items are Phase 13b–c.
 - Wiz and Splunk adapters (rest of Milestone 3) and Milestone 4 hardening.
-- Scoped context does not yet include linked Confluence sections (needs knowledge sync).
+- Docgen's scoped context does not yet include linked Confluence sections (the decode context does use
+  Confluence runbooks).
 - Beyond the plan's § 4 and built: the decision gate (Jev, Phase 11.5) and event-bus inspectors.

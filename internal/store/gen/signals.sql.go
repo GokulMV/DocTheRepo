@@ -246,7 +246,7 @@ func (q *Queries) GetIssueByFingerprint(ctx context.Context, fingerprint string)
 }
 
 const getKnownIssue = `-- name: GetKnownIssue :one
-SELECT id, title, description, explanation, source_text, jira_key, reason, match, action, enabled, expires_at, source, confluence_page_id, owner_user_id, ticket_url, hits, last_hit_at, created_at, updated_at FROM known_issues WHERE id = $1
+SELECT id, title, description, explanation, source_text, jira_key, reason, match, action, enabled, expires_at, source, confluence_page_id, owner_user_id, ticket_url, hits, last_hit_at, created_at, updated_at, upstream_status, upstream_note, label_managed FROM known_issues WHERE id = $1
 `
 
 func (q *Queries) GetKnownIssue(ctx context.Context, id string) (KnownIssue, error) {
@@ -272,6 +272,9 @@ func (q *Queries) GetKnownIssue(ctx context.Context, id string) (KnownIssue, err
 		&i.LastHitAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.UpstreamStatus,
+		&i.UpstreamNote,
+		&i.LabelManaged,
 	)
 	return i, err
 }
@@ -399,7 +402,7 @@ func (q *Queries) IssueSamples(ctx context.Context, arg IssueSamplesParams) ([]E
 }
 
 const listKnownIssues = `-- name: ListKnownIssues :many
-SELECT id, title, description, explanation, source_text, jira_key, reason, match, action, enabled, expires_at, source, confluence_page_id, owner_user_id, ticket_url, hits, last_hit_at, created_at, updated_at FROM known_issues ORDER BY created_at DESC, id LIMIT $1
+SELECT id, title, description, explanation, source_text, jira_key, reason, match, action, enabled, expires_at, source, confluence_page_id, owner_user_id, ticket_url, hits, last_hit_at, created_at, updated_at, upstream_status, upstream_note, label_managed FROM known_issues ORDER BY created_at DESC, id LIMIT $1
 `
 
 func (q *Queries) ListKnownIssues(ctx context.Context, lim int32) ([]KnownIssue, error) {
@@ -431,6 +434,9 @@ func (q *Queries) ListKnownIssues(ctx context.Context, lim int32) ([]KnownIssue,
 			&i.LastHitAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.UpstreamStatus,
+			&i.UpstreamNote,
+			&i.LabelManaged,
 		); err != nil {
 			return nil, err
 		}

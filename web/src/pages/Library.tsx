@@ -84,11 +84,15 @@ export default function Library() {
               <li key={i.type + i.id} className="py-2 text-sm">
                 {i.type === 'doc_node' ? (
                   <Link to={`/docs/${i.id}`} className="font-medium text-brand-600">{i.title}</Link>
+                ) : i.type === 'confluence_page' || i.type === 'jira_issue' ? (
+                  <a href={i.path} target="_blank" rel="noreferrer" className="font-medium text-brand-600">{i.title}</a>
                 ) : (
                   <Link to={`/palace/${i.id}`} className="font-medium text-brand-600">{i.title}</Link>
                 )}
+                {i.type === 'confluence_page' && <Badge>Confluence</Badge>}
+                {i.type === 'jira_issue' && <Badge>Jira</Badge>}
                 {i.pinned && <Badge tone="amber">pinned</Badge>}
-                <p className="font-mono text-xs text-slate-500">{i.path}</p>
+                {i.type !== 'confluence_page' && i.type !== 'jira_issue' && <p className="font-mono text-xs text-slate-500">{i.path}</p>}
                 {i.summary && <p className="text-slate-600 dark:text-slate-400">{i.summary}</p>}
                 {i.note && <p className="text-xs italic text-slate-500">{i.note}</p>}
               </li>

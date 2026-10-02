@@ -35,8 +35,11 @@ func seedChunks(t *testing.T, st *store.Store, repo string, ids ...string) {
 	var cs []ports.Chunk
 	for _, id := range ids {
 		src := ports.SourceCode
-		if id[0] == 'd' {
+		switch id[0] {
+		case 'd':
 			src = ports.SourceGeneratedDoc
+		case 'k':
+			src = ports.SourceConfluence
 		}
 		cs = append(cs, ports.Chunk{ID: id, Scope: "s", Source: src, Path: "p", Symbol: id, Content: id, ContentHash: id})
 	}
@@ -74,6 +77,18 @@ func TestVectorIndexParity(t *testing.T) {
 			hits, _ = x.Search(ctx, []float32{0, 1, 0}, 5, ports.VectorFilter{RepoIDs: []string{repo}})
 			require.Len(t, hits, 1)
 			assert.Equal(t, "a", hits[0].ChunkID)
+
+			// Repo-less shared sources (Confluence, Jira) are visible to repo-scoped readers; repo-less code is not.
+			seedChunks(t, st, repo, "k1")
+			require.NoError(t, x.Upsert(ctx, 0, []ports.ChunkVector{{ChunkID: "k1", Source: ports.SourceConfluence, Vector: []float32{0, 0, 1}}}))
+			hits, _ = x.Search(ctx, []float32{0, 0.2, 1}, 5, ports.VectorFilter{RepoIDs: []string{repo}})
+			ids := make([]string, len(hits))
+			for i, h := range hits {
+				ids[i] = h.ChunkID
+			}
+			assert.Contains(t, ids, "k1")
+			assert.NotContains(t, ids, "b")
+			require.NoError(t, x.Delete(ctx, []string{"k1"}))
 
 			_, err = store.NewChunks(st).Apply(ctx, store.ChunkWrite{Remove: []string{"a"}})
 			require.NoError(t, err)

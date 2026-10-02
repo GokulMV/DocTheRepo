@@ -15,6 +15,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/auth"
 	"github.com/GokulMV/DocTheRepo/internal/core/llmgateway"
 	"github.com/GokulMV/DocTheRepo/internal/core/pipeline"
+	"github.com/GokulMV/DocTheRepo/internal/ingest"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
 	"github.com/GokulMV/DocTheRepo/internal/store"
 )
@@ -371,6 +372,17 @@ func firstN(xs []string, n int) []string {
 // syncConnector enqueues a push for every tracked repo of the connector whose branch moved.
 func (h *adminHandlers) syncConnector(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	if cc, err := h.d.Connectors.Get(r.Context(), id); err == nil && (cc.Type == "confluence" || cc.Type == "jira") {
+		job, _, err := h.d.Queue.Enqueue(r.Context(), ports.NewJob{Type: ports.JobKnowledgeSync, SerialKey: "knowledge:" + id,
+			DedupeKey: "knowledge:" + id, CorrelationID: correlationFor(r), Payload: ingest.SyncPayload{ConnectorID: id}, MaxAttempts: 3})
+		if err != nil {
+			WriteErr(w, r, err)
+			return
+		}
+		h.audit(r, "connector.sync", "connector", id, map[string]int{"jobs": 1})
+		WriteJSON(w, http.StatusAccepted, map[string]any{"job_ids": []string{job.ID}})
+		return
+	}
 	host, err := h.d.Host(r.Context(), id)
 	if err != nil {
 		WriteErr(w, r, err)

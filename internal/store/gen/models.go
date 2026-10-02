@@ -576,6 +576,7 @@ const (
 	LlmFeatureTriage    LlmFeature = "triage"
 	LlmFeatureEmbedding LlmFeature = "embedding"
 	LlmFeatureSuggest   LlmFeature = "suggest"
+	LlmFeatureDecide    LlmFeature = "decide"
 )
 
 func (e *LlmFeature) Scan(src interface{}) error {
@@ -624,6 +625,7 @@ const (
 	LlmProviderKindOpenaiCompat LlmProviderKind = "openai_compat"
 	LlmProviderKindOllama       LlmProviderKind = "ollama"
 	LlmProviderKindExternalCli  LlmProviderKind = "external_cli"
+	LlmProviderKindJev          LlmProviderKind = "jev"
 )
 
 func (e *LlmProviderKind) Scan(src interface{}) error {
@@ -838,6 +840,7 @@ const (
 	SavingsKindDecodeReused         SavingsKind = "decode_reused"
 	SavingsKindAnswerCacheHit       SavingsKind = "answer_cache_hit"
 	SavingsKindRenameRekey          SavingsKind = "rename_rekey"
+	SavingsKindDecisionGate         SavingsKind = "decision_gate"
 )
 
 func (e *SavingsKind) Scan(src interface{}) error {
@@ -882,6 +885,7 @@ const (
 	ShelfItemTypeEntity         ShelfItemType = "entity"
 	ShelfItemTypeConfluencePage ShelfItemType = "confluence_page"
 	ShelfItemTypeKnownIssue     ShelfItemType = "known_issue"
+	ShelfItemTypeJiraIssue      ShelfItemType = "jira_issue"
 )
 
 func (e *ShelfItemType) Scan(src interface{}) error {
@@ -1490,6 +1494,24 @@ type Job struct {
 	UpdatedAt     time.Time       `json:"updated_at"`
 }
 
+type KnowledgeDoc struct {
+	ID                string      `json:"id"`
+	ConnectorID       string      `json:"connector_id"`
+	Source            ChunkSource `json:"source"`
+	ExternalID        string      `json:"external_id"`
+	Space             string      `json:"space"`
+	Title             string      `json:"title"`
+	Url               string      `json:"url"`
+	Labels            []string    `json:"labels"`
+	Status            string      `json:"status"`
+	Done              bool        `json:"done"`
+	Path              string      `json:"path"`
+	Summary           string      `json:"summary"`
+	ContentHash       string      `json:"content_hash"`
+	UpstreamUpdatedAt *time.Time  `json:"upstream_updated_at"`
+	SyncedAt          time.Time   `json:"synced_at"`
+}
+
 type KnownIssue struct {
 	ID               string           `json:"id"`
 	Title            string           `json:"title"`
@@ -1510,6 +1532,9 @@ type KnownIssue struct {
 	LastHitAt        *time.Time       `json:"last_hit_at"`
 	CreatedAt        time.Time        `json:"created_at"`
 	UpdatedAt        time.Time        `json:"updated_at"`
+	UpstreamStatus   string           `json:"upstream_status"`
+	UpstreamNote     string           `json:"upstream_note"`
+	LabelManaged     bool             `json:"label_managed"`
 }
 
 type KnownIssueSuggestion struct {

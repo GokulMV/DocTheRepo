@@ -4,7 +4,7 @@ import { keys, useConnectors, useInvalidating } from '@/api/hooks';
 import type { Check, Connector } from '@/api/types';
 import { Badge, Button, Card, Dialog, Empty, ErrorNote, Field, Input, PageHeader, Select, Spinner, Table, Td, Textarea, statusTone } from '@/components/ui';
 import { relTime } from '@/lib/format';
-import { SOURCES, sourceSpec } from './signalSources';
+import { KNOWLEDGE, knowledgeSpec, SOURCES, sourceSpec } from './signalSources';
 
 function randomSecret() {
   const b = new Uint8Array(24);
@@ -163,18 +163,71 @@ function AddSignal({ onCreated }: { onCreated: (c: { id: string; type: string; s
   );
 }
 
+function AddKnowledge({ onCreated }: { onCreated: (type: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [type, setType] = useState<'confluence' | 'jira'>('confluence');
+  const spec = knowledgeSpec(type)!;
+  const [name, setName] = useState('');
+  const [config, setConfig] = useState<Record<string, string>>({});
+  const [token, setToken] = useState('');
+  const create = useInvalidating((b: object) => api.post<{ id: string }>('/connectors', b), keys.connectors);
+  return (
+    <>
+      <Button variant="secondary" onClick={() => setOpen(true)}>Add knowledge source</Button>
+      <Dialog open={open} onOpenChange={setOpen} title="Add a knowledge source" description="Confluence spaces and Jira projects, synced read-only for answers, decodes, the Library, and known issues.">
+        <form
+          className="space-y-3"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const cfg = Object.fromEntries(Object.entries(config).filter(([, v]) => v.trim() !== ''));
+            await create.mutateAsync({ type, name: name || spec.label, mode: 'poll', config: cfg, credentials: token });
+            onCreated(type);
+            setOpen(false);
+            setConfig({});
+            setToken('');
+          }}
+        >
+          <Field label="Source" hint={spec.help}>
+            <Select value={type} onChange={(e) => { setType(e.target.value as 'confluence' | 'jira'); setConfig({}); }}>
+              {KNOWLEDGE.map((k) => <option key={k.type} value={k.type}>{k.label}</option>)}
+            </Select>
+          </Field>
+          <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder={spec.label} /></Field>
+          {spec.config.map((c) => (
+            <Field key={c.key} label={c.label + (c.required ? '' : ' (optional)')} hint={c.hint}>
+              <Input value={config[c.key] ?? ''} required={c.required} placeholder={c.placeholder} onChange={(e) => setConfig({ ...config, [c.key]: e.target.value })} />
+            </Field>
+          ))}
+          <Field label="API token" hint="Cloud: an API token for the e-mail above · Data Center: a personal access token. Stored encrypted; never shown again.">
+            <Input type="password" required value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" />
+          </Field>
+          <ErrorNote error={create.error} />
+          <Button type="submit" disabled={create.isPending}>Add</Button>
+        </form>
+      </Dialog>
+    </>
+  );
+}
+
 export default function Connectors() {
   const conns = useConnectors();
   const [testing, setTesting] = useState<string>();
   const [created, setCreated] = useState<{ id: string; type: string; secret: string }>();
   const [signal, setSignal] = useState<{ id: string; type: string; secret: string; path: string }>();
+  const [knowledge, setKnowledge] = useState<string>();
   const sync = useInvalidating((id: string) => api.post<{ job_ids: string[] }>(`/connectors/${id}/sync`));
   const del = useInvalidating((id: string) => api.del(`/connectors/${id}`), keys.connectors, keys.repos);
   const toggle = useInvalidating((c: Connector) => api.patch(`/connectors/${c.id}`, { enabled: !c.enabled }), keys.connectors);
   return (
     <>
-      <PageHeader title="Connectors" description="Git hosts, plus the error, alert, log, and event-platform sources the Inbox reads. Confluence, Jira, Wiz and Splunk arrive next."
-        actions={<div className="flex gap-2"><AddSignal onCreated={setSignal} /><AddGit onCreated={(id, type, secret) => setCreated({ id, type, secret })} /></div>} />
+      <PageHeader title="Connectors" description="Git hosts, the error, alert, log, and event-platform sources the Inbox reads, and Confluence and Jira for knowledge. Wiz and Splunk arrive next."
+        actions={<div className="flex flex-wrap gap-2"><AddKnowledge onCreated={setKnowledge} /><AddSignal onCreated={setSignal} /><AddGit onCreated={(id, type, secret) => setCreated({ id, type, secret })} /></div>} />
+      {knowledge && (
+        <Card title="Syncing" className="mb-4">
+          <p className="text-sm">Saved. The first {knowledgeSpec(knowledge)?.label} sync starts within a minute; pages and issues then appear in Ask, the Library, and (when labelled) Known Issues. Health shows here after each sync.</p>
+          <Button size="sm" variant="secondary" className="mt-2" onClick={() => setKnowledge(undefined)}>Done</Button>
+        </Card>
+      )}
       {signal && (
         <Card title="Finish setup" className="mb-4">
           {signal.path ? (
@@ -218,9 +271,10 @@ export default function Connectors() {
                 <Td>{c.type}</Td>
                 <Td>{c.mode}</Td>
                 <Td><Badge tone={statusTone(c.health)}>{c.health}</Badge>{c.last_error && <p className="max-w-xs truncate text-xs text-red-600" title={c.last_error}>{c.last_error}</p>}</Td>
-                <Td>{relTime(c.last_sync_at)}{c.mode !== 'webhook' && sourceSpec(c.type) && <p className="text-xs text-slate-500">polled every {c.poll_seconds}s</p>}</Td>
+                <Td>{relTime(c.last_sync_at)}{c.mode !== 'webhook' && sourceSpec(c.type) && <p className="text-xs text-slate-500">polled every {c.poll_seconds}s</p>}{knowledgeSpec(c.type) && <p className="text-xs text-slate-500">synced every {Math.round(c.poll_seconds / 60)} min</p>}</Td>
                 <Td>
                   <div className="flex flex-wrap gap-1">
+                    {knowledgeSpec(c.type) && <Button size="sm" variant="secondary" onClick={() => sync.mutate(c.id)}>Sync now</Button>}
                     {(c.type === 'github' || c.type === 'gitlab') && (
                       <>
                         <Button size="sm" variant="secondary" onClick={() => setTesting(c.id)}>Test</Button>
@@ -236,7 +290,7 @@ export default function Connectors() {
           </Table>
         </Card>
       )}
-      {sync.data && <p className="mt-2 text-sm text-slate-600">Queued {sync.data.job_ids.length} push job(s).</p>}
+      {sync.data && <p className="mt-2 text-sm text-slate-600">Queued {sync.data.job_ids.length} sync job(s).</p>}
       {testing && <TestResult id={testing} onClose={() => setTesting(undefined)} />}
     </>
   );

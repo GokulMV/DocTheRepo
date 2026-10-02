@@ -55,3 +55,36 @@ export const SOURCES: SourceSpec[] = [
 ];
 
 export const sourceSpec = (type: string) => SOURCES.find((s) => s.type === type);
+
+// Knowledge sources (Confluence, Jira): synced read-only every 15 minutes for Q&A, decode runbooks, the
+// Library, and known-issue import.
+export interface KnowledgeSpec {
+  type: 'confluence' | 'jira';
+  label: string;
+  config: { key: string; label: string; hint: string; required?: boolean; placeholder?: string }[];
+  help: string;
+}
+
+const labelField = { key: 'known_issue_label', label: 'Known-issue label', hint: 'Issues/pages with this label become draft known-issue rules (default known-issue; "-" turns import off).' };
+
+export const KNOWLEDGE: KnowledgeSpec[] = [
+  { type: 'confluence', label: 'Confluence', help: 'Pages in the listed spaces are synced (changed pages every 15 minutes, deletions daily). Use a read-only account.',
+    config: [
+      { key: 'base_url', label: 'Site URL', hint: 'Cloud: https://<site>.atlassian.net/wiki · Data Center: https://confluence.example.com', required: true, placeholder: 'https://acme.atlassian.net/wiki' },
+      { key: 'spaces', label: 'Spaces', hint: 'Space keys, comma-separated', required: true, placeholder: 'ENG, OPS' },
+      { key: 'email', label: 'Account e-mail', hint: 'Cloud only (with an API token). Leave empty for a Data Center personal access token.' },
+      { key: 'timezone', label: 'Time zone', hint: 'The account’s Confluence time zone (IANA, e.g. Europe/Berlin); speeds up incremental sync.' },
+      labelField,
+    ] },
+  { type: 'jira', label: 'Jira', help: 'Issues in the listed projects are synced. A labelled issue moving to Done turns its rule from suppress to label only.',
+    config: [
+      { key: 'base_url', label: 'Site URL', hint: 'Cloud: https://<site>.atlassian.net · Data Center: https://jira.example.com', required: true, placeholder: 'https://acme.atlassian.net' },
+      { key: 'projects', label: 'Projects', hint: 'Project keys, comma-separated', required: true, placeholder: 'ENG, OPS' },
+      { key: 'email', label: 'Account e-mail', hint: 'Cloud only (with an API token). Leave empty for a Data Center personal access token.' },
+      { key: 'jql', label: 'Extra JQL filter', hint: 'ANDed into every query, e.g. issuetype in (Bug, Incident)' },
+      { key: 'lookback_days', label: 'History on first sync (days)', hint: 'Default 365' },
+      labelField,
+    ] },
+];
+
+export const knowledgeSpec = (type: string) => KNOWLEDGE.find((k) => k.type === type);

@@ -398,6 +398,14 @@ export interface KnownIssue {
   source: string;
   owner_user_id?: string;
   ticket_url?: string;
+  jira_key?: string;
+  confluence_page_id?: string;
+  /** Linked Jira issue's status at the last sync. */
+  upstream_status?: string;
+  /** Why a sync changed the rule (e.g. "Fixed upstream … verify"). */
+  upstream_note?: string;
+  /** Imported from a labelled Jira issue / Confluence page; follows the label. */
+  label_managed?: boolean;
   hits: number;
   last_hit_at?: string;
   created_at: string;
@@ -451,6 +459,20 @@ export interface TextSuggestion {
   extracted: { exceptions?: string[]; error_codes?: string[]; quoted_messages?: string[]; services?: string[]; resources?: string[] };
   matching_issues_last_7d: number;
   sample_issue_ids: string[];
+  /** Set by from-link: the Jira issue or Confluence page that was fetched. */
+  link?: LinkedDoc;
+}
+
+export interface LinkedDoc {
+  source: 'jira' | 'confluence';
+  external_id: string;
+  title: string;
+  url: string;
+  status?: string;
+  done: boolean;
+  jira_key?: string;
+  confluence_page_id?: string;
+  source_text: string;
 }
 
 export const KNOWN_REASONS = ['known_bug', 'wont_fix', 'third_party', 'expected_noise', 'cannot_action', 'in_progress'] as const;

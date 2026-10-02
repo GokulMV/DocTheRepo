@@ -2,6 +2,7 @@ package ports
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 )
 
@@ -47,4 +48,35 @@ type KnowledgeSource interface {
 // documents deleted upstream are removed from the index.
 type KnowledgeReconciler interface {
 	IDs(ctx context.Context, cc ConnectorConfig, stream string) ([]string, error)
+}
+
+// UpstreamRule is a known-issue rule tied to a Jira issue or Confluence page.
+type UpstreamRule struct {
+	ID           string
+	Source       string // jira | confluence
+	Ref          string // issue key or page ID
+	Action       string // suppress | label_only
+	Enabled      bool
+	LabelManaged bool // created by label import (label removal flips it too)
+	UpstreamNote string
+}
+
+// ImportedRule is a draft known-issue rule created from a labelled Jira issue or Confluence page. It is
+// stored disabled: nothing is suppressed until a human reviews and enables it.
+type ImportedRule struct {
+	Source, Ref                          string
+	Title, Description, Explanation      string
+	SourceText, TicketURL, Reason        string
+	Action, UpstreamStatus, UpstreamNote string
+	// Match is a knownissues.Match (possibly empty: the human completes it before enabling).
+	Match json.RawMessage
+}
+
+// KnowledgeApplied summarises storing a batch of knowledge documents.
+type KnowledgeApplied struct {
+	Docs, Added, Changed, Removed, Unchanged int
+	// Links counts Palace links to mentioned services, repositories, and endpoints.
+	Links int
+	// Embed are the chunks whose content changed and need (re-)embedding.
+	Embed []Chunk `json:"-"`
 }

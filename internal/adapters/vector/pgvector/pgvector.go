@@ -188,7 +188,7 @@ func (x *Index) Search(ctx context.Context, vec []float32, k int, f ports.Vector
 		}
 		rows, err := tx.Query(ctx, fmt.Sprintf(`SELECT e.chunk_id, 1 - (e.embedding <=> $1::vector) AS score
 			FROM %s e JOIN chunks c ON c.chunk_id = e.chunk_id AND c.deleted_at IS NULL
-			WHERE (cardinality($2::uuid[]) = 0 OR e.repo_id = ANY($2::uuid[]))
+			WHERE (cardinality($2::uuid[]) = 0 OR e.repo_id = ANY($2::uuid[]) OR (e.repo_id IS NULL AND e.source::text IN ('confluence', 'jira')))
 			  AND (cardinality($3::text[]) = 0 OR e.source::text = ANY($3::text[]))
 			ORDER BY e.embedding <=> $1::vector LIMIT $4`, viewName), Encode(vec), nonNil(repos), nonNil(sources), k)
 		if err != nil {

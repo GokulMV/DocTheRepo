@@ -232,9 +232,14 @@ func (s *Server) retrieve(w http.ResponseWriter, r *http.Request) {
 
 type condition struct {
 	Key   string `json:"key"`
-	Match struct {
+	Match *struct {
 		Any []any `json:"any"`
 	} `json:"match"`
+	IsEmpty *struct {
+		Key string `json:"key"`
+	} `json:"is_empty"`
+	Must   []condition `json:"must"`
+	Should []condition `json:"should"`
 }
 
 func (s *Server) search(w http.ResponseWriter, r *http.Request) {
@@ -287,17 +292,38 @@ func (s *Server) search(w http.ResponseWriter, r *http.Request) {
 
 func matches(payload map[string]any, must []condition) bool {
 	for _, c := range must {
-		v := payload[c.Key]
-		ok := false
-		for _, a := range c.Match.Any {
-			if a == v {
-				ok = true
-				break
-			}
-		}
-		if !ok {
+		if !eval(payload, c) {
 			return false
 		}
+	}
+	return true
+}
+
+// eval supports the subset the adapter sends: match-any, is_empty, and nested must/should.
+func eval(payload map[string]any, c condition) bool {
+	switch {
+	case c.Match != nil:
+		v := payload[c.Key]
+		for _, a := range c.Match.Any {
+			if a == v {
+				return true
+			}
+		}
+		return false
+	case c.IsEmpty != nil:
+		v, ok := payload[c.IsEmpty.Key]
+		return !ok || v == nil
+	}
+	if len(c.Must) > 0 && !matches(payload, c.Must) {
+		return false
+	}
+	if len(c.Should) > 0 {
+		for _, s := range c.Should {
+			if eval(payload, s) {
+				return true
+			}
+		}
+		return false
 	}
 	return true
 }

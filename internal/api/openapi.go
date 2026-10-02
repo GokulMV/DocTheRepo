@@ -89,6 +89,7 @@ var Operations = []op{
 	{"DELETE", "/api/v1/known-issues/{id}", "Known issues", "Delete a rule", "editor", false, false},
 	{"POST", "/api/v1/known-issues/test", "Known issues", "Dry-run a rule against the last 7 days", "editor", true, false},
 	{"POST", "/api/v1/known-issues/from-text", "Known issues", "Propose a rule from pasted text (nothing is enabled)", "editor", true, false},
+	{"POST", "/api/v1/known-issues/from-link", "Known issues", "Propose a rule from a Jira issue or Confluence page URL, fetched through its connector (nothing is enabled)", "editor", true, false},
 	{"GET", "/api/v1/known-issues/suggestions", "Known issues", "Auto-suggested rules awaiting review", "editor", false, false},
 	{"POST", "/api/v1/known-issues/suggestions/{id}/{decision}", "Known issues", "Accept (enables the rule) or reject a suggestion", "editor", true, false},
 	{"GET", "/api/v1/openapi.json", "Meta", "This document", "", false, false},

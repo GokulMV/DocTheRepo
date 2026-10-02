@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '@/api/client';
 import { useInvalidating, useKnownIssues, useMe, useSuggestions } from '@/api/hooks';
-import { atLeast, KNOWN_REASONS, type KnownIssue, type Match, type Suggestion, type TextSuggestion } from '@/api/types';
+import { atLeast, KNOWN_REASONS, type KnownIssue, type LinkedDoc, type Match, type Suggestion, type TextSuggestion } from '@/api/types';
 import { MatchEditor, RuleTester, reasonLabel } from '@/components/signals';
 import { Badge, Button, Card, Dialog, Empty, ErrorNote, Field, Input, PageHeader, Select, Spinner, Table, Td, Textarea, cx } from '@/components/ui';
 import { num, relTime } from '@/lib/format';
@@ -17,13 +17,22 @@ const describe = (m: Match) =>
     m.max_severity ? `up to ${m.max_severity}` : '',
   ].filter(Boolean).join(' · ') || 'everything (invalid)';
 
-function RuleDialog({ initial, onDone }: { initial?: Partial<KnownIssue>; onDone: () => void }) {
+// origin records where a saved proposal came from (pasted text, or a fetched Jira issue / Confluence page).
+type Origin = { source: string; jira_key?: string; confluence_page_id?: string; ticket_url?: string; explanation?: string; source_text?: string };
+
+function originOf(res: TextSuggestion, pasted: string): Origin {
+  const l = res.link;
+  if (!l) return { source: 'pasted', explanation: res.explanation, source_text: pasted };
+  return { source: l.source, jira_key: l.jira_key, confluence_page_id: l.confluence_page_id, ticket_url: l.url, explanation: res.explanation, source_text: l.source_text };
+}
+
+function RuleDialog({ initial, origin, onDone }: { initial?: Partial<KnownIssue>; origin?: Origin; onDone: () => void }) {
   const [title, setTitle] = useState(initial?.title ?? '');
   const [reason, setReason] = useState(initial?.reason ?? 'known_bug');
   const [action, setAction] = useState(initial?.action ?? 'suppress');
   const [match, setMatch] = useState<Match>(initial?.match ?? {});
   const [description, setDescription] = useState(initial?.description ?? '');
-  const save = useInvalidating(() => api.post<KnownIssue>('/known-issues', { title, reason, action, match, description }), ['known-issues'], ['issues']);
+  const save = useInvalidating(() => api.post<KnownIssue>('/known-issues', { title, reason, action, match, description, ...origin }), ['known-issues'], ['issues']);
   return (
     <Dialog open onOpenChange={(o) => !o && onDone()} title="New known-issue rule" description="Every field you fill must match. Test it before saving.">
       <form className="space-y-3" onSubmit={async (e) => { e.preventDefault(); await save.mutateAsync(undefined); onDone(); }}>
@@ -63,7 +72,15 @@ function Rules({ canEdit }: { canEdit: boolean }) {
         <Table head={['Rule', 'Matches', 'Hits', 'Status', '']}>
           {rules.data.map((k) => (
             <tr key={k.id}>
-              <Td className="max-w-sm"><span className="font-medium">{k.title}</span><p className="text-xs text-slate-500">{reasonLabel(k.reason)} · {k.source}{k.action === 'label_only' && ' · label only'}</p></Td>
+              <Td className="max-w-sm">
+                <span className="font-medium">{k.title}</span>
+                <p className="text-xs text-slate-500">
+                  {reasonLabel(k.reason)} · {k.source}{k.label_managed && ' (label)'}{k.action === 'label_only' && ' · label only'}
+                  {k.ticket_url && <> · <a className="text-brand-700 hover:underline dark:text-brand-100" href={k.ticket_url} target="_blank" rel="noreferrer">{k.jira_key || 'page'}</a></>}
+                  {k.upstream_status && <> · {k.upstream_status}</>}
+                </p>
+                {k.upstream_note && <p className="mt-1"><Badge tone="amber">verify</Badge> <span className="text-xs text-amber-800 dark:text-amber-200">{k.upstream_note}</span></p>}
+              </Td>
               <Td className="max-w-md text-xs">{describe(k.match)}</Td>
               <Td>{num(k.hits)}{k.last_hit_at && <p className="text-xs text-slate-500">{relTime(k.last_hit_at)}</p>}</Td>
               <Td>
@@ -124,13 +141,34 @@ function Suggestions() {
   );
 }
 
+function LinkedDocNote({ l }: { l: LinkedDoc }) {
+  return (
+    <p className="text-xs text-slate-500">
+      From {l.source === 'jira' ? 'Jira' : 'Confluence'}: <a className="text-brand-700 hover:underline dark:text-brand-100" href={l.url} target="_blank" rel="noreferrer">{l.title}</a>
+      {l.status && <> · {l.status}</>}
+      {l.done && <> <Badge tone="amber">done upstream</Badge> consider “label only” so its errors stay visible</>}
+    </p>
+  );
+}
+
 function FromText() {
   const [text, setText] = useState('');
+  const [url, setUrl] = useState('');
   const [res, setRes] = useState<TextSuggestion>();
   const [saving, setSaving] = useState(false);
   const run = useInvalidating((t: string) => api.post<TextSuggestion>('/known-issues/from-text', { text: t }));
+  const fromLink = useInvalidating((u: string) => api.post<TextSuggestion>('/known-issues/from-link', { url: u }));
   return (
-    <Card title="From text" actions={<span className="text-xs text-slate-500">Paste an incident note, runbook, or ticket. Secrets are scrubbed before the model sees it.</span>}>
+    <Card title="From text or a link" actions={<span className="text-xs text-slate-500">Paste an incident note, runbook, or ticket — or a Jira issue / Confluence page URL. Secrets are scrubbed before the model sees it.</span>}>
+      <form className="mb-4 flex flex-wrap items-end gap-2" onSubmit={async (e) => { e.preventDefault(); setText(''); setRes(await fromLink.mutateAsync(url.trim())); }}>
+        <div className="min-w-[18rem] flex-1">
+          <Field label="Jira issue or Confluence page URL">
+            <Input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://acme.atlassian.net/browse/ENG-412" />
+          </Field>
+        </div>
+        <Button type="submit" disabled={fromLink.isPending || !url.trim()}>Explain link</Button>
+      </form>
+      <ErrorNote error={fromLink.error} />
       <form className="space-y-3" onSubmit={async (e) => { e.preventDefault(); setRes(await run.mutateAsync(text)); }}>
         <Textarea aria-label="Text" rows={6} value={text} onChange={(e) => setText(e.target.value)} placeholder={'e.g. "upstream request timeout" from checkout during the nightly batch is expected until ORD-412 ships.'} />
         <Button type="submit" disabled={run.isPending || !text.trim()}>Find matching issues</Button>
@@ -138,6 +176,7 @@ function FromText() {
       <ErrorNote error={run.error} />
       {res && (
         <div className="mt-4 space-y-3 text-sm">
+          {res.link && <LinkedDocNote l={res.link} />}
           <p>{res.explanation} <Badge tone={res.confidence === 'high' ? 'green' : res.confidence === 'medium' ? 'amber' : 'gray'}>{res.confidence}</Badge></p>
           <p className="text-xs text-slate-500">Proposed rule: {describe(res.proposed_match)} · would match {res.matching_issues_last_7d} issue(s) in the last 7 days.</p>
           {res.candidates.length > 0 && (
@@ -152,12 +191,19 @@ function FromText() {
           {(res.proposed_match.fingerprints?.length ?? 0) > 0 && <Button onClick={() => setSaving(true)}>Review and save as a rule</Button>}
         </div>
       )}
-      {saving && res && <RuleDialog initial={{ title: res.candidates[0]?.title ?? '', reason: res.reason, match: res.proposed_match, description: text.slice(0, 2000) }} onDone={() => setSaving(false)} />}
+      {saving && res && (
+        <RuleDialog
+          initial={{ title: res.link?.title ?? res.candidates[0]?.title ?? '', reason: res.reason, match: res.proposed_match,
+            action: res.link?.done ? 'label_only' : 'suppress', description: (res.link ? res.link.url : text).slice(0, 2000) }}
+          origin={originOf(res, text)}
+          onDone={() => setSaving(false)}
+        />
+      )}
     </Card>
   );
 }
 
-const TABS = ['Rules', 'Suggestions', 'From text'] as const;
+const TABS = ['Rules', 'Suggestions', 'From text'] as const; // "From text" also explains Jira/Confluence links
 
 export default function KnownIssues() {
   const me = useMe();

@@ -67,3 +67,23 @@ ON CONFLICT DO NOTHING;
 
 -- name: ShelfItems :many
 SELECT si.* FROM shelf_items si JOIN library_shelves s ON s.id = si.shelf_id WHERE s.slug = sqlc.arg(slug) ORDER BY si.item_id;
+
+-- name: RetireSharedSourceEdges :exec
+-- Edges a repo-less document (Confluence page, Jira issue) contributed; re-linking revives what remains.
+UPDATE edges SET deleted_at = now() WHERE repo_id IS NULL AND source_path = sqlc.arg(source_path) AND deleted_at IS NULL;
+
+-- name: RetireEntity :exec
+UPDATE entities SET deleted_at = now() WHERE kind = sqlc.arg(kind) AND key = sqlc.arg(key) AND deleted_at IS NULL;
+
+-- name: MentionableEntities :many
+-- Entities prose can name (Palace links for Confluence/Jira): services, repositories, endpoints.
+SELECT kind, key, name FROM entities
+WHERE deleted_at IS NULL AND kind IN ('service', 'repo', 'endpoint')
+ORDER BY kind, key
+LIMIT 50000;
+
+-- name: LiveEntityID :one
+SELECT id FROM entities WHERE kind = sqlc.arg(kind) AND key = sqlc.arg(key) AND deleted_at IS NULL;
+
+-- name: DeleteShelfItemsFor :exec
+DELETE FROM shelf_items WHERE item_type = sqlc.arg(item_type) AND item_id = sqlc.arg(item_id);

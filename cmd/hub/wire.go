@@ -13,6 +13,8 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/GokulMV/DocTheRepo/internal/adapters/codehost"
+	"github.com/GokulMV/DocTheRepo/internal/adapters/knowledge/confluence"
+	"github.com/GokulMV/DocTheRepo/internal/adapters/knowledge/jira"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/llm"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/push"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/push/lifecycle"
@@ -83,6 +85,8 @@ type app struct {
 	decoder     *decode.Decoder
 	suggestions *store.Suggestions
 	suggest     *suggest.Service
+	// Knowledge: Confluence and Jira sync (Phase 13).
+	knowledge *ingest.KnowledgeSync
 }
 
 func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.Box, q *queue.Queue, log *slog.Logger, m *observability.Metrics) (*app, error) {
@@ -209,6 +213,17 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 		Decide: gw.Decide, GateThreshold: cfg.Decide.GateThreshold, Estimate: a.signalStore.DecodeEstimate}
 	a.suggestions = store.NewSuggestions(st, a.knownIssues)
 	a.suggest = &suggest.Service{Store: a.suggestions, GW: gw, Index: a.index}
+	a.knowledge = &ingest.KnowledgeSync{Store: conns, Queue: q, Docs: store.NewKnowledge(st, shelves), Rules: a.knownIssues,
+		Sources: map[string]ports.KnowledgeSource{"confluence": confluence.New(), "jira": jira.New()},
+		Embed:   indexer.Embed, ReloadRules: a.signals.Reload,
+		Propose: func(ctx context.Context, text string) (ingest.Proposal, error) {
+			res, err := a.suggest.FromText(ctx, text, nil, "")
+			if err != nil {
+				return ingest.Proposal{}, err
+			}
+			m, _ := json.Marshal(res.ProposedMatch)
+			return ingest.Proposal{Explanation: res.Explanation, Reason: res.Reason, Match: m}, nil
+		}}
 	a.pipe = &pipeline.Pipeline{Repos: repos, Chunks: a.chunks, Graph: store.NewGraph(st), Docs: a.docs, Savings: store.NewSavings(st),
 		Hosts: a.hosts.Host, Lander: &push.Dispatcher{PRs: prs, Lifecycle: a.sweeper}, GW: gw, DocGen: &docgen.Generator{GW: gw},
 		Indexer: indexer, Grammars: reg, Log: log.With("component", "pipeline")}
@@ -222,6 +237,7 @@ func (a *app) registerHandlers(pool *queue.Pool) {
 	pool.Register(ports.JobReindex, a.pipe.Reindex)
 	pool.Register(ports.JobSignalBatch, a.polls.Handle)
 	pool.Register(ports.JobDecodeIssue, ingest.DecodeHandler(a.decoder))
+	pool.Register(ports.JobKnowledgeSync, a.knowledge.Handle)
 	pool.Register(ports.JobPRReview, func(ctx context.Context, job ports.Job) (ports.Outcome, error) {
 		var pl ingest.ReviewPayload
 		if err := json.Unmarshal(job.Payload, &pl); err != nil {
@@ -258,6 +274,10 @@ func (a *app) tasks() []scheduler.Task {
 		}},
 		{Name: "poll_signal_connectors", Every: 15 * time.Second, RunFirst: true, Fn: func(ctx context.Context) error {
 			_, err := a.polls.Enqueue(ctx)
+			return err
+		}},
+		{Name: "sync_knowledge_connectors", Every: 30 * time.Second, RunFirst: true, Fn: func(ctx context.Context) error {
+			_, err := a.knowledge.Enqueue(ctx)
 			return err
 		}},
 		{Name: "pr_lifecycle_sweep", Every: max(a.cfg.Docs.PRSweepInterval, time.Second), Fn: a.sweeper.Sweep},
@@ -324,7 +344,8 @@ func (a *app) v1Routes() []func(chi.Router) {
 		api.AdminRoutes(admin),
 		api.OpsRoutes(a.q, a.browse, a.auth),
 		api.IssueRoutes(api.IssueDeps{Auth: a.auth, Issues: store.NewIssues(a.st, a.knownIssues), KnownIssues: a.knownIssues,
-			Suggestions: a.suggestions, Suggest: a.suggest, Queue: a.q, ReloadRules: a.signals.Reload}),
+			Suggestions: a.suggestions, Suggest: a.suggest, Queue: a.q, ReloadRules: a.signals.Reload,
+			FetchLink: a.knowledge.FetchLink}),
 	}
 }
 

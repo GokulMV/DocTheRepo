@@ -281,6 +281,8 @@ func runJob(t *testing.T, a *app, q *queue.Queue, typ ports.JobType) string {
 		out, err = a.pipe.ImportDocs(ctx, *job)
 	case ports.JobDecodeIssue:
 		out, err = ingest.DecodeHandler(a.decoder)(ctx, *job)
+	case ports.JobKnowledgeSync:
+		out, err = a.knowledge.Handle(ctx, *job)
 	}
 	require.NoError(t, err)
 	status := out.Status
