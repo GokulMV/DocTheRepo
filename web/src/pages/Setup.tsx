@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
-import { ArrowRight, BookOpen, ChevronDown, CircleCheck, Cpu, FolderGit2, Plug, type LucideIcon } from 'lucide-react';
+import { ArrowRight, BookOpen, ChevronDown, CircleCheck, Cpu, FolderGit2, KeyRound, Plug, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
-import { useConnectors, useLimits, useProviders, useRepos, useRoutes, useTree } from '@/api/hooks';
+import { useAuthConfig, useConnectors, useLimits, useMe, useProviders, useRepos, useRoutes, useTree } from '@/api/hooks';
 import { PageHeader, Spinner, cx } from '@/components/ui';
 
 interface Step {
@@ -15,7 +15,12 @@ interface Step {
   to: string;
   action: string;
   icon: LucideIcon;
+  /** A secondary way to mark the step done. */
+  skip?: { label: string; onClick: () => void };
 }
+
+const SIGNIN_OK = 'dth.setup.passwords-enough';
+const readFlag = (k: string) => { try { return localStorage.getItem(k) === '1'; } catch { return false; } };
 
 /**
  * Setup is the first-run checklist: three steps to useful docs and answers, each saying what you need and
@@ -28,13 +33,28 @@ export default function Setup() {
   const repos = useRepos();
   const limits = useLimits();
   const docs = useTree();
+  const me = useMe();
+  const authCfg = useAuthConfig();
   const [more, setMore] = useState(false);
+  const [passwordsEnough, setPasswordsEnough] = useState(() => readFlag(SIGNIN_OK));
   if (conns.isLoading || providers.isLoading || routes.isLoading || repos.isLoading) return <Spinner />;
   const routed = new Set(routes.data?.items.map((r) => r.feature));
   const git = conns.data?.filter((c) => c.type === 'github' || c.type === 'gitlab') ?? [];
   const tracked = repos.data ?? [];
   const hasDocs = (docs.data?.length ?? 0) > 0;
+  const owner = me.data?.role === 'owner';
+  const sso = !!authCfg.data?.sso;
+  const signIn: Step[] = owner ? [{
+    title: 'Choose how your team signs in',
+    done: sso || passwordsEnough,
+    why: 'Single sign-on lets people use their company account (Google, Microsoft, Okta, Keycloak). It can be set up before anything else.',
+    need: 'An app in your identity provider: the page shows the steps for each one and the callback URL to register. Or keep email and password and send people links.',
+    status: sso ? 'Single sign-on is on' : passwordsEnough ? 'Email and password' : undefined,
+    to: '/sign-in', action: 'Set up sign-in', icon: KeyRound,
+    skip: sso ? undefined : { label: 'Passwords are enough', onClick: () => { try { localStorage.setItem(SIGNIN_OK, '1'); } catch { /* private mode */ } setPasswordsEnough(true); } },
+  }] : [];
   const steps: Step[] = [
+    ...signIn,
     {
       title: 'Connect GitHub',
       done: git.length > 0,
@@ -79,7 +99,7 @@ export default function Setup() {
   ];
   return (
     <>
-      <PageHeader title="Setup" description={done === steps.length ? 'Everything is set up. This page stays as a health check.' : `Three steps to docs and answers. ${done} of ${steps.length} done.`} />
+      <PageHeader title="Setup" description={done === steps.length ? 'Everything is set up. This page stays as a health check.' : `A few steps to docs and answers. ${done} of ${steps.length} done.`} />
       <div className="max-w-3xl">
         <ol className="space-y-3">
           {steps.map((s, i) => {
@@ -112,6 +132,7 @@ export default function Setup() {
                   <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">{s.why}</p>
                   {!s.done && <p className="mt-1.5 text-xs text-slate-500"><b className="font-medium text-slate-600 dark:text-slate-300">You need:</b> {s.need}</p>}
                   {s.status && <p className="mt-1.5 text-xs text-slate-500">{s.status}</p>}
+                  {!s.done && s.skip && <button type="button" onClick={s.skip.onClick} className="mt-1.5 text-xs font-medium text-slate-500 underline hover:text-slate-700 dark:hover:text-slate-300">{s.skip.label}</button>}
                 </div>
                 <Link
                   to={s.to}

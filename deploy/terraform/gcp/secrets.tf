@@ -11,11 +11,14 @@ locals {
     var.auth_mode == "oidc" ? { "oidc-client-secret" = "DTH_OIDC_CLIENT_SECRET" } : {},
     # Local mode: the owner's first password (used only while the users table is empty).
     var.auth_mode == "local" ? { "owner-password" = "DTH_OWNER_PASSWORD" } : {},
+    # Settings applied at start (sign-in, users, models…), generated with `dth init`.
+    nonsensitive(var.hub_settings != "") ? { "hub-settings" = "DTH_SETTINGS" } : {},
   )
   secret_values = {
     "database-url"       = "postgres://dth:${random_password.db.result}@${google_sql_database_instance.hub.private_ip_address}:5432/dth?sslmode=require"
     "oidc-client-secret" = var.oidc_client_secret
     "owner-password"     = try(random_password.owner[0].result, "")
+    "hub-settings"       = var.hub_settings
   }
 }
 

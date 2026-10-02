@@ -58,6 +58,13 @@ type SettingsConfig struct {
 	FileRoot string `yaml:"file_root"`
 	// RequireSealed refuses provider keys and connector secrets that are not sealed to the Hub's key.
 	RequireSealed bool `yaml:"require_sealed_secrets"`
+	// ApplyOnStart are settings files or directories applied when the Hub starts (DTH_SETTINGS_FILE,
+	// comma-separated), so a deployment comes up with sign-in, users, models and repositories in place.
+	// They are the operator's own files: every secret reference scheme works in them.
+	ApplyOnStart []string `yaml:"apply_on_start"`
+	// Inline is a settings document applied at start, for platforms where mounting a file is awkward
+	// (DTH_SETTINGS; ECS and Cloud Run can fill it from a secret).
+	Inline string `yaml:"-"`
 }
 
 // DecideConfig controls decisions behind confidence gates (plan Phase 11.5). They only run when a
@@ -281,6 +288,12 @@ func applyEnv(cfg *Config) error {
 	}
 	if v, ok := os.LookupEnv("DTH_REQUIRE_SEALED_SECRETS"); ok {
 		cfg.Settings.RequireSealed = v == "1" || strings.EqualFold(v, "true")
+	}
+	if v, ok := os.LookupEnv("DTH_SETTINGS_FILE"); ok {
+		cfg.Settings.ApplyOnStart = splitList(v)
+	}
+	if v, ok := os.LookupEnv("DTH_SETTINGS"); ok {
+		cfg.Settings.Inline = v
 	}
 	if v, ok := os.LookupEnv("DTH_SETTINGS_SECRET_SOURCES"); ok {
 		cfg.Settings.SecretSources = splitList(v)

@@ -25,6 +25,10 @@ const CSRFHeader = "X-CSRF-Token"
 func authenticate(svc *auth.Service) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if sp := auth.FromContext(r.Context()); sp != nil && sp.Via == "system" {
+				next.ServeHTTP(w, r) // an in-process call by the Hub itself (see auth.SystemPrincipal)
+				return
+			}
 			var (
 				p   *auth.Principal
 				err error

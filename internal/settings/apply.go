@@ -21,7 +21,7 @@ type API interface {
 
 // Change is one line of a plan or an apply report. It never carries secret values.
 type Change struct {
-	Kind   string   `json:"kind"` // provider, connector, route, repo, spend
+	Kind   string   `json:"kind"` // auth, user, provider, connector, route, repo, spend
 	Name   string   `json:"name"`
 	Action string   `json:"action"` // create, update, unchanged, failed
 	Fields []string `json:"fields,omitempty"`
@@ -142,7 +142,7 @@ func fetchState(ctx context.Context, api API) (*state, error) {
 const pendingID = "(new)"
 
 // Apply makes the Hub match doc: it creates what is missing and updates what differs, in dependency order
-// (providers, connectors, routes, repositories, spend). It never deletes. It stops at the first error;
+// (sign-in, users, providers, connectors, routes, repositories, spend). It never deletes. It stops at the first error;
 // everything before it is applied, and running it again is safe.
 func Apply(ctx context.Context, api API, doc Document, dryRun bool) (Result, error) {
 	res := Result{DryRun: dryRun, Changes: []Change{}}
@@ -161,7 +161,7 @@ func Apply(ctx context.Context, api API, doc Document, dryRun bool) (Result, err
 	for _, r := range st.repos {
 		a.repoIDs[r.FullName] = r.ID
 	}
-	steps := []func(context.Context, Document) error{a.providers, a.connectors, a.routes, a.repos, a.spend}
+	steps := []func(context.Context, Document) error{a.auth, a.users, a.providers, a.connectors, a.routes, a.repos, a.spend}
 	for _, step := range steps {
 		if err := step(ctx, doc); err != nil {
 			res.Error = err.Error()

@@ -181,3 +181,10 @@ variable "oidc_allowed_domains" {
   type        = list(string)
   default     = []
 }
+
+variable "hub_settings" {
+  description = "Optional settings file (YAML) applied when the Hub starts: sign-in and SSO, users and owners, models, connectors, repositories. Generate one with `dth init`. Stored in the secret manager, never in the task definition."
+  type        = string
+  default     = ""
+  sensitive   = true
+}

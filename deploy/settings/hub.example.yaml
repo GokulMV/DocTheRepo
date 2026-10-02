@@ -2,6 +2,22 @@
 # Secrets are references resolved where you run dth apply; the file is safe to commit.
 version: 1
 
+# How people sign in (needs the owner role to apply). Passwords off + SSO land together.
+auth:
+  password: false
+  sso:
+    provider: okta                                # google | microsoft | okta | keycloak | other (a label)
+    issuer: https://acme.okta.com
+    client_id: 0oa1b2c3d4
+    client_secret: ${env:DTH_SECRET_OIDC_CLIENT_SECRET}
+    allowed_domains: [acme.com]
+    groups_claim: groups
+
+# People, matched by email. A listed owner owns the Hub from their first sign-in. Nobody is ever removed.
+users:
+  - { email: ann@acme.com, role: owner }
+  - { email: bo@acme.com, role: admin }
+
 providers:
   - name: anthropic
     kind: anthropic

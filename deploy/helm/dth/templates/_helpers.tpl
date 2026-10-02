@@ -113,6 +113,13 @@ app.kubernetes.io/component: {{ .role }}
       name: {{ .Values.auth.local.existingSecret }}
       key: {{ .Values.auth.local.key }}
 {{- end }}
+{{- if or .Values.settings.existingSecret .Values.settings.inline }}
+- name: DTH_SETTINGS
+  valueFrom:
+    secretKeyRef:
+      name: {{ default (printf "%s-settings" (include "dth.fullname" .)) .Values.settings.existingSecret }}
+      key: {{ .Values.settings.key }}
+{{- end }}
 {{- with .Values.extraEnv }}
 {{ toYaml . }}
 {{- end }}

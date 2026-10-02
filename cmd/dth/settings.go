@@ -126,6 +126,34 @@ func (a *app) settingsCmd() *cobra.Command {
 		},
 	}
 	export.Flags().StringVarP(&out, "output", "o", "", "file to write (default stdout)")
-	c.AddCommand(export)
+	var files []string
+	resolve := &cobra.Command{
+		Use:   "resolve",
+		Short: "Print a settings file with its secret references filled in (for a secret store)",
+		Long: "resolve reads settings files, replaces every ${…} reference with its value from your environment, files, " +
+			"Vault, gopass or cloud secret managers, and prints the result. Use it to hand a deployment one secret (for " +
+			"example Terraform's hub_settings or a Kubernetes Secret). The output contains secrets: never commit it.",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if len(files) == 0 {
+				return errors.New("pass one or more -f files")
+			}
+			srcs, err := settings.ReadPaths(files, cmd.InOrStdin())
+			if err != nil {
+				return err
+			}
+			doc, err := settings.Load(cmd.Context(), srcs, &settings.Resolver{})
+			if err != nil {
+				return err
+			}
+			b, err := settings.Marshal(doc)
+			if err != nil {
+				return err
+			}
+			_, err = a.out.Write(b)
+			return err
+		},
+	}
+	resolve.Flags().StringArrayVarP(&files, "file", "f", nil, "settings file or directory (repeatable; - for stdin)")
+	c.AddCommand(export, resolve)
 	return c
 }

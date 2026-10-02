@@ -25,6 +25,7 @@ data "aws_iam_policy_document" "execution_secrets" {
     resources = concat(
       [aws_secretsmanager_secret.database_url.arn],
       aws_secretsmanager_secret.oidc_client_secret[*].arn,
+      aws_secretsmanager_secret.hub_settings[*].arn,
       aws_secretsmanager_secret.owner_password[*].arn,
     )
   }

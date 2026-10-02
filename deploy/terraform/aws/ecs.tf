@@ -30,6 +30,7 @@ locals {
     [{ name = "DTH_DATABASE_URL", valueFrom = aws_secretsmanager_secret.database_url.arn }],
     [for s in aws_secretsmanager_secret.oidc_client_secret : { name = "DTH_OIDC_CLIENT_SECRET", valueFrom = s.arn }],
     [for s in aws_secretsmanager_secret.owner_password : { name = "DTH_OWNER_PASSWORD", valueFrom = s.arn }],
+    [for s in aws_secretsmanager_secret.hub_settings : { name = "DTH_SETTINGS", valueFrom = s.arn }],
   )
 }
 

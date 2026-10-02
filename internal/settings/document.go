@@ -27,6 +27,8 @@ const Version = 1
 // Document is one Hub configuration. Every section is optional.
 type Document struct {
 	Version    int              `yaml:"version,omitempty" json:"version,omitempty"`
+	Auth       *Auth            `yaml:"auth,omitempty" json:"auth,omitempty"`
+	Users      []User           `yaml:"users,omitempty" json:"users,omitempty"`
 	Providers  []Provider       `yaml:"providers,omitempty" json:"providers,omitempty"`
 	Routes     map[string]Route `yaml:"routes,omitempty" json:"routes,omitempty"`
 	Connectors []Connector      `yaml:"connectors,omitempty" json:"connectors,omitempty"`
@@ -87,6 +89,32 @@ type Repo struct {
 	ServiceName        string    `yaml:"service_name,omitempty" json:"service_name,omitempty"`
 	Owners             *[]string `yaml:"owners,omitempty" json:"owners,omitempty"`
 	Enabled            *bool     `yaml:"enabled,omitempty" json:"enabled,omitempty"`
+}
+
+// Auth is how people sign in (applying it needs the owner role).
+type Auth struct {
+	// Password turns email-and-password sign-in on or off (unset: the deployment's default).
+	Password *bool `yaml:"password,omitempty" json:"password,omitempty"`
+	SSO      *SSO  `yaml:"sso,omitempty" json:"sso,omitempty"`
+}
+
+// SSO is an OpenID Connect identity provider (Google Workspace, Microsoft Entra ID, Okta, Keycloak, …).
+type SSO struct {
+	Provider       string   `yaml:"provider,omitempty" json:"provider,omitempty"`
+	Issuer         string   `yaml:"issuer" json:"issuer"`
+	ClientID       string   `yaml:"client_id" json:"client_id"`
+	ClientSecret   Secret   `yaml:"client_secret,omitempty" json:"client_secret,omitempty"`
+	AllowedDomains []string `yaml:"allowed_domains,omitempty" json:"allowed_domains,omitempty"`
+	GroupsClaim    string   `yaml:"groups_claim,omitempty" json:"groups_claim,omitempty"`
+}
+
+// User is a person, matched by email. They sign in with single sign-on (same email) or a password link
+// an admin creates; a user listed with role owner owns the Hub from their first sign-in.
+type User struct {
+	Email    string `yaml:"email" json:"email"`
+	Name     string `yaml:"name,omitempty" json:"name,omitempty"`
+	Role     string `yaml:"role,omitempty" json:"role,omitempty"` // viewer (default), editor, admin, owner
+	Disabled *bool  `yaml:"disabled,omitempty" json:"disabled,omitempty"`
 }
 
 // Spend replaces the spend limits when present.
@@ -230,6 +258,18 @@ func Load(ctx context.Context, srcs []Source, r *Resolver) (Document, error) {
 }
 
 func (d *Document) merge(p Document) {
+	if p.Auth != nil {
+		if d.Auth == nil {
+			d.Auth = &Auth{}
+		}
+		if p.Auth.Password != nil {
+			d.Auth.Password = p.Auth.Password
+		}
+		if p.Auth.SSO != nil {
+			d.Auth.SSO = p.Auth.SSO
+		}
+	}
+	d.Users = mergeBy(d.Users, p.Users, func(x User) string { return strings.ToLower(strings.TrimSpace(x.Email)) })
 	d.Providers = mergeBy(d.Providers, p.Providers, func(x Provider) string { return x.Name })
 	d.Connectors = mergeBy(d.Connectors, p.Connectors, func(x Connector) string { return x.Name })
 	d.Repos = mergeBy(d.Repos, p.Repos, func(x Repo) string { return x.FullName })
@@ -259,6 +299,19 @@ func mergeBy[T any](base, add []T, key func(T) string) []T {
 func (d *Document) Validate() error {
 	var errs []error
 	bad := func(f string, a ...any) { errs = append(errs, fmt.Errorf(f, a...)) }
+	if d.Auth != nil && d.Auth.SSO != nil && (d.Auth.SSO.Issuer == "" || d.Auth.SSO.ClientID == "") {
+		bad("auth.sso: issuer and client_id are required")
+	}
+	for i, u := range d.Users {
+		if strings.TrimSpace(u.Email) == "" {
+			bad("users[%d]: email is required", i)
+		}
+		switch u.Role {
+		case "", "viewer", "editor", "admin", "owner":
+		default:
+			bad("users[%d]: role must be viewer, editor, admin or owner", i)
+		}
+	}
 	for i, p := range d.Providers {
 		if p.Name == "" || p.Kind == "" {
 			bad("providers[%d]: name and kind are required", i)

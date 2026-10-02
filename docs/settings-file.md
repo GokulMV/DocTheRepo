@@ -1,6 +1,8 @@
 # Settings file
 
 Everything you would otherwise click through in the UI can live in one YAML or JSON file, or in several:
+- How people sign in: passwords on or off, single sign-on (OIDC).
+- Users and their roles, including the owners.
 - LLM providers and their keys.
 - Feature routing.
 - Git, signal and knowledge connectors.
@@ -20,15 +22,40 @@ and **Apply**. **Current settings** loads the export.
 
 A full example is in [`deploy/settings/hub.example.yaml`](../deploy/settings/hub.example.yaml).
 
+## Applied when the Hub starts
+
+A deployment can come up fully configured, with sign-in, owners, models and repositories in place
+before anyone opens it. `dth init` asks the questions and writes the file (see
+[install.md](install.md#before-you-deploy)). The Hub applies it on every start:
+
+| Where | How |
+|---|---|
+| quickstart | `./scripts/quickstart.sh --settings hub.yaml` (or `--init` to answer the questions first) |
+| Docker Compose | put the file in `./settings/` next to `docker-compose.yml` (mounted at `/settings`) |
+| Any | `DTH_SETTINGS_FILE` = files or directories, comma-separated |
+| AWS / Google Cloud (Terraform) | the `hub_settings` variable: `-var "hub_settings=$(dth settings resolve -f hub.yaml)"` |
+| Kubernetes (Helm) | `settings.existingSecret` (a Secret with `hub.yaml`), or `--set-file settings.inline=hub.yaml` |
+| Inline | `DTH_SETTINGS` holds the YAML itself |
+
+Startup apply runs on the API role, as the Hub itself with the owner role. Every secret reference scheme
+works in these files, because they are the operator's own. Applying is idempotent, so it is safe on every
+start. If it fails, for example because the identity provider is not reachable yet, the Hub logs the
+error, keeps serving, and retries every 30 seconds (20 times).
+
+`dth settings resolve -f hub.yaml` prints the file with its references filled in. Use it for one-secret
+targets such as Terraform's `hub_settings` or a Kubernetes Secret. The output contains secrets, so never
+commit it.
+
 ## What apply does
 
 - **Changes:** it creates what is missing and updates what differs. It **never deletes**.
 - **How items are matched:**
+  - Users by `email` (case-insensitive). Sign-in settings are one item.
   - Providers and connectors by `name`.
   - Repositories by `full_name` plus `connector`.
   - Routes by feature.
   - The `spend` section replaces all spend limits, when present.
-- **Order:** providers, then connectors, routes, repositories and spend. A route names its provider, and a
+- **Order:** sign-in, users, then providers, connectors, routes, repositories and spend. A route names its provider, and a
   repository its connector, by name.
 - **Same path as the UI:** it goes through the Hub's API. Validation, role checks (admin), webhook
   registration and the audit log are the same as in the UI, and the audit entries are under your account.

@@ -134,3 +134,10 @@ variable "owner_email" {
   description = "First owner account (local mode: password generated into Secret Manager)."
   type        = string
 }
+
+variable "hub_settings" {
+  description = "Optional settings file (YAML) applied when the Hub starts: sign-in and SSO, users and owners, models, connectors, repositories. Generate one with `dth init`. Stored in the secret manager, never in the task definition."
+  type        = string
+  default     = ""
+  sensitive   = true
+}

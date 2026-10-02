@@ -39,7 +39,7 @@ type Principal struct {
 	Email  string `json:"email"`
 	Name   string `json:"name"`
 	Role   Role   `json:"role"`
-	// Via is "session" or "token".
+	// Via is "session", "token" or "system" (the Hub itself; see SystemPrincipal).
 	Via string `json:"-"`
 	// CSRF is the session's CSRF token (cookie-authenticated mutations must echo it).
 	CSRF      string `json:"-"`
@@ -84,4 +84,10 @@ func (s RepoScope) Restrict(requested []string) (ids []string, all bool, ok bool
 		}
 	}
 	return requested, false, true
+}
+
+// SystemPrincipal acts with the owner role for the Hub itself (the settings file applied at startup). It
+// exists only inside the process: requests from the network can never carry it.
+func SystemPrincipal(name string) *Principal {
+	return &Principal{Email: name, Name: name, Role: RoleOwner, Via: "system"}
 }
