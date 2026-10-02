@@ -66,6 +66,11 @@ Optionally set `ANTHROPIC_API_KEY` and/or `OPENAI_API_KEY` first to configure mo
 sign-in details are printed and saved in `~/.dth-quickstart/credentials.txt`. Stop with
 `./scripts/quickstart.sh --down`.
 
+Re-running the quickstart (for example after `git pull`) keeps everything: connectors, the GitHub App,
+provider keys, routing, repositories and docs live in the database and `~/.dth-quickstart` (which holds the
+master key that encrypts your keys; back it up). It never overwrites routing you changed in the UI. Only
+`--down --wipe` deletes data.
+
 Then, in the UI:
 1. **Connectors → Connect with GitHub**, and pick repositories.
 2. **Providers & routing:** add your model provider.
