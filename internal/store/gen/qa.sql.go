@@ -14,7 +14,8 @@ import (
 const chunksByIDsScoped = `-- name: ChunksByIDsScoped :many
 SELECT chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url, tsv, created_at, updated_at, deleted_at FROM chunks
 WHERE chunk_id = ANY($1::text[]) AND deleted_at IS NULL
-  AND ($2::boolean OR repo_id = ANY($3::uuid[]))
+  AND ($2::boolean OR repo_id = ANY($3::uuid[])
+       OR (repo_id IS NULL AND source IN ('confluence', 'jira')))
 `
 
 type ChunksByIDsScopedParams struct {
@@ -247,7 +248,8 @@ SELECT c.chunk_id, ts_rank_cd(c.tsv, q.query)::float8 AS rank
 FROM chunks c,
      (SELECT websearch_to_tsquery('english', $1::text) || websearch_to_tsquery('simple', $1::text) AS query) q
 WHERE c.deleted_at IS NULL AND c.tsv @@ q.query
-  AND ($2::boolean OR c.repo_id = ANY($3::uuid[]))
+  AND ($2::boolean OR c.repo_id = ANY($3::uuid[])
+       OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira')))
   AND (cardinality($4::text[]) = 0 OR c.source::text = ANY($4::text[]))
 ORDER BY rank DESC, c.chunk_id
 LIMIT $5

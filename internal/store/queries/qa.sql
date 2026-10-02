@@ -5,7 +5,8 @@ SELECT c.chunk_id, ts_rank_cd(c.tsv, q.query)::float8 AS rank
 FROM chunks c,
      (SELECT websearch_to_tsquery('english', sqlc.arg(question)::text) || websearch_to_tsquery('simple', sqlc.arg(question)::text) AS query) q
 WHERE c.deleted_at IS NULL AND c.tsv @@ q.query
-  AND (sqlc.arg(all_repos)::boolean OR c.repo_id = ANY(sqlc.arg(repo_ids)::uuid[]))
+  AND (sqlc.arg(all_repos)::boolean OR c.repo_id = ANY(sqlc.arg(repo_ids)::uuid[])
+       OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira')))
   AND (cardinality(sqlc.arg(sources)::text[]) = 0 OR c.source::text = ANY(sqlc.arg(sources)::text[]))
 ORDER BY rank DESC, c.chunk_id
 LIMIT sqlc.arg(lim);
@@ -13,7 +14,8 @@ LIMIT sqlc.arg(lim);
 -- name: ChunksByIDsScoped :many
 SELECT * FROM chunks
 WHERE chunk_id = ANY(sqlc.arg(ids)::text[]) AND deleted_at IS NULL
-  AND (sqlc.arg(all_repos)::boolean OR repo_id = ANY(sqlc.arg(repo_ids)::uuid[]));
+  AND (sqlc.arg(all_repos)::boolean OR repo_id = ANY(sqlc.arg(repo_ids)::uuid[])
+       OR (repo_id IS NULL AND source IN ('confluence', 'jira')));
 
 -- name: SymbolNeighbors :many
 -- One-hop symbol neighbours (callers and callees) of the given symbol entity keys.

@@ -213,12 +213,77 @@ func (q *Queries) ReviveChunks(ctx context.Context, ids []string) (int64, error)
 	return result.RowsAffected(), nil
 }
 
+const sharedChunksForPath = `-- name: SharedChunksForPath :many
+SELECT chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url, tsv, created_at, updated_at, deleted_at FROM chunks WHERE repo_id IS NULL AND source = $1 AND path = $2
+`
+
+type SharedChunksForPathParams struct {
+	Source ChunkSource `json:"source"`
+	Path   string      `json:"path"`
+}
+
+// Stored chunks (live and soft-deleted) of one repo-less document (a Confluence page or Jira issue).
+func (q *Queries) SharedChunksForPath(ctx context.Context, arg SharedChunksForPathParams) ([]Chunk, error) {
+	rows, err := q.db.Query(ctx, sharedChunksForPath, arg.Source, arg.Path)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Chunk{}
+	for rows.Next() {
+		var i Chunk
+		if err := rows.Scan(
+			&i.ChunkID,
+			&i.RepoID,
+			&i.Scope,
+			&i.Source,
+			&i.Path,
+			&i.Symbol,
+			&i.Language,
+			&i.Content,
+			&i.ContentHash,
+			&i.Signature,
+			&i.CommitSha,
+			&i.Url,
+			&i.Tsv,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const softDeleteChunks = `-- name: SoftDeleteChunks :execrows
 UPDATE chunks SET deleted_at = now(), updated_at = now() WHERE chunk_id = ANY($1::text[]) AND deleted_at IS NULL
 `
 
 func (q *Queries) SoftDeleteChunks(ctx context.Context, ids []string) (int64, error) {
 	result, err := q.db.Exec(ctx, softDeleteChunks, ids)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const softDeleteSharedPath = `-- name: SoftDeleteSharedPath :execrows
+UPDATE chunks SET deleted_at = now(), updated_at = now()
+WHERE repo_id IS NULL AND source = $1 AND path = $2 AND deleted_at IS NULL
+`
+
+type SoftDeleteSharedPathParams struct {
+	Source ChunkSource `json:"source"`
+	Path   string      `json:"path"`
+}
+
+func (q *Queries) SoftDeleteSharedPath(ctx context.Context, arg SoftDeleteSharedPathParams) (int64, error) {
+	result, err := q.db.Exec(ctx, softDeleteSharedPath, arg.Source, arg.Path)
 	if err != nil {
 		return 0, err
 	}

@@ -37,3 +37,11 @@ UPDATE index_version SET version = version + 1 RETURNING version;
 
 -- name: GetIndexVersion :one
 SELECT version FROM index_version;
+
+-- name: SharedChunksForPath :many
+-- Stored chunks (live and soft-deleted) of one repo-less document (a Confluence page or Jira issue).
+SELECT * FROM chunks WHERE repo_id IS NULL AND source = sqlc.arg(source) AND path = sqlc.arg(path);
+
+-- name: SoftDeleteSharedPath :execrows
+UPDATE chunks SET deleted_at = now(), updated_at = now()
+WHERE repo_id IS NULL AND source = sqlc.arg(source) AND path = sqlc.arg(path) AND deleted_at IS NULL;

@@ -71,6 +71,20 @@ func (q *Queries) DeleteFileSections(ctx context.Context, arg DeleteFileSections
 	return err
 }
 
+const deleteShelfItemsFor = `-- name: DeleteShelfItemsFor :exec
+DELETE FROM shelf_items WHERE item_type = $1 AND item_id = $2
+`
+
+type DeleteShelfItemsForParams struct {
+	ItemType ShelfItemType `json:"item_type"`
+	ItemID   string        `json:"item_id"`
+}
+
+func (q *Queries) DeleteShelfItemsFor(ctx context.Context, arg DeleteShelfItemsForParams) error {
+	_, err := q.db.Exec(ctx, deleteShelfItemsFor, arg.ItemType, arg.ItemID)
+	return err
+}
+
 const docChildren = `-- name: DocChildren :many
 SELECT id, repo_id, parent_id, kind, path, title, summary, chunk_id, order_key, updated_at, content, commit_sha FROM doc_nodes WHERE repo_id = $1 AND parent_id IS NOT DISTINCT FROM $2
 ORDER BY kind, order_key, title
@@ -214,6 +228,70 @@ func (q *Queries) ListShelves(ctx context.Context) ([]LibraryShelf, error) {
 	return items, nil
 }
 
+const liveEntityID = `-- name: LiveEntityID :one
+SELECT id FROM entities WHERE kind = $1 AND key = $2 AND deleted_at IS NULL
+`
+
+type LiveEntityIDParams struct {
+	Kind string `json:"kind"`
+	Key  string `json:"key"`
+}
+
+func (q *Queries) LiveEntityID(ctx context.Context, arg LiveEntityIDParams) (string, error) {
+	row := q.db.QueryRow(ctx, liveEntityID, arg.Kind, arg.Key)
+	var id string
+	err := row.Scan(&id)
+	return id, err
+}
+
+const mentionableEntities = `-- name: MentionableEntities :many
+SELECT kind, key, name FROM entities
+WHERE deleted_at IS NULL AND kind IN ('service', 'repo', 'endpoint')
+ORDER BY kind, key
+LIMIT 50000
+`
+
+type MentionableEntitiesRow struct {
+	Kind string `json:"kind"`
+	Key  string `json:"key"`
+	Name string `json:"name"`
+}
+
+// Entities prose can name (Palace links for Confluence/Jira): services, repositories, endpoints.
+func (q *Queries) MentionableEntities(ctx context.Context) ([]MentionableEntitiesRow, error) {
+	rows, err := q.db.Query(ctx, mentionableEntities)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []MentionableEntitiesRow{}
+	for rows.Next() {
+		var i MentionableEntitiesRow
+		if err := rows.Scan(&i.Kind, &i.Key, &i.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const retireEntity = `-- name: RetireEntity :exec
+UPDATE entities SET deleted_at = now() WHERE kind = $1 AND key = $2 AND deleted_at IS NULL
+`
+
+type RetireEntityParams struct {
+	Kind string `json:"kind"`
+	Key  string `json:"key"`
+}
+
+func (q *Queries) RetireEntity(ctx context.Context, arg RetireEntityParams) error {
+	_, err := q.db.Exec(ctx, retireEntity, arg.Kind, arg.Key)
+	return err
+}
+
 const retireOrphanEntities = `-- name: RetireOrphanEntities :execrows
 UPDATE entities e SET deleted_at = now()
 WHERE e.repo_id = $1 AND e.deleted_at IS NULL AND e.kind NOT IN ('repo', 'service')
@@ -227,6 +305,16 @@ func (q *Queries) RetireOrphanEntities(ctx context.Context, repoID *string) (int
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const retireSharedSourceEdges = `-- name: RetireSharedSourceEdges :exec
+UPDATE edges SET deleted_at = now() WHERE repo_id IS NULL AND source_path = $1 AND deleted_at IS NULL
+`
+
+// Edges a repo-less document (Confluence page, Jira issue) contributed; re-linking revives what remains.
+func (q *Queries) RetireSharedSourceEdges(ctx context.Context, sourcePath string) error {
+	_, err := q.db.Exec(ctx, retireSharedSourceEdges, sourcePath)
+	return err
 }
 
 const retireSourceEdges = `-- name: RetireSourceEdges :exec

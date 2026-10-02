@@ -132,8 +132,11 @@ func (x *Index) Upsert(ctx context.Context, version int, vs []ports.ChunkVector)
 		if len(cv.Vector) != dims {
 			return ports.Permanent(fmt.Errorf("chunk %s: vector has %d dims, index expects %d", cv.ChunkID, len(cv.Vector), dims))
 		}
-		points = append(points, map[string]any{"id": PointID(cv.ChunkID), "vector": cv.Vector,
-			"payload": map[string]any{"chunk_id": cv.ChunkID, "repo_id": cv.RepoID, "source": string(cv.Source)}})
+		payload := map[string]any{"chunk_id": cv.ChunkID, "source": string(cv.Source)}
+		if cv.RepoID != "" { // repo-less chunks (Confluence, Jira) have no repo_id, so is_empty can find them
+			payload["repo_id"] = cv.RepoID
+		}
+		points = append(points, map[string]any{"id": PointID(cv.ChunkID), "vector": cv.Vector, "payload": payload})
 	}
 	if err := x.call(ctx, http.MethodPut, "/collections/"+x.collection(v)+"/points?wait=true", map[string]any{"points": points}, nil); err != nil {
 		return fmt.Errorf("qdrant upsert: %w", err)
@@ -227,7 +230,18 @@ func (x *Index) Search(ctx context.Context, vec []float32, k int, f ports.Vector
 	}
 	var must []any
 	if len(f.RepoIDs) > 0 {
-		must = append(must, map[string]any{"key": "repo_id", "match": map[string]any{"any": f.RepoIDs}})
+		// Repo-scoped readers also see repo-less shared sources (Confluence, Jira).
+		shared := make([]string, len(ports.SharedSources))
+		for i, s := range ports.SharedSources {
+			shared[i] = string(s)
+		}
+		must = append(must, map[string]any{"should": []any{
+			map[string]any{"key": "repo_id", "match": map[string]any{"any": f.RepoIDs}},
+			map[string]any{"must": []any{
+				map[string]any{"key": "source", "match": map[string]any{"any": shared}},
+				map[string]any{"is_empty": map[string]any{"key": "repo_id"}},
+			}},
+		}})
 	}
 	if len(f.Sources) > 0 {
 		src := make([]string, len(f.Sources))

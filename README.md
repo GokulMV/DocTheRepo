@@ -97,6 +97,15 @@ Under construction, milestone by milestone (plan § 14). Implemented so far:
   Playwright covers the error flow (Sentry webhook → explained → mark as known → next one suppressed);
   the signal-storm k6 run checks zero lost events at 2,000 events/s
   ([`docs/perf-results.md`](docs/perf-results.md)).
+- **Phase 13 — Confluence & Jira**: read-only sync of Confluence spaces and Jira projects (Cloud and Data
+  Center) every 15 minutes: pages and issues are converted to Markdown, chunked, embedded, linked in the
+  Palace to the services, repositories, and endpoints they mention (`documented_in`, `runbook_for`), and
+  shelved in the Library; deletions are reconciled daily. Issues/pages labelled `known-issue` become draft
+  rules with a proposed match; a Jira issue moving to Done flips its rule to label only ("fixed upstream —
+  verify"). Known Issues explains a pasted Jira or Confluence URL (`POST /known-issues/from-link`). See
+  [`docs/confluence-jira.md`](docs/confluence-jira.md).
+- **opencode & MCP**: opencode as a documentation engine (`dth engine opencode`) and the Hub as an MCP
+  server for opencode, Claude Code, and Cursor (`dth mcp`). See [`docs/opencode.md`](docs/opencode.md).
 
 ## Install
 

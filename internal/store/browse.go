@@ -297,6 +297,25 @@ func (b *Browse) Shelf(ctx context.Context, slug string, sc rag.Scope) (Shelf, e
 	for _, e := range ents {
 		sh.Entries = append(sh.Entries, ShelfEntry{Type: string(e.ItemType), ID: e.ItemID, Title: e.Title, Path: e.Path, Summary: e.Summary, RepoID: e.RepoID, Pinned: e.Pinned, Note: e.Note})
 	}
+	// Confluence pages and Jira issues are shared sources: every viewer may see them.
+	rows, err := b.s.Pool.Query(ctx, `SELECT si.item_type::text, si.item_id, si.pinned, si.note, k.title, k.url, k.summary
+		FROM shelf_items si JOIN knowledge_docs k ON k.id::text = si.item_id
+		WHERE si.shelf_id = $1 AND si.item_type IN ('confluence_page', 'jira_issue')
+		ORDER BY si.pinned DESC, k.title`, r.ID)
+	if err != nil {
+		return sh, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var e ShelfEntry
+		if err := rows.Scan(&e.Type, &e.ID, &e.Pinned, &e.Note, &e.Title, &e.Path, &e.Summary); err != nil {
+			return sh, err
+		}
+		sh.Entries = append(sh.Entries, e)
+	}
+	if err := rows.Err(); err != nil {
+		return sh, err
+	}
 	sh.Items = int64(len(sh.Entries))
 	return sh, nil
 }
@@ -353,9 +372,9 @@ func (b *Browse) PinItem(ctx context.Context, shelfID, itemType, itemID, note st
 		return ports.ErrNotFound
 	}
 	switch itemType {
-	case "doc_node", "entity", "confluence_page", "known_issue":
+	case "doc_node", "entity", "confluence_page", "jira_issue", "known_issue":
 	default:
-		return &ports.ValidationError{Code: "VALIDATION_FAILED", Message: "item_type must be doc_node, entity, confluence_page or known_issue"}
+		return &ports.ValidationError{Code: "VALIDATION_FAILED", Message: "item_type must be doc_node, entity, confluence_page, jira_issue or known_issue"}
 	}
 	_, err := b.s.Q.PinShelfItem(ctx, gen.PinShelfItemParams{ShelfID: shelfID, ItemType: gen.ShelfItemType(itemType), ItemID: itemID, Note: note})
 	if err != nil {

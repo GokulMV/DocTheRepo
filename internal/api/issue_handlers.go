@@ -12,7 +12,9 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/auth"
 	"github.com/GokulMV/DocTheRepo/internal/core/knownissues"
 	"github.com/GokulMV/DocTheRepo/internal/core/llmgateway"
+	"github.com/GokulMV/DocTheRepo/internal/core/signals"
 	"github.com/GokulMV/DocTheRepo/internal/core/suggest"
+	"github.com/GokulMV/DocTheRepo/internal/ingest"
 	"github.com/GokulMV/DocTheRepo/internal/observability"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
 	"github.com/GokulMV/DocTheRepo/internal/store"
@@ -28,6 +30,9 @@ type IssueDeps struct {
 	Queue       Enqueuer
 	// ReloadRules recompiles the live matcher after a rule change (so it applies to the next event).
 	ReloadRules func(ctx context.Context) error
+	// FetchLink loads a Jira issue or Confluence page by browser URL through its connector (from-link);
+	// nil disables the endpoint.
+	FetchLink func(ctx context.Context, url string) (ports.KnowledgeDoc, error)
 }
 
 // IssueRoutes mounts the Inbox, known issues, and suggestions.
@@ -51,6 +56,7 @@ func IssueRoutes(d IssueDeps) func(chi.Router) {
 			r.Delete("/known-issues/{id}", h.deleteKnown)
 			r.Post("/known-issues/test", h.testRule)
 			r.Post("/known-issues/from-text", h.fromText)
+			r.Post("/known-issues/from-link", h.fromLink)
 			r.Get("/known-issues/suggestions", h.listSuggestions)
 			r.Post("/known-issues/suggestions/{id}/{decision:accept|reject}", h.decide)
 		})
@@ -243,6 +249,37 @@ type knownIn struct {
 	TicketURL   *string            `json:"ticket_url"`
 	// mark-known only:
 	MatchOverride *knownissues.Match `json:"match_override"`
+	// create only (saving a from-text / from-link proposal):
+	Source           *string `json:"source"`
+	JiraKey          *string `json:"jira_key"`
+	ConfluencePageID *string `json:"confluence_page_id"`
+	Explanation      *string `json:"explanation"`
+	SourceText       *string `json:"source_text"`
+}
+
+// applyOrigin sets the create-only fields that record where a rule came from.
+func (in knownIn) applyOrigin(k *store.KnownIssue) error {
+	if in.Source != nil {
+		switch *in.Source {
+		case "manual", "pasted", "jira", "confluence":
+			k.Source = *in.Source
+		default:
+			return errBadParam("source must be manual, pasted, jira, or confluence")
+		}
+	}
+	if in.JiraKey != nil {
+		k.JiraKey = strings.TrimSpace(*in.JiraKey)
+	}
+	if in.ConfluencePageID != nil {
+		k.ConfluencePageID = strings.TrimSpace(*in.ConfluencePageID)
+	}
+	if in.Explanation != nil {
+		k.Explanation = *in.Explanation
+	}
+	if in.SourceText != nil {
+		k.SourceText = *in.SourceText
+	}
+	return nil
 }
 
 func (in knownIn) apply(k *store.KnownIssue) {
@@ -335,6 +372,10 @@ func (h *issueHandlers) createKnown(w http.ResponseWriter, r *http.Request) {
 	}
 	k := store.KnownIssue{Action: "suppress", Enabled: true, Source: "manual", OwnerUserID: auth.FromContext(r.Context()).UserID}
 	in.apply(&k)
+	if err := in.applyOrigin(&k); err != nil {
+		fail(w, r, err)
+		return
+	}
 	id, err := h.d.KnownIssues.Create(r.Context(), k)
 	if err != nil {
 		WriteErr(w, r, err)
@@ -419,6 +460,85 @@ func (h *issueHandlers) fromText(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteJSON(w, http.StatusOK, res)
+}
+
+// fromLinkResponse is the from-text response plus the fetched document, so the UI can save the rule
+// with its ticket link.
+type fromLinkResponse struct {
+	suggest.TextSuggestion
+	Link linkInfo `json:"link"`
+}
+
+type linkInfo struct {
+	Source           string `json:"source"`
+	ExternalID       string `json:"external_id"`
+	Title            string `json:"title"`
+	URL              string `json:"url"`
+	Status           string `json:"status,omitempty"`
+	Done             bool   `json:"done"`
+	JiraKey          string `json:"jira_key,omitempty"`
+	ConfluencePageID string `json:"confluence_page_id,omitempty"`
+	SourceText       string `json:"source_text"`
+}
+
+func (h *issueHandlers) fromLink(w http.ResponseWriter, r *http.Request) {
+	if h.d.FetchLink == nil {
+		WriteErr(w, r, ports.ErrNotFound)
+		return
+	}
+	var in struct {
+		URL string `json:"url"`
+	}
+	if err := decodeJSON(w, r, &in); err != nil {
+		fail(w, r, err)
+		return
+	}
+	u := strings.TrimSpace(in.URL)
+	if !strings.HasPrefix(u, "https://") && !strings.HasPrefix(u, "http://") {
+		fail(w, r, errBadParam("url must be a Jira issue or Confluence page URL"))
+		return
+	}
+	doc, err := h.d.FetchLink(r.Context(), u)
+	switch {
+	case errors.Is(err, ingest.ErrNoKnowledgeConnector):
+		WriteError(w, r, http.StatusBadRequest, "NO_CONNECTOR", "no Confluence or Jira connector matches this URL: add one under Connectors", nil)
+		return
+	case errors.Is(err, ports.ErrNotFound):
+		WriteError(w, r, http.StatusNotFound, "NOT_FOUND", "the page or issue was not found (or the connector's account cannot see it)", nil)
+		return
+	case err != nil:
+		WriteErr(w, r, err)
+		return
+	}
+	text := doc.Title + "\n\n" + doc.Markdown
+	res, err := h.d.Suggest.FromText(r.Context(), text, nil, auth.FromContext(r.Context()).UserID)
+	switch {
+	case errors.Is(err, suggest.ErrEmptyText):
+		fail(w, r, errBadParam("the page or issue has no text"))
+		return
+	case errors.Is(err, llmgateway.ErrNoRoute):
+		WriteError(w, r, http.StatusConflict, "NO_ROUTE", "configure a model for the suggest feature first", nil)
+		return
+	case err != nil:
+		WriteErr(w, r, err)
+		return
+	}
+	li := linkInfo{Source: string(doc.Source), ExternalID: doc.ExternalID, Title: doc.Title, URL: doc.URL, Status: doc.Status, Done: doc.Done,
+		SourceText: signals.Scrub(truncateRunes(text, suggest.MaxTextChars))}
+	if doc.Source == ports.SourceJira {
+		li.JiraKey = doc.ExternalID
+	} else {
+		li.ConfluencePageID = doc.ExternalID
+	}
+	h.audit(r, "known_issue.from_link", "known_issue", "", map[string]any{"url": u, "source": li.Source, "external_id": li.ExternalID})
+	WriteJSON(w, http.StatusOK, fromLinkResponse{TextSuggestion: res, Link: li})
+}
+
+func truncateRunes(s string, n int) string {
+	if len(s) > n {
+		return s[:n]
+	}
+	return s
 }
 
 func (h *issueHandlers) listSuggestions(w http.ResponseWriter, r *http.Request) {
