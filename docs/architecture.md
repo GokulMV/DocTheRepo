@@ -98,7 +98,19 @@ by the suggest route). `POST /known-issues/from-link` fetches a URL through the 
 overview docs for broad questions) → reciprocal rank fusion → ACL-scoped chunks → one-hop graph expansion →
 budget packing → model (route `qa`) → citation check → cache.
 
-Ask is retrieval-augmented generation: one retrieval pass and one model call, no tool loop.
+Ask is retrieval-augmented generation with an agent fallback:
+
+- **Usually:** one retrieval pass and one model call.
+- **When retrieval finds too little:** fewer than 3 sources fit, or the first answer cites nothing. The
+  model then investigates for up to `ask.agent_steps` steps (default 4; `DTH_ASK_AGENT_STEPS`, 0 turns it
+  off). In each step it chooses to search again with other words, read a whole file, list files, or
+  answer. Then it answers from everything gathered, through the same citation contract.
+- **What it can see:** every step reads through the same ACL-scoped store. Steps are plain JSON
+  decisions (structured output), so the agent works with any chat provider, not only those with tool use.
+- **While it works:** the UI shows each step ("Searched for …", "Read …"). The first round's "not found"
+  is held back, and an uncited answer that was already streamed is withdrawn (an SSE `reset` event).
+- **Cost:** at most 1 + `agent_steps` + 1 model calls, and only for questions that need it. The result is
+  cached like any other answer, so asking again costs nothing.
 
 Two caches keep repeated questions cheap:
 

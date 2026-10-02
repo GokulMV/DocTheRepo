@@ -93,3 +93,24 @@ WHERE c.deleted_at IS NULL
        OR (c.source = 'generated_doc' AND lower(c.path) ~ '(^|/)(main|index|app|server|cli|cmd)[^/]*\.md$'))
 ORDER BY rank DESC, length(c.path), c.chunk_id
 LIMIT sqlc.arg(lim);
+
+-- name: ChunksForPath :many
+-- The agent's "read a file": the chunks of files whose path is, or ends with, the given one.
+SELECT * FROM chunks c
+WHERE c.deleted_at IS NULL AND (c.path = sqlc.arg(path)::text OR c.path LIKE '%/' || sqlc.arg(path)::text)
+  AND (sqlc.arg(all_repos)::boolean OR c.repo_id = ANY(sqlc.arg(repo_ids)::uuid[])
+       OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira')))
+  AND (cardinality(sqlc.arg(sources)::text[]) = 0 OR c.source::text = ANY(sqlc.arg(sources)::text[]))
+ORDER BY c.scope, c.path, c.chunk_id
+LIMIT sqlc.arg(lim);
+
+-- name: ListChunkPaths :many
+-- The agent's "list files": distinct paths containing the given text, with how many chunks each has.
+SELECT c.scope, c.path, count(*)::int AS chunks FROM chunks c
+WHERE c.deleted_at IS NULL AND c.path ILIKE '%' || sqlc.arg(contains)::text || '%'
+  AND (sqlc.arg(all_repos)::boolean OR c.repo_id = ANY(sqlc.arg(repo_ids)::uuid[])
+       OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira')))
+  AND (cardinality(sqlc.arg(sources)::text[]) = 0 OR c.source::text = ANY(sqlc.arg(sources)::text[]))
+GROUP BY c.scope, c.path
+ORDER BY c.scope, c.path
+LIMIT sqlc.arg(lim);

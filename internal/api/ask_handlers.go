@@ -74,7 +74,9 @@ type askResponse struct {
 	Answer    string         `json:"answer"`
 	Citations []rag.Citation `json:"citations"`
 	Cached    bool           `json:"cached"`
-	Usage     map[string]any `json:"usage"`
+	// Investigated: retrieval found too little, so the model looked further before answering.
+	Investigated bool           `json:"investigated,omitempty"`
+	Usage        map[string]any `json:"usage"`
 }
 
 // sse writes server-sent events.
@@ -153,6 +155,8 @@ func (h *askHandlers) ask(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		stream = &sse{w: w, f: f}
 		query.OnDelta = func(t string) { stream.event("delta", map[string]string{"text": t}) }
+		query.OnStatus = func(st rag.Status) { stream.event("status", st) }
+		query.OnReset = func() { stream.event("reset", map[string]any{}) }
 	}
 	ans, err := h.eng.Ask(r.Context(), query)
 	if err != nil {
@@ -170,7 +174,7 @@ func (h *askHandlers) ask(w http.ResponseWriter, r *http.Request) {
 		h.askErr(w, r, stream, err)
 		return
 	}
-	resp := askResponse{ThreadID: threadID, MessageID: mid, Answer: ans.Text, Citations: ans.Citations, Cached: ans.Cached,
+	resp := askResponse{ThreadID: threadID, MessageID: mid, Answer: ans.Text, Citations: ans.Citations, Cached: ans.Cached, Investigated: ans.Investigated,
 		Usage: map[string]any{"input_tokens": ans.Usage.InputTokens, "output_tokens": ans.Usage.OutputTokens, "cost_usd": ans.CostUSD}}
 	if stream != nil {
 		for _, c := range ans.Citations {

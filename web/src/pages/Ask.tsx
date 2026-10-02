@@ -79,6 +79,27 @@ function Feedback({ m }: { m: Message }) {
   );
 }
 
+interface AgentStatus { step: number; action: 'search' | 'read_file' | 'list_files'; input: string; reason: string }
+
+const STEP_VERB: Record<AgentStatus['action'], string> = { search: 'Searched for', read_file: 'Read', list_files: 'Listed files matching' };
+
+/** AgentSteps shows how Ask looked further when the first search found too little. */
+function AgentSteps({ steps, done }: { steps: AgentStatus[]; done: boolean }) {
+  return (
+    <div className="mb-3 rounded-lg bg-slate-50 p-2.5 text-xs text-slate-600 dark:bg-white/[0.03] dark:text-slate-400">
+      <p className="font-medium text-slate-700 dark:text-slate-300">The first search found little, so Ask is looking further{done ? '' : '…'}</p>
+      <ol className="mt-1 space-y-0.5">
+        {steps.map((s) => (
+          <li key={s.step} title={s.reason}>
+            <span className="text-slate-400">{s.step}.</span> {STEP_VERB[s.action] ?? s.action} <code className="rounded bg-white px-1 dark:bg-white/[0.06]">{s.input}</code>
+            {s.reason && <span className="text-slate-400"> · {s.reason}</span>}
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 const EXAMPLES = [
   { q: 'How does checkout handle a failed payment?', icon: GitBranch },
   { q: 'Which services publish to the orders topic?', icon: Network },
@@ -161,6 +182,8 @@ export default function Ask() {
   const [repoIds, setRepoIds] = useState<string[]>([]);
   const [include, setInclude] = useState<string[]>([]);
   const [streaming, setStreaming] = useState('');
+  // The agent's steps when the first search found too little ("Searching for …", "Reading …").
+  const [steps, setSteps] = useState<AgentStatus[]>([]);
   const [pending, setPending] = useState<string>();
   const [error, setError] = useState<unknown>();
   const abort = useRef<AbortController>();
@@ -180,6 +203,7 @@ export default function Ask() {
     setError(undefined);
     setPending(q);
     setStreaming('');
+    setSteps([]);
     setQuestion('');
     abort.current = new AbortController();
     try {
@@ -197,6 +221,8 @@ export default function Ask() {
         (ev) => {
           const data = JSON.parse(ev.data);
           if (ev.event === 'delta') setStreaming((s) => s + data.text);
+          if (ev.event === 'status') setSteps((s) => [...s, data as AgentStatus]);
+          if (ev.event === 'reset') setStreaming('');
           if (ev.event === 'done') done = data;
           if (ev.event === 'error') throw new ApiError(500, data.error.code, data.error.message, data.error.correlation_id);
         },
@@ -212,6 +238,7 @@ export default function Ask() {
     } finally {
       setPending(undefined);
       setStreaming('');
+      setSteps([]);
     }
   };
 
@@ -294,7 +321,8 @@ export default function Ask() {
                   <p className="max-w-[85%] rounded-2xl rounded-br-md bg-brand-600 px-4 py-2.5 text-sm font-medium text-white dark:bg-brand-500">{pending}</p>
                 </div>
                 <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-card dark:border-white/[0.07] dark:bg-slate-900/60" aria-live="polite">
-                  {streaming ? <Markdown>{streaming}</Markdown> : <p className="animate-pulse text-sm text-slate-500">Searching your sources…</p>}
+                  {steps.length > 0 && <AgentSteps steps={steps} done={!!streaming} />}
+                  {streaming ? <Markdown>{streaming}</Markdown> : <p className="animate-pulse text-sm text-slate-500">{steps.length ? 'Looking further…' : 'Searching your sources…'}</p>}
                 </div>
               </>
             )}
