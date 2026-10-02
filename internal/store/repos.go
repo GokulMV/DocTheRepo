@@ -72,8 +72,17 @@ func (c *Connectors) Create(ctx context.Context, n NewConnector) (string, error)
 	return id, nil
 }
 
-// Get loads a connector and decrypts its secrets. Missing → ports.ErrNotFound.
+// Get loads an enabled connector and decrypts its secrets. Missing or disabled → ports.ErrNotFound.
 func (c *Connectors) Get(ctx context.Context, id string) (ports.ConnectorConfig, error) {
+	return c.get(ctx, id, false)
+}
+
+// GetAny is Get for disabled connectors too (to undo their effects on the host, such as an installation).
+func (c *Connectors) GetAny(ctx context.Context, id string) (ports.ConnectorConfig, error) {
+	return c.get(ctx, id, true)
+}
+
+func (c *Connectors) get(ctx context.Context, id string, anyState bool) (ports.ConnectorConfig, error) {
 	if !uuidRE.MatchString(id) { // e.g. a mistyped webhook URL: unknown, not a database error
 		return ports.ConnectorConfig{}, fmt.Errorf("connector %q: %w", id, ports.ErrNotFound)
 	}
@@ -84,7 +93,7 @@ func (c *Connectors) Get(ctx context.Context, id string) (ports.ConnectorConfig,
 	if err != nil {
 		return ports.ConnectorConfig{}, fmt.Errorf("load connector: %w", err)
 	}
-	if !r.Enabled {
+	if !r.Enabled && !anyState {
 		return ports.ConnectorConfig{}, fmt.Errorf("connector %s is disabled: %w", id, ports.ErrNotFound)
 	}
 	return c.decode(ctx, gen.ListConnectorsByTypeRow(r))

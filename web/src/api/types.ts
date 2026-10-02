@@ -194,6 +194,14 @@ export interface Connector {
   credentials_meta?: SecretMeta;
 }
 
+/** What a disable, enable or remove did on GitHub (GitHub App connectors only). */
+export interface RemoteResult {
+  action: 'suspended' | 'resumed' | 'uninstalled';
+  ok: boolean;
+  error?: string;
+  settings_url?: string;
+}
+
 export interface Check {
   name: string;
   ok: boolean;

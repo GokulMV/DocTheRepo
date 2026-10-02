@@ -21,8 +21,11 @@ import (
 // Host implements ports.CodeHost.
 type Host struct {
 	c             *gh.Client
+	app           *gh.Client // authenticated as the App itself (JWT): GET /app rejects installation tokens
 	webhookSecret []byte
 	appMode       bool
+	installation  int64
+	webURL        string // https://github.com or the GHES root
 	identity      *ports.Identity
 }
 
@@ -33,7 +36,10 @@ func New(cfg ports.ProviderConfig, transport http.RoundTripper) (*Host, error) {
 	if transport == nil {
 		transport = http.DefaultTransport
 	}
-	h := &Host{webhookSecret: []byte(cfg.Extra["webhook_secret"])}
+	h := &Host{webhookSecret: []byte(cfg.Extra["webhook_secret"]), webURL: "https://github.com"}
+	if cfg.BaseURL != "" {
+		h.webURL = strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(cfg.BaseURL, "/"), "/api/v3"), "/")
+	}
 	var client *http.Client
 	switch cfg.Extra["auth"] {
 	case "token":
@@ -55,7 +61,21 @@ func New(cfg ports.ProviderConfig, transport http.RoundTripper) (*Host, error) {
 			itr.BaseURL = strings.TrimSuffix(cfg.BaseURL, "/")
 		}
 		client = &http.Client{Transport: itr, Timeout: 60 * time.Second}
-		h.appMode = true
+		h.appMode, h.installation = true, instID
+		atr, err := ghinstallation.NewAppsTransport(transport, appID, []byte(cfg.APIKey))
+		if err != nil {
+			return nil, fmt.Errorf("github app key: %w", err)
+		}
+		if cfg.BaseURL != "" {
+			atr.BaseURL = strings.TrimSuffix(cfg.BaseURL, "/")
+		}
+		appOpts := []gh.ClientOptionsFunc{gh.WithHTTPClient(&http.Client{Transport: atr, Timeout: 60 * time.Second})}
+		if cfg.BaseURL != "" {
+			appOpts = append(appOpts, gh.WithEnterpriseURLs(cfg.BaseURL, cfg.BaseURL))
+		}
+		if h.app, err = gh.NewClient(appOpts...); err != nil {
+			return nil, fmt.Errorf("github client: %w", err)
+		}
 	}
 	opts := []gh.ClientOptionsFunc{gh.WithHTTPClient(client)}
 	if cfg.Extra["auth"] == "token" {
@@ -395,6 +415,43 @@ func (h *Host) CommitsForPath(ctx context.Context, repo, path string, since time
 	return out, nil
 }
 
+// SetInstallationSuspended suspends or resumes the App installation (GitHub App mode only).
+func (h *Host) SetInstallationSuspended(ctx context.Context, suspended bool) (bool, error) {
+	if !h.appMode {
+		return false, nil
+	}
+	var err error
+	if suspended {
+		_, err = h.app.Apps.SuspendInstallation(ctx, h.installation)
+	} else {
+		_, err = h.app.Apps.UnsuspendInstallation(ctx, h.installation)
+	}
+	if err != nil {
+		return false, classify(err)
+	}
+	return true, nil
+}
+
+// Uninstall deletes the App installation (GitHub App mode only) and returns the App's settings page, where
+// its owner can delete the App itself.
+func (h *Host) Uninstall(ctx context.Context) (string, bool, error) {
+	if !h.appMode {
+		return "", false, nil
+	}
+	settings := ""
+	if app, _, err := h.app.Apps.Get(ctx, ""); err == nil && app.GetSlug() != "" {
+		settings = h.webURL + "/settings/apps/" + app.GetSlug()
+		if o := app.GetOwner(); o != nil && o.GetType() == "Organization" {
+			settings = h.webURL + "/organizations/" + o.GetLogin() + "/settings/apps/" + app.GetSlug()
+		}
+	}
+	resp, err := h.app.Apps.DeleteInstallation(ctx, h.installation)
+	if err != nil && (resp == nil || resp.StatusCode != http.StatusNotFound) { // 404: already uninstalled
+		return settings, false, classify(err)
+	}
+	return settings, true, nil
+}
+
 // BotIdentity returns the App's bot user ("<slug>[bot]") or the token's user.
 func (h *Host) BotIdentity(ctx context.Context) (ports.Identity, error) {
 	if h.identity != nil {
@@ -402,7 +459,7 @@ func (h *Host) BotIdentity(ctx context.Context) (ports.Identity, error) {
 	}
 	var id ports.Identity
 	if h.appMode {
-		app, _, err := h.c.Apps.Get(ctx, "")
+		app, _, err := h.app.Apps.Get(ctx, "")
 		if err != nil {
 			return id, classify(err)
 		}

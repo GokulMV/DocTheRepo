@@ -1,0 +1,9 @@
+* text=auto eol=lf
+*.png binary
+*.svg text
+# Generated files: collapsed in diffs.
+internal/store/gen/** linguist-generated=true
+web/package-lock.json linguist-generated=true
+test/e2e/package-lock.json linguist-generated=true
+docs/architecture/*.html linguist-generated=true
+THIRD_PARTY_LICENSES.md linguist-generated=true

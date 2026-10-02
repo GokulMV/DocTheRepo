@@ -337,7 +337,14 @@ func bootstrapOwner(ctx context.Context, cfg config.Config, st *store.Store, svc
 func (a *app) v1Routes() []func(chi.Router) {
 	admin := api.AdminDeps{Auth: a.auth, Repos: a.repos, Connectors: a.conns, Providers: a.provSrc.Providers, Routes: a.routes,
 		Browse: a.browse, Queue: a.q, Seal: a.box.Seal, ProviderAAD: secrets.ProviderKeyAAD, ProviderKinds: llm.Kinds(),
-		InvalidateProvider: a.llmPool.Invalidate, Host: a.hosts.Host, InvalidateHost: func(id string) { a.hosts.Invalidate(id); a.signals.InvalidateConnector(id) }, DryRun: a.pipe.CodePush,
+		InvalidateProvider: a.llmPool.Invalidate, Host: a.hosts.Host, InvalidateHost: func(id string) { a.hosts.Invalidate(id); a.signals.InvalidateConnector(id) },
+		HostAny: func(ctx context.Context, id string) (ports.CodeHost, error) {
+			cc, err := a.conns.GetAny(ctx, id)
+			if err != nil {
+				return nil, err
+			}
+			return codehost.Build(cc)
+		}, DryRun: a.pipe.CodePush,
 		RegisterWebhook: a.registerWebhook,
 		SealKeys:        a.sealKeys, RequireSealed: a.cfg.Settings.RequireSealed,
 		ReloadSpend: a.reloadGuard,

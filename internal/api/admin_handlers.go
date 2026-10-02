@@ -47,6 +47,8 @@ type AdminDeps struct {
 	// Host returns a git connector's adapter; InvalidateHost drops it after an edit.
 	Host           func(ctx context.Context, connectorID string) (ports.CodeHost, error)
 	InvalidateHost func(id string)
+	// HostAny builds a fresh adapter for any connector, enabled or not (to suspend or uninstall a GitHub App).
+	HostAny func(ctx context.Context, connectorID string) (ports.CodeHost, error)
 	// RegisterWebhook points the git host's push webhook for repo at this Hub; it reports "registered", or
 	// "skipped: …" when the connector polls. Best effort: a failure never blocks tracking the repository.
 	RegisterWebhook func(ctx context.Context, connectorID, repo string) (string, error)
@@ -373,13 +375,76 @@ func (h *adminHandlers) patchConnector(w http.ResponseWriter, r *http.Request) {
 	if h.d.SealKeys != nil && in.Credentials != nil {
 		_ = h.d.SealKeys.SetConnectorCredsHint(r.Context(), id, *in.Credentials)
 	}
+	// Disabling suspends a GitHub App installation, so GitHub stops sending events and the App's access
+	// pauses; enabling resumes it. The Hub-side change stands even if GitHub refuses.
+	var remote *remoteResult
+	if in.Enabled != nil {
+		remote = h.setSuspended(r, id, !*in.Enabled)
+	}
 	h.audit(r, "connector.update", "connector", id, map[string]any{"name": in.Name, "mode": in.Mode, "enabled": in.Enabled,
-		"credentials_changed": in.Credentials != nil, "webhook_secret_changed": in.WebhookSecret != nil})
-	w.WriteHeader(http.StatusNoContent)
+		"credentials_changed": in.Credentials != nil, "webhook_secret_changed": in.WebhookSecret != nil, "github": remote})
+	WriteJSON(w, http.StatusOK, map[string]any{"id": id, "github": remote})
+}
+
+// remoteResult reports what happened on the git host when a connector was disabled, enabled or removed.
+type remoteResult struct {
+	Action      string `json:"action"` // suspended | resumed | uninstalled
+	OK          bool   `json:"ok"`
+	Error       string `json:"error,omitempty"`
+	SettingsURL string `json:"settings_url,omitempty"` // where the App itself can be deleted
+}
+
+func (h *adminHandlers) installation(r *http.Request, id string) ports.AppInstallation {
+	if h.d.HostAny == nil {
+		return nil
+	}
+	host, err := h.d.HostAny(r.Context(), id)
+	if err != nil {
+		return nil
+	}
+	inst, _ := host.(ports.AppInstallation)
+	return inst
+}
+
+func (h *adminHandlers) setSuspended(r *http.Request, id string, suspend bool) *remoteResult {
+	inst := h.installation(r, id)
+	if inst == nil {
+		return nil
+	}
+	res := &remoteResult{Action: "resumed"}
+	if suspend {
+		res.Action = "suspended"
+	}
+	applied, err := inst.SetInstallationSuspended(r.Context(), suspend)
+	if err != nil {
+		res.Error = err.Error()
+		return res
+	}
+	if !applied {
+		return nil
+	}
+	res.OK = true
+	return res
 }
 
 func (h *adminHandlers) deleteConnector(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+	// Uninstall a GitHub App first, while its key is still stored: its access to the repositories ends and
+	// GitHub stops sending events. The connector is removed even if GitHub refuses (reported back).
+	var remote *remoteResult
+	if inst := h.installation(r, id); inst != nil {
+		res := &remoteResult{Action: "uninstalled"}
+		settings, applied, err := inst.Uninstall(r.Context())
+		res.SettingsURL = settings
+		switch {
+		case err != nil:
+			res.Error = err.Error()
+			remote = res
+		case applied:
+			res.OK = true
+			remote = res
+		}
+	}
 	if err := h.d.Connectors.Delete(r.Context(), id); err != nil {
 		WriteErr(w, r, err)
 		return
@@ -387,8 +452,8 @@ func (h *adminHandlers) deleteConnector(w http.ResponseWriter, r *http.Request) 
 	if h.d.InvalidateHost != nil {
 		h.d.InvalidateHost(id)
 	}
-	h.audit(r, "connector.delete", "connector", id, nil)
-	w.WriteHeader(http.StatusNoContent)
+	h.audit(r, "connector.delete", "connector", id, map[string]any{"github": remote})
+	WriteJSON(w, http.StatusOK, map[string]any{"id": id, "github": remote})
 }
 
 type check struct {

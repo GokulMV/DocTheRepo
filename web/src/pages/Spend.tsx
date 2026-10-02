@@ -9,7 +9,9 @@ const blank: SpendLimit = { scope: 'feature', scope_key: 'qa', window: 'day', ma
 export default function Spend() {
   const limits = useLimits();
   const [rows, setRows] = useState<SpendLimit[]>([]);
-  useEffect(() => setRows(limits.data ?? []), [limits.data]);
+  useEffect(() => {
+    setRows(limits.data ?? []);
+  }, [limits.data]);
   const save = useInvalidating((items: SpendLimit[]) => api.put('/spend/limits', { items }), keys.limits);
   const set = (i: number, patch: Partial<SpendLimit>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   const numOrNull = (v: string) => (v.trim() === '' ? null : Number(v));

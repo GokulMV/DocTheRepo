@@ -4,6 +4,7 @@ VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo de
 LDFLAGS   := -s -w -X main.version=$(VERSION)
 SQLC      ?= sqlc
 
+
 .PHONY: all build test test-unit test-integration cover lint vet fmt generate vuln audit security sbom scan-image clean web web-test release image cli-release deploy-lint e2e stack perf-push perf-qa perf-signals
 
 all: lint test build
@@ -115,3 +116,7 @@ scan-image: image ## Trivy scan of the container image: fails on fixable HIGH/CR
 
 clean:
 	rm -rf bin dist coverage.out .perf
+
+.PHONY: licenses
+licenses: ## Regenerate THIRD_PARTY_LICENSES.md (Go modules in the binaries, npm packages in the UI)
+	python3 scripts/licenses.py
