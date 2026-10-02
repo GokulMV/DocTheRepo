@@ -91,7 +91,8 @@ or GCP KMS key.
 - **Web UI** (`web/`, React + TypeScript): Setup, Ask, Docs, Palace, Library, Inbox, Issue, Known Issues,
   Repos, Connectors, Providers & routing, Spend, Analytics, Activity, Users, Account.
 - **CLI** `dth`: up/down/status, login, ask, repos (add, import, dry-run), jobs/retry, usage, tokens,
-  reindex, adapter-test, migrate.
+  reindex, adapter-test, migrate; `dth engine opencode` (opencode as a doc engine via `external_cli`) and
+  `dth mcp` (the Hub as a read-only MCP server for opencode, Claude Code, Cursor) — see `docs/opencode.md`.
 
 ## 6. Delivery and tests
 

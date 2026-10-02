@@ -75,7 +75,7 @@ func newRoot(out, errOut io.Writer) *cobra.Command {
 	root.PersistentFlags().StringVar(&a.token, "token", "", "personal access token (env DTH_TOKEN; default: saved by dth login)")
 	root.PersistentFlags().BoolVar(&a.asJSON, "json", false, "print raw JSON")
 	root.AddCommand(a.upCmd(), a.downCmd(), a.loginCmd(), a.statusCmd(), a.askCmd(), a.reposCmd(), a.importCmd(), a.dryRunCmd(),
-		a.jobsCmd(), a.retryCmd(), a.usageCmd(), a.tokenCmd(), a.reindexCmd(), a.adapterTestCmd(), a.migrateCmd())
+		a.jobsCmd(), a.retryCmd(), a.usageCmd(), a.tokenCmd(), a.reindexCmd(), a.adapterTestCmd(), a.migrateCmd(), a.engineCmd(), a.mcpCmd())
 	return root
 }
 
