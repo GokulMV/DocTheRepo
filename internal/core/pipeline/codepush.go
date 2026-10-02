@@ -119,6 +119,9 @@ func (p *Pipeline) CodePush(ctx context.Context, job ports.Job) (ports.Outcome, 
 	if err != nil {
 		return ports.Outcome{}, fmt.Errorf("compare %s..%s: %w", short(base), short(head), err)
 	}
+	if p.OnChanges != nil {
+		p.OnChanges(ctx, repo, host, head, changed)
+	}
 	forced := map[string]bool{}
 	for _, fp := range pl.ForcePaths {
 		forced[fp] = true
