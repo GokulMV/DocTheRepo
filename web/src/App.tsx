@@ -9,6 +9,7 @@ import Login from '@/pages/Login';
 const Ask = lazy(() => import('@/pages/Ask'));
 const Docs = lazy(() => import('@/pages/Docs'));
 const Palace = lazy(() => import('@/pages/Palace'));
+const Architecture = lazy(() => import('@/pages/Architecture'));
 const Library = lazy(() => import('@/pages/Library'));
 const Repos = lazy(() => import('@/pages/Repos'));
 const Connectors = lazy(() => import('@/pages/Connectors'));
@@ -40,6 +41,8 @@ export default function App() {
           <Route path="/docs/:nodeId" element={<Docs />} />
           <Route path="/palace" element={<Palace />} />
           <Route path="/palace/:entityId" element={<Palace />} />
+          <Route path="/architecture" element={<Architecture />} />
+          <Route path="/architecture/:repoId" element={<Architecture />} />
           <Route path="/library" element={<Library />} />
           <Route path="/library/:slug" element={<Library />} />
           <Route path="/inbox" element={<Inbox />} />

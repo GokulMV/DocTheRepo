@@ -111,6 +111,16 @@ Under construction, milestone by milestone (plan § 14). Implemented so far:
   [`docs/wiz-splunk.md`](docs/wiz-splunk.md).
 - **opencode & MCP**: opencode as a documentation engine (`dth engine opencode`) and the Hub as an MCP
   server for opencode, Claude Code, and Cursor (`dth mcp`). See [`docs/opencode.md`](docs/opencode.md).
+- **Architecture tab**: every repository's architecture, generated from its code on each push (callers,
+  endpoints, service and modules, topics, datastores, dependencies and consumers), plus diagrams authored
+  with [archify](https://github.com/tt-a1i/archify) and committed to the repository, synced on push and shown
+  sandboxed. See [`docs/architecture-tab.md`](docs/architecture-tab.md).
+- **Settings file**: configure providers, routing, connectors, repositories and spend limits from YAML/JSON
+  with secret references (`${env:}`, `${file:…#key}`, `${vault:}`, `${gopass:}`, `${awssm:}`, `${gcpsm:}`):
+  `dth apply -f`, or paste it under Administration → Settings file. See
+  [`docs/settings-file.md`](docs/settings-file.md).
+- **Phase 15 (in progress) — hardening**: govulncheck, npm audit and Trivy gates in CI plus a weekly scan;
+  CycloneDX SBOMs (`make sbom`). Operations, backup/restore and upgrade runbooks are next.
 
 ## Install
 
@@ -121,7 +131,7 @@ git clone https://github.com/GokulMV/DocTheRepo && cd DocTheRepo && ./scripts/qu
 ```
 
 Checks and installs what is missing, unattended: git, curl, tar, make, openssl, a C compiler, Go 1.25.11
-and Node.js 22 (private copies under `~/.dth-quickstart/toolchain` when the system ones are missing or too
+and Node.js 22.12+ (private copies under `~/.dth-quickstart/toolchain` when the system ones are missing or too
 old), and Docker + Compose (Linux: get.docker.com; macOS: Homebrew + Colima). It then builds the UI and the
 hub (`make release`), starts PostgreSQL/pgvector in Docker, runs the hub, creates the owner account, and
 opens <http://localhost:8080> with the credentials printed (and saved in `~/.dth-quickstart/credentials.txt`).

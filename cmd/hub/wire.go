@@ -89,6 +89,8 @@ type app struct {
 	suggest     *suggest.Service
 	// Knowledge: Confluence and Jira sync (Phase 13).
 	knowledge *ingest.KnowledgeSync
+	arch      *store.ArchitectureStore
+	archSync  *ingest.ArchitectureSync
 }
 
 func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.Box, q *queue.Queue, log *slog.Logger, m *observability.Metrics) (*app, error) {
@@ -229,6 +231,9 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 	a.pipe = &pipeline.Pipeline{Repos: repos, Chunks: a.chunks, Graph: store.NewGraph(st), Docs: a.docs, Savings: store.NewSavings(st),
 		Hosts: a.hosts.Host, Lander: &push.Dispatcher{PRs: prs, Lifecycle: a.sweeper}, GW: gw, DocGen: &docgen.Generator{GW: gw},
 		Indexer: indexer, Grammars: reg, Log: log.With("component", "pipeline")}
+	a.arch = store.NewArchitecture(st)
+	a.archSync = &ingest.ArchitectureSync{Repos: repos, Hosts: a.hosts.Host, Store: a.arch, Log: log.With("component", "architecture")}
+	a.pipe.OnChanges = a.archSync.OnChanges
 	return a, nil
 }
 
@@ -348,6 +353,7 @@ func (a *app) v1Routes() []func(chi.Router) {
 		api.IssueRoutes(api.IssueDeps{Auth: a.auth, Issues: store.NewIssues(a.st, a.knownIssues), KnownIssues: a.knownIssues,
 			Suggestions: a.suggestions, Suggest: a.suggest, Queue: a.q, ReloadRules: a.signals.Reload,
 			FetchLink: a.knowledge.FetchLink}),
+		api.ArchitectureRoutes(api.ArchitectureDeps{Auth: a.auth, Store: a.arch, Scan: a.archSync.Scan}),
 	}
 }
 

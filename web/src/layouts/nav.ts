@@ -1,6 +1,6 @@
 import {
   Activity, BookOpen, ChartColumn, FileCog, FolderGit2, Inbox, Library, MessageSquareText, Network, Plug, Rocket, ShieldCheck, SlidersHorizontal,
-  Users, Wallet, type LucideIcon,
+  Users, Wallet, Workflow, type LucideIcon,
 } from 'lucide-react';
 import type { Role } from '@/api/types';
 
@@ -20,6 +20,7 @@ export const NAV: { section: string; items: NavItem[] }[] = [
       { to: '/ask', label: 'Ask', min: 'viewer', icon: MessageSquareText },
       { to: '/docs', label: 'Docs', min: 'viewer', icon: BookOpen },
       { to: '/palace', label: 'Palace', min: 'viewer', icon: Network },
+      { to: '/architecture', label: 'Architecture', min: 'viewer', icon: Workflow },
       { to: '/library', label: 'Library', min: 'viewer', icon: Library },
     ],
   },

@@ -62,6 +62,9 @@ type Pipeline struct {
 	Indexer  *Indexer
 	Grammars *grammars.Registry
 	Log      *slog.Logger
+	// OnChanges, if set, sees every push's changed files (the Architecture tab syncs authored diagrams).
+	// It must not fail the push.
+	OnChanges func(ctx context.Context, repo ports.RepoConfig, host ports.CodeHost, head string, changed []ports.ChangedFile)
 }
 
 func (p *Pipeline) log() *slog.Logger {
