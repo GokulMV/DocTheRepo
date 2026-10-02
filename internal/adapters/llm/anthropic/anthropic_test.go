@@ -242,3 +242,44 @@ func TestChat_StreamWithoutEventsIsAnError(t *testing.T) {
 	_, transient := ports.AsTransient(err)
 	assert.True(t, transient, "an empty stream must never look like an empty successful reply: %v", err)
 }
+
+// A route can set an effort the model does not accept (Haiku): the request is retried without it, the
+// model is remembered, and Haiku never gets it in the first place.
+func TestChat_EffortDroppedForModelsThatRejectIt(t *testing.T) {
+	var mu sync.Mutex
+	var calls, withEffort int
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, _ := io.ReadAll(r.Body)
+		var body map[string]any
+		_ = json.Unmarshal(raw, &body)
+		oc, _ := body["output_config"].(map[string]any)
+		mu.Lock()
+		calls++
+		if oc["effort"] != nil {
+			withEffort++
+		}
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		if oc["effort"] != nil {
+			w.WriteHeader(400)
+			_, _ = io.WriteString(w, `{"type":"error","error":{"type":"invalid_request_error","message":"This model does not support the effort parameter."}}`)
+			return
+		}
+		_, _ = io.WriteString(w, message("end_turn", "ok"))
+	}))
+	defer s.Close()
+	a := adapter(t, s.URL, nil)
+	ask := func(model string) {
+		t.Helper()
+		resp, err := a.Chat(context.Background(), ports.ChatRequest{Model: model, Effort: "medium", Messages: []ports.ChatMessage{{Role: "user", Content: "hi"}}})
+		require.NoError(t, err)
+		assert.Equal(t, "ok", resp.Text)
+	}
+	ask("claude-future-model")
+	assert.Equal(t, 2, calls, "rejected once, then retried without effort")
+	ask("claude-future-model")
+	assert.Equal(t, 3, calls, "remembered: no wasted request")
+	ask("claude-haiku-4-5-20251001")
+	assert.Equal(t, 4, calls)
+	assert.Equal(t, 1, withEffort, "Haiku never gets the effort parameter")
+}

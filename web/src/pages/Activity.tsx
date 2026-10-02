@@ -91,7 +91,7 @@ export default function Activity() {
               <li key={a.kind + a.ref_id + a.at} className="flex items-baseline justify-between gap-3 py-2">
                 <span>
                   <span title={a.action}><Badge tone={a.kind === 'audit' ? 'blue' : statusTone(a.action.split(':')[1] ?? '')}>{ACTIONS[a.action] ?? a.action}</Badge></span>
-                  {a.detail && <span className="ml-2 break-all text-slate-500">{name(a.detail)}</span>}
+                  {a.detail && <span title={a.detail} className="mt-1 line-clamp-2 break-all text-slate-500">{name(a.detail)}</span>}
                 </span>
                 <span className="shrink-0 text-xs text-slate-400">{relTime(a.at)}</span>
               </li>

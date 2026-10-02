@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	sdk "github.com/anthropics/anthropic-sdk-go"
@@ -45,6 +46,27 @@ type Adapter struct {
 	messages  *sdk.BetaMessageService
 	models    *sdk.ModelService // nil on platforms without the Models API
 	fallbacks bool
+	// noEffort remembers models that rejected the effort parameter, so it is not sent to them again.
+	noEffort sync.Map
+}
+
+// effortUnsupported reports models known not to accept the effort parameter (it is ignored for them
+// rather than failing every request). Others are learned from their first rejection.
+func (a *Adapter) effortUnsupported(model string) bool {
+	if _, ok := a.noEffort.Load(model); ok {
+		return true
+	}
+	m := strings.ToLower(model)
+	return strings.Contains(m, "haiku") || strings.HasPrefix(m, "claude-3")
+}
+
+// isEffortRejection reports the API's "this model does not support the effort parameter" error.
+func isEffortRejection(err error) bool {
+	var apiErr *sdk.Error
+	if !errors.As(err, &apiErr) || apiErr.StatusCode != 400 {
+		return false
+	}
+	return strings.Contains(strings.ToLower(apiErr.Error()), "effort")
 }
 
 // New builds a Claude API adapter. Extra["fallbacks"]="off" disables refusal fallbacks.
@@ -130,7 +152,7 @@ func (a *Adapter) Chat(ctx context.Context, req ports.ChatRequest) (ports.ChatRe
 			p.Messages = append(p.Messages, sdk.NewBetaUserMessage(block))
 		}
 	}
-	if req.Effort != "" {
+	if req.Effort != "" && !a.effortUnsupported(req.Model) {
 		p.OutputConfig.Effort = sdk.BetaOutputConfigEffort(req.Effort)
 	}
 	if req.JSONSchema != nil {
@@ -141,40 +163,52 @@ func (a *Adapter) Chat(ctx context.Context, req ports.ChatRequest) (ports.ChatRe
 		p.Betas = append(p.Betas, sdk.AnthropicBetaServerSideFallback2026_07_01)
 	}
 
-	var msg *sdk.BetaMessage
-	if req.OnDelta != nil || maxTokens > streamAbove {
-		stream := a.messages.NewStreaming(ctx, p)
-		acc := sdk.BetaMessage{}
-		for stream.Next() {
-			ev := stream.Current()
-			if err := acc.Accumulate(ev); err != nil {
-				return ports.ChatResponse{}, ports.Transient(fmt.Errorf("claude stream: %w", err))
-			}
-			if req.OnDelta != nil {
-				if d, ok := ev.AsAny().(sdk.BetaRawContentBlockDeltaEvent); ok {
-					if t, ok := d.Delta.AsAny().(sdk.BetaTextDelta); ok {
-						req.OnDelta(t.Text)
-					}
+	msg, err := a.send(ctx, p, req.OnDelta, maxTokens)
+	if err != nil && p.OutputConfig.Effort != "" && isEffortRejection(err) {
+		// The route sets an effort this model does not accept: remember that, and send it without.
+		a.noEffort.Store(req.Model, true)
+		p.OutputConfig.Effort = ""
+		msg, err = a.send(ctx, p, req.OnDelta, maxTokens)
+	}
+	if err != nil {
+		return ports.ChatResponse{}, err
+	}
+	return toResponse(msg, int(maxTokens))
+}
+
+// send performs one request, streaming long or incremental generations.
+func (a *Adapter) send(ctx context.Context, p sdk.BetaMessageNewParams, onDelta func(string), maxTokens int64) (*sdk.BetaMessage, error) {
+	if onDelta == nil && maxTokens <= streamAbove {
+		m, err := a.messages.New(ctx, p)
+		if err != nil {
+			return nil, classify(err)
+		}
+		return m, nil
+	}
+	stream := a.messages.NewStreaming(ctx, p)
+	acc := sdk.BetaMessage{}
+	for stream.Next() {
+		ev := stream.Current()
+		if err := acc.Accumulate(ev); err != nil {
+			return nil, ports.Transient(fmt.Errorf("claude stream: %w", err))
+		}
+		if onDelta != nil {
+			if d, ok := ev.AsAny().(sdk.BetaRawContentBlockDeltaEvent); ok {
+				if t, ok := d.Delta.AsAny().(sdk.BetaTextDelta); ok {
+					onDelta(t.Text)
 				}
 			}
 		}
-		if err := stream.Err(); err != nil {
-			return ports.ChatResponse{}, classify(err)
-		}
-		if acc.ID == "" {
-			// No message_start event: the upstream (or a proxy) did not stream. Never treat that as an
-			// empty but successful reply.
-			return ports.ChatResponse{}, ports.Transient(errors.New("claude stream contained no events"))
-		}
-		msg = &acc
-	} else {
-		m, err := a.messages.New(ctx, p)
-		if err != nil {
-			return ports.ChatResponse{}, classify(err)
-		}
-		msg = m
 	}
-	return toResponse(msg, int(maxTokens))
+	if err := stream.Err(); err != nil {
+		return nil, classify(err)
+	}
+	if acc.ID == "" {
+		// No message_start event: the upstream (or a proxy) did not stream. Never treat that as an
+		// empty but successful reply.
+		return nil, ports.Transient(errors.New("claude stream contained no events"))
+	}
+	return &acc, nil
 }
 
 func toResponse(msg *sdk.BetaMessage, maxTokens int) (ports.ChatResponse, error) {
