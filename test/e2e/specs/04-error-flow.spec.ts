@@ -15,7 +15,7 @@ test('error flow: Sentry webhook → decoded in the Inbox → mark as known → 
   await page.goto('/connectors');
   await page.getByRole('button', { name: 'Add signal source' }).click();
   const dialog = page.getByRole('dialog', { name: 'Add a signal source' });
-  await dialog.getByLabel('Source').selectOption('sentry');
+  await dialog.getByRole('combobox', { name: /^Source/ }).selectOption('sentry');
   await dialog.getByLabel('Name').fill('Sentry (e2e)');
   await dialog.getByRole('button', { name: 'Add' }).click();
   const details = page.getByLabel('Webhook details');

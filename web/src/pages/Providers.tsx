@@ -1,3 +1,4 @@
+import { Cpu } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api } from '@/api/client';
 import { keys, useInvalidating, useProviders, useRoutes } from '@/api/hooks';
@@ -158,7 +159,7 @@ export default function Providers() {
       <ErrorNote error={providers.error ?? routes.error} />
       <Card title="Providers" className="mb-6">
         {list.length === 0 ? (
-          <Empty title="No providers">Add Anthropic, OpenAI, Azure OpenAI, Bedrock, Vertex, Ollama, or any OpenAI-compatible endpoint.</Empty>
+          <Empty icon={Cpu} title="No providers">Add Anthropic, OpenAI, Azure OpenAI, Bedrock, Vertex, Ollama, or any OpenAI-compatible endpoint.</Empty>
         ) : (
           <Table head={['Name', 'Kind', 'Key', 'Test', '']}>{list.map((p) => <ProviderRow key={p.id} p={p} />)}</Table>
         )}

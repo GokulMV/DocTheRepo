@@ -126,6 +126,13 @@ export interface Neighbourhood {
   edges: GraphEdge[];
 }
 
+export interface Overview {
+  nodes: (Entity & { degree: number })[];
+  edges: (GraphEdge & { weight: number })[];
+  counts: Record<string, number>;
+  truncated: boolean;
+}
+
 export interface Shelf {
   id: string;
   slug: string;

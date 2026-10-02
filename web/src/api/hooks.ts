@@ -11,6 +11,7 @@ import type {
   KnownIssue,
   Me,
   Neighbourhood,
+  Overview,
   Page,
   Provider,
   Repo,
@@ -76,6 +77,12 @@ export const useEntities = (kind: string, q: string) =>
   useQuery({
     queryKey: ['entities', kind, q],
     queryFn: () => api.get<Page<Entity>>(`/palace/entities${qs({ kind, q, limit: 100 })}`),
+  });
+
+export const useOverview = (kinds: string[]) =>
+  useQuery({
+    queryKey: ['palace-overview', kinds],
+    queryFn: () => api.get<Overview>(`/palace/overview${qs({ kinds: kinds.join(','), limit: 300 })}`),
   });
 
 export const useGraph = (id?: string, depth = 1) =>

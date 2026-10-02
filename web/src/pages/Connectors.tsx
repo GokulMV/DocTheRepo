@@ -1,3 +1,4 @@
+import { Plug } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api } from '@/api/client';
 import { keys, useConnectors, useInvalidating } from '@/api/hooks';
@@ -267,7 +268,7 @@ export default function Connectors() {
       )}
       {conns.isLoading && <Spinner />}
       <ErrorNote error={conns.error ?? sync.error ?? del.error} />
-      {conns.data?.length === 0 && <Empty title="No connectors yet">Connect GitHub or GitLab to start, then add the tools that report your errors and alerts.</Empty>}
+      {conns.data?.length === 0 && <Empty icon={Plug} title="No connectors yet">Connect GitHub or GitLab to start, then add the tools that report your errors and alerts.</Empty>}
       {!!conns.data?.length && (
         <Card>
           <Table head={['Name', 'Type', 'Mode', 'Health', 'Last sync', '']}>

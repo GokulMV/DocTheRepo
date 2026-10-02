@@ -24,6 +24,7 @@ func BrowseRoutes(b *store.Browse, svc *auth.Service) func(chi.Router) {
 			r.Get("/docs/node/{id}", h.node)
 			r.Get("/palace/entities", h.entities)
 			r.Get("/palace/entities/{id}/graph", h.graph)
+			r.Get("/palace/overview", h.overview)
 			r.Get("/library/shelves", h.shelves)
 			r.Get("/library/shelves/{slug}", h.shelf)
 		})
@@ -160,6 +161,33 @@ func (h *browseHandlers) graph(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteJSON(w, http.StatusOK, g)
+}
+
+func (h *browseHandlers) overview(w http.ResponseWriter, r *http.Request) {
+	sc, err := scopeOf(r, h.auth)
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	limit := 300
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if limit, err = strconv.Atoi(v); err != nil || limit < 1 || limit > 1000 {
+			fail(w, r, errBadParam("limit must be between 1 and 1000"))
+			return
+		}
+	}
+	var kinds []string
+	for _, k := range strings.Split(r.URL.Query().Get("kinds"), ",") {
+		if k = strings.TrimSpace(k); k != "" {
+			kinds = append(kinds, k)
+		}
+	}
+	o, err := h.b.Overview(r.Context(), kinds, limit, sc)
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, o)
 }
 
 func (h *browseHandlers) shelves(w http.ResponseWriter, r *http.Request) {

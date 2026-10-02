@@ -78,7 +78,7 @@ test('cold start: connect, push, docs PR merged, cited answer', async ({ page })
   mark(`First sync documents the existing code; its docs PR merges once CI is green.`);
   await page.goto('/connectors');
   await page.getByRole('button', { name: 'Sync now' }).click();
-  await expect(page.getByText('Queued 1 push job(s).')).toBeVisible();
+  await expect(page.getByText('Queued 1 sync job(s).')).toBeVisible();
   const first = await docsPRMerged(repo, []);
 
   // A developer pushes new code; the webhook delivers it and a new docs PR follows.

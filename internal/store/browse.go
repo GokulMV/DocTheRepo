@@ -572,3 +572,136 @@ func (b *Browse) ReindexEstimate(ctx context.Context) (int64, int64, error) {
 	t, err := b.s.Q.LiveChunkTokens(ctx)
 	return n, int64(t), err
 }
+
+// OverviewNode is an entity on the Palace overview with its connection count.
+type OverviewNode struct {
+	Entity
+	Degree int `json:"degree"`
+}
+
+// OverviewEdge is an edge between overview nodes; Weight counts the underlying edges it stands for.
+type OverviewEdge struct {
+	Src    string `json:"src"`
+	Dst    string `json:"dst"`
+	Kind   string `json:"kind"`
+	Weight int    `json:"weight"`
+}
+
+// Overview is the Palace's high-level map.
+type Overview struct {
+	Nodes     []OverviewNode `json:"nodes"`
+	Edges     []OverviewEdge `json:"edges"`
+	Counts    map[string]int `json:"counts"`
+	Truncated bool           `json:"truncated"`
+}
+
+// DefaultOverviewKinds are the entity kinds the overview shows unless asked otherwise.
+var DefaultOverviewKinds = []string{"repo", "service", "queue_topic", "datastore", "endpoint", "confluence_page"}
+
+// maxOverviewEdges bounds the edges scanned for one overview.
+const maxOverviewEdges = 50000
+
+// Overview returns the most connected entities of the given kinds (ACL-filtered) and the edges among
+// them. Edges whose endpoint is a finer entity (a symbol publishing to a topic, a file reading an env
+// var) are lifted to that entity's repository when the repository is on the map, so the overview shows
+// "repo publishes topic" without listing every symbol.
+func (b *Browse) Overview(ctx context.Context, kinds []string, limit int, sc rag.Scope) (Overview, error) {
+	if len(kinds) == 0 {
+		kinds = DefaultOverviewKinds
+	}
+	out := Overview{Nodes: []OverviewNode{}, Edges: []OverviewEdge{}, Counts: map[string]int{}}
+	acl := `(e.repo_id IS NULL OR $1::boolean OR e.repo_id = ANY($2::uuid[]))`
+	rows, err := b.s.Pool.Query(ctx, `SELECT e.kind, count(*) FROM entities e WHERE e.deleted_at IS NULL AND `+acl+` GROUP BY e.kind`, sc.All, ids(sc))
+	if err != nil {
+		return out, err
+	}
+	for rows.Next() {
+		var k string
+		var n int
+		if err := rows.Scan(&k, &n); err != nil {
+			rows.Close()
+			return out, err
+		}
+		out.Counts[k] = n
+	}
+	rows.Close()
+
+	rows, err = b.s.Pool.Query(ctx, `SELECT e.id, e.kind, e.key, e.name, e.repo_id, e.attrs, e.last_seen,
+			(SELECT count(*) FROM edges x WHERE x.deleted_at IS NULL AND (x.src_id = e.id OR x.dst_id = e.id))::int AS degree
+		FROM entities e WHERE e.deleted_at IS NULL AND e.kind = ANY($3::text[]) AND `+acl+`
+		ORDER BY degree DESC, e.kind, e.key LIMIT $4`, sc.All, ids(sc), kinds, limit+1)
+	if err != nil {
+		return out, err
+	}
+	nodes := map[string]bool{}
+	repoNode := map[string]string{} // repo_id → overview node of kind repo
+	for rows.Next() {
+		var n OverviewNode
+		var repo *string
+		var attrs json.RawMessage
+		if err := rows.Scan(&n.ID, &n.Kind, &n.Key, &n.Name, &repo, &attrs, &n.LastSeen, &n.Degree); err != nil {
+			rows.Close()
+			return out, err
+		}
+		if len(out.Nodes) == limit {
+			out.Truncated = true
+			continue
+		}
+		n.Entity = toEntity(n.ID, n.Kind, n.Key, n.Name, repo, attrs, n.LastSeen)
+		out.Nodes = append(out.Nodes, n)
+		nodes[n.ID] = true
+		if n.Kind == "repo" && repo != nil {
+			repoNode[*repo] = n.ID
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return out, err
+	}
+	if len(nodes) == 0 {
+		return out, nil
+	}
+
+	rows, err = b.s.Pool.Query(ctx, `SELECT x.kind, s.id, s.repo_id, d.id, d.repo_id
+		FROM edges x JOIN entities s ON s.id = x.src_id JOIN entities d ON d.id = x.dst_id
+		WHERE x.deleted_at IS NULL AND s.deleted_at IS NULL AND d.deleted_at IS NULL AND x.kind <> 'contains'
+		  AND (s.kind = ANY($1::text[]) OR d.kind = ANY($1::text[]))
+		LIMIT $2`, kinds, maxOverviewEdges)
+	if err != nil {
+		return out, err
+	}
+	defer rows.Close()
+	lift := func(id string, repo *string) string {
+		if nodes[id] {
+			return id
+		}
+		if repo != nil {
+			return repoNode[*repo]
+		}
+		return ""
+	}
+	agg := map[[3]string]int{}
+	for rows.Next() {
+		var kind, src, dst string
+		var srcRepo, dstRepo *string
+		if err := rows.Scan(&kind, &src, &srcRepo, &dst, &dstRepo); err != nil {
+			return out, err
+		}
+		s, d := lift(src, srcRepo), lift(dst, dstRepo)
+		if s == "" || d == "" || s == d {
+			continue
+		}
+		agg[[3]string{s, kind, d}]++
+	}
+	if err := rows.Err(); err != nil {
+		return out, err
+	}
+	for k, w := range agg {
+		out.Edges = append(out.Edges, OverviewEdge{Src: k[0], Kind: k[1], Dst: k[2], Weight: w})
+	}
+	sort.Slice(out.Edges, func(i, j int) bool {
+		a, b := out.Edges[i], out.Edges[j]
+		return a.Src+a.Kind+a.Dst < b.Src+b.Kind+b.Dst
+	})
+	return out, nil
+}

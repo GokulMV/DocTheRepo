@@ -128,7 +128,8 @@ arch_name() { # → amd64 | arm64
 # ensure_go puts Go $GO_VERSION on PATH: the system go if it is that version, else a private download.
 ensure_go() {
   local tc="$STATE_DIR/toolchain/go$GO_VERSION"
-  if have go && [ "$(go env GOVERSION 2>/dev/null)" = "go$GO_VERSION" ]; then :
+  # GOTOOLCHAIN=local: an older go would otherwise auto-switch and report the wanted version.
+  if have go && [ "$(GOTOOLCHAIN=local go env GOVERSION 2>/dev/null)" = "go$GO_VERSION" ]; then :
   elif [ -x "$tc/bin/go" ]; then export PATH="$tc/bin:$PATH"
   else
     local os plat tmp; os="$(echo "$OS" | tr '[:upper:]' '[:lower:]')"; plat="$os-$(arch_name)"
