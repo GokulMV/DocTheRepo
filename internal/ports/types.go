@@ -65,9 +65,19 @@ type Job struct {
 	CorrelationID string          `json:"correlation_id"`
 	Error         string          `json:"error,omitempty"`
 	Result        json.RawMessage `json:"result,omitempty"`
-	ReplayedFrom  string          `json:"replayed_from,omitempty"`
-	CreatedAt     time.Time       `json:"created_at"`
-	UpdatedAt     time.Time       `json:"updated_at"`
+	// Progress is a running job's latest progress report (JobProgress), if it reports one.
+	Progress     json.RawMessage `json:"progress,omitempty"`
+	ReplayedFrom string          `json:"replayed_from,omitempty"`
+	CreatedAt    time.Time       `json:"created_at"`
+	UpdatedAt    time.Time       `json:"updated_at"`
+}
+
+// JobProgress is what a running job reports as it goes: a stage, and how far through it is.
+type JobProgress struct {
+	Stage string `json:"stage"`          // e.g. "documenting", "writing"
+	Done  int    `json:"done"`           // items finished
+	Total int    `json:"total"`          // items in this stage
+	Item  string `json:"item,omitempty"` // the latest item, e.g. a file path
 }
 
 // NewJob describes a job to enqueue.

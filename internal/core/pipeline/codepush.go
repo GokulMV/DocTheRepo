@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"golang.org/x/sync/errgroup"
 	"path"
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/GokulMV/DocTheRepo/internal/core/chunker"
 	"github.com/GokulMV/DocTheRepo/internal/core/docassembly"
@@ -214,6 +216,9 @@ func (p *Pipeline) CodePush(ctx context.Context, job ports.Job) (ports.Outcome, 
 		res.DocFiles = append(res.DocFiles, d.Path)
 	}
 	status := ports.JobDone
+	if p.Progress != nil && len(docs.files) > 0 {
+		p.Progress(ctx, job.ID, ports.JobProgress{Stage: "writing", Done: 0, Total: len(docs.files)})
+	}
 	if len(docs.files) > 0 {
 		bot, err := host.BotIdentity(ctx)
 		if err != nil {
@@ -458,7 +463,10 @@ func (p *Pipeline) generate(ctx context.Context, host ports.CodeHost, repo ports
 			}
 		}
 	}
-	for _, w := range todo {
+	// Build each file's scoped context first (cheap, and it shares caches), then generate the files in
+	// parallel: a large repository has hundreds of files, and one model call at a time took tens of minutes.
+	contexts := make([]scopedcontext.Context, len(todo))
+	for i, w := range todo {
 		in := scopedcontext.Input{Files: map[string]*chunker.FileAnalysis{w.fc.Path: w.analysis}, BudgetTokens: budget,
 			CrossFiles: map[string]*chunker.FileAnalysis{}}
 		for _, t := range w.targets {
@@ -479,19 +487,44 @@ func (p *Pipeline) generate(ctx context.Context, host ports.CodeHost, repo ports
 				}
 			}
 		}
-		sc := scopedcontext.Build(in)
-		res.EstimatedTokens += int64(sc.Tokens)
+		contexts[i] = scopedcontext.Build(in)
+		res.EstimatedTokens += int64(contexts[i].Tokens)
 		res.Documented += len(w.targets)
-		if dryRun {
-			continue
-		}
-		w.gen, err = p.DocGen.Generate(ctx, meta, docgen.Request{JobID: jobID, Repo: repo.FullName, CommitSHA: head, DocsPath: repo.DocsPath,
-			SourcePath: w.fc.Path, Targets: w.targets, Context: sc})
-		if err != nil {
-			return err
+	}
+	if dryRun {
+		return nil
+	}
+	report := func(done int, item string) {
+		if p.Progress != nil {
+			p.Progress(ctx, jobID, ports.JobProgress{Stage: "documenting", Done: done, Total: len(todo), Item: item})
 		}
 	}
-	return nil
+	report(0, "")
+	parallel := p.DocGenParallel
+	if parallel <= 0 {
+		parallel = 4
+	}
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(parallel)
+	var mu sync.Mutex
+	done := 0
+	for i, w := range todo {
+		g.Go(func() error {
+			gen, err := p.DocGen.Generate(gctx, meta, docgen.Request{JobID: jobID, Repo: repo.FullName, CommitSHA: head, DocsPath: repo.DocsPath,
+				SourcePath: w.fc.Path, Targets: w.targets, Context: contexts[i]})
+			if err != nil {
+				return err
+			}
+			w.gen = gen
+			mu.Lock()
+			done++
+			n := done
+			mu.Unlock()
+			report(n, w.fc.Path)
+			return nil
+		})
+	}
+	return g.Wait()
 }
 
 // docSet is the doc files a push writes.

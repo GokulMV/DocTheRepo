@@ -1506,6 +1506,7 @@ type Job struct {
 	ReplayedFrom  *string         `json:"replayed_from"`
 	CreatedAt     time.Time       `json:"created_at"`
 	UpdatedAt     time.Time       `json:"updated_at"`
+	Progress      json.RawMessage `json:"progress"`
 }
 
 type KnowledgeDoc struct {
