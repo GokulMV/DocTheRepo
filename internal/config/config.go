@@ -45,6 +45,15 @@ type Config struct {
 	Vector    VectorConfig    `yaml:"vector"`
 	Decide    DecideConfig    `yaml:"decide"`
 	Settings  SettingsConfig  `yaml:"settings"`
+	Ask       AskConfig       `yaml:"ask"`
+}
+
+// AskConfig tunes Ask.
+type AskConfig struct {
+	// AgentSteps is how many steps the model may take to look further (search again, read a file, list
+	// files) when one round of retrieval finds too little (DTH_ASK_AGENT_STEPS; 0 turns it off). Answers
+	// found that way are cached like any other.
+	AgentSteps int `yaml:"agent_steps"`
 }
 
 // SettingsConfig is the policy for settings files pasted into the UI (Administration → Settings file).
@@ -225,6 +234,7 @@ func Default() Config {
 		Retention: RetentionConfig{EventDays: 30, ChunkGCDays: 14},
 		Grammars:  GrammarsConfig{LoadDir: "./grammars"},
 		Decide:    DecideConfig{GateThreshold: 0.9},
+		Ask:       AskConfig{AgentSteps: 4},
 	}
 }
 
@@ -300,6 +310,13 @@ func applyEnv(cfg *Config) error {
 	}
 	if v, ok := os.LookupEnv("DTH_OIDC_ALLOWED_DOMAINS"); ok {
 		cfg.Auth.OIDC.AllowedDomains = splitList(v)
+	}
+	if v, ok := os.LookupEnv("DTH_ASK_AGENT_STEPS"); ok {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 || n > 10 {
+			return fmt.Errorf("DTH_ASK_AGENT_STEPS: want 0 to 10, got %q", v)
+		}
+		cfg.Ask.AgentSteps = n
 	}
 	if v, ok := os.LookupEnv("DTH_PR_SWEEP_INTERVAL"); ok {
 		d, err := time.ParseDuration(v)

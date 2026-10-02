@@ -269,3 +269,27 @@ func (q *QA) SetFeedback(ctx context.Context, userID, messageID, value, comment 
 	}
 	return err
 }
+
+// ChunksForPath returns the chunks of files at path (or ending with it) within the scope.
+func (q *QA) ChunksForPath(ctx context.Context, path string, sc rag.Scope, limit int) ([]ports.Chunk, error) {
+	all, rids, srcs := scopeArgs(sc)
+	rows, err := q.s.Q.ChunksForPath(ctx, gen.ChunksForPathParams{Path: strings.TrimPrefix(strings.TrimSpace(path), "/"), AllRepos: all, RepoIds: rids, Sources: srcs, Lim: int32(limit)})
+	if err != nil {
+		return nil, err
+	}
+	return toChunks(rows), nil
+}
+
+// ListPaths lists indexed files whose path contains the text, within the scope.
+func (q *QA) ListPaths(ctx context.Context, contains string, sc rag.Scope, limit int) ([]rag.PathEntry, error) {
+	all, rids, srcs := scopeArgs(sc)
+	rows, err := q.s.Q.ListChunkPaths(ctx, gen.ListChunkPathsParams{Contains: strings.TrimSpace(contains), AllRepos: all, RepoIds: rids, Sources: srcs, Lim: int32(limit)})
+	if err != nil {
+		return nil, err
+	}
+	out := make([]rag.PathEntry, len(rows))
+	for i, r := range rows {
+		out[i] = rag.PathEntry{Repo: r.Scope, Path: r.Path, Chunks: int(r.Chunks)}
+	}
+	return out, nil
+}

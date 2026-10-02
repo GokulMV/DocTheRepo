@@ -86,6 +86,8 @@ type Engine struct {
 	// Observe receives retrieval stage timings (embed, vector_search, full_text, load_expand, total);
 	// optional.
 	Observe func(stage string, d time.Duration)
+	// AgentSteps is how many steps the agent may take when retrieval finds too little (0: off).
+	AgentSteps int
 }
 
 // Query is one question.
@@ -96,6 +98,10 @@ type Query struct {
 	History []ports.ChatMessage
 	UserID  string
 	OnDelta func(text string)
+	// OnStatus reports the agent's steps while it looks further; optional.
+	OnStatus func(Status)
+	// OnReset says that text already streamed is replaced by a new answer; optional.
+	OnReset func()
 }
 
 // Citation is a resolved source reference.
@@ -119,6 +125,8 @@ type Answer struct {
 	CostUSD   float64          `json:"cost_usd"`
 	Model     string           `json:"model,omitempty"`
 	Provider  string           `json:"provider,omitempty"`
+	// Investigated: retrieval found too little, so the agent looked further before answering.
+	Investigated bool `json:"investigated,omitempty"`
 }
 
 // ErrEmptyQuestion is returned for blank or oversized questions.
@@ -230,35 +238,99 @@ func (e *Engine) Ask(ctx context.Context, q Query) (Answer, error) {
 	if budget <= 0 {
 		budget = DefaultBudget
 	}
+	q.Question = question
+	var agentUsage ports.TokenUsage
+	investigated := false
+	deeper := func() {
+		chunks = e.investigate(ctx, meta, q, chunks, &agentUsage)
+		investigated = true
+	}
 	packed := Pack(chunks, budget)
+	if e.AgentSteps > 0 && len(packed) < AgentMinSources {
+		deeper() // too little to answer from: look further first
+		packed = Pack(chunks, budget)
+	}
 	if len(packed) == 0 {
-		a := Answer{Text: NotFoundAnswer, Citations: []Citation{}}
+		a := Answer{Text: NotFoundAnswer, Citations: []Citation{}, Investigated: investigated, Usage: agentUsage}
 		if q.OnDelta != nil {
 			q.OnDelta(a.Text)
 		}
 		return a, nil
 	}
-	msgs := append([]ports.ChatMessage{}, q.History...)
-	msgs = append(msgs, ports.ChatMessage{Role: "user", Content: Prompt(question, packed)})
-	resp, err := e.GW.Chat(ctx, llmgateway.FeatureQA, meta, ports.ChatRequest{System: System, Messages: msgs, OnDelta: q.OnDelta})
+	// While the agent could still run, a "not found" reply is held back rather than streamed.
+	a, streamed, err := e.answer(ctx, meta, rt, q, packed, e.AgentSteps > 0 && !investigated)
 	if err != nil {
 		return Answer{}, err
 	}
-	a := Answer{Usage: resp.Usage, Model: resp.Model, Provider: rt.ProviderKind}
-	if a.Model == "" {
-		a.Model = rt.Model
+	if len(a.Citations) == 0 && e.AgentSteps > 0 && !investigated {
+		if streamed && q.OnReset != nil {
+			q.OnReset() // an uncited reply was shown; the investigated answer replaces it
+		}
+		deeper()
+		if packed = Pack(chunks, budget); len(packed) > 0 {
+			first := a.Usage
+			if a, _, err = e.answer(ctx, meta, rt, q, packed, false); err != nil {
+				return Answer{}, err
+			}
+			agentUsage.InputTokens += first.InputTokens
+			agentUsage.OutputTokens += first.OutputTokens
+		} else if q.OnDelta != nil {
+			q.OnDelta(a.Text)
+		}
 	}
+	a.Investigated = investigated
+	a.Usage.InputTokens += agentUsage.InputTokens
+	a.Usage.OutputTokens += agentUsage.OutputTokens
+	a.Usage.CacheReadTokens += agentUsage.CacheReadTokens
+	a.Usage.CacheWriteTokens += agentUsage.CacheWriteTokens
 	if e.Cost != nil {
-		a.CostUSD, _ = e.Cost(rt.ProviderKind, a.Model, llmgateway.FeatureQA, resp.Usage.InputTokens, resp.Usage.OutputTokens)
-	}
-	a.Text, a.Citations = Cite(resp.Text, packed)
-	if len(a.Citations) == 0 {
-		a.Text = NotFoundAnswer
+		a.CostUSD, _ = e.Cost(rt.ProviderKind, a.Model, llmgateway.FeatureQA, a.Usage.InputTokens, a.Usage.OutputTokens)
 	}
 	if key != "" && len(a.Citations) > 0 {
 		_ = e.Store.PutAnswer(ctx, key, Answer{Text: a.Text, Citations: a.Citations, Model: a.Model, Provider: a.Provider})
 	}
 	return a, nil
+}
+
+// answer asks the model to answer from packed, through the citation contract. With holdNotFound, streamed
+// text is held back while it could still be the "not found" sentence, which is then not streamed at all
+// (the caller looks further instead); streamed reports whether any text reached q.OnDelta.
+func (e *Engine) answer(ctx context.Context, meta llmgateway.CallMeta, rt llmgateway.Route, q Query, packed []ports.Chunk, holdNotFound bool) (Answer, bool, error) {
+	streamed := false
+	var onDelta func(string)
+	if q.OnDelta != nil {
+		var held strings.Builder
+		flowing := !holdNotFound
+		onDelta = func(t string) {
+			if !flowing {
+				held.WriteString(t)
+				if strings.HasPrefix(NotFoundAnswer, strings.TrimSpace(held.String())) {
+					return
+				}
+				flowing, t = true, held.String()
+			}
+			streamed = true
+			q.OnDelta(t)
+		}
+	}
+	msgs := append([]ports.ChatMessage{}, q.History...)
+	msgs = append(msgs, ports.ChatMessage{Role: "user", Content: Prompt(q.Question, packed)})
+	resp, err := e.GW.Chat(ctx, llmgateway.FeatureQA, meta, ports.ChatRequest{System: System, Messages: msgs, OnDelta: onDelta})
+	if err != nil {
+		return Answer{}, streamed, err
+	}
+	a := Answer{Usage: resp.Usage, Model: resp.Model, Provider: rt.ProviderKind}
+	if a.Model == "" {
+		a.Model = rt.Model
+	}
+	a.Text, a.Citations = Cite(resp.Text, packed)
+	if len(a.Citations) == 0 {
+		a.Text = NotFoundAnswer
+		if !holdNotFound && !streamed && q.OnDelta != nil {
+			q.OnDelta(a.Text)
+		}
+	}
+	return a, streamed, nil
 }
 
 // retrieve runs hybrid search, fusion, and graph expansion; every read is ACL-scoped in SQL.

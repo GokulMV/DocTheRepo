@@ -61,6 +61,68 @@ func (q *Queries) ChunksByIDsScoped(ctx context.Context, arg ChunksByIDsScopedPa
 	return items, nil
 }
 
+const chunksForPath = `-- name: ChunksForPath :many
+SELECT chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url, tsv, created_at, updated_at, deleted_at FROM chunks c
+WHERE c.deleted_at IS NULL AND (c.path = $1::text OR c.path LIKE '%/' || $1::text)
+  AND ($2::boolean OR c.repo_id = ANY($3::uuid[])
+       OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira')))
+  AND (cardinality($4::text[]) = 0 OR c.source::text = ANY($4::text[]))
+ORDER BY c.scope, c.path, c.chunk_id
+LIMIT $5
+`
+
+type ChunksForPathParams struct {
+	Path     string   `json:"path"`
+	AllRepos bool     `json:"all_repos"`
+	RepoIds  []string `json:"repo_ids"`
+	Sources  []string `json:"sources"`
+	Lim      int32    `json:"lim"`
+}
+
+// The agent's "read a file": the chunks of files whose path is, or ends with, the given one.
+func (q *Queries) ChunksForPath(ctx context.Context, arg ChunksForPathParams) ([]Chunk, error) {
+	rows, err := q.db.Query(ctx, chunksForPath,
+		arg.Path,
+		arg.AllRepos,
+		arg.RepoIds,
+		arg.Sources,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Chunk{}
+	for rows.Next() {
+		var i Chunk
+		if err := rows.Scan(
+			&i.ChunkID,
+			&i.RepoID,
+			&i.Scope,
+			&i.Source,
+			&i.Path,
+			&i.Symbol,
+			&i.Language,
+			&i.Content,
+			&i.ContentHash,
+			&i.Signature,
+			&i.CommitSha,
+			&i.Url,
+			&i.Tsv,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const createThread = `-- name: CreateThread :exec
 INSERT INTO qa_threads (id, user_id, title, scope) VALUES ($1, $2, $3, $4)
 `
@@ -191,6 +253,58 @@ func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) er
 		arg.Cached,
 	)
 	return err
+}
+
+const listChunkPaths = `-- name: ListChunkPaths :many
+SELECT c.scope, c.path, count(*)::int AS chunks FROM chunks c
+WHERE c.deleted_at IS NULL AND c.path ILIKE '%' || $1::text || '%'
+  AND ($2::boolean OR c.repo_id = ANY($3::uuid[])
+       OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira')))
+  AND (cardinality($4::text[]) = 0 OR c.source::text = ANY($4::text[]))
+GROUP BY c.scope, c.path
+ORDER BY c.scope, c.path
+LIMIT $5
+`
+
+type ListChunkPathsParams struct {
+	Contains string   `json:"contains"`
+	AllRepos bool     `json:"all_repos"`
+	RepoIds  []string `json:"repo_ids"`
+	Sources  []string `json:"sources"`
+	Lim      int32    `json:"lim"`
+}
+
+type ListChunkPathsRow struct {
+	Scope  string `json:"scope"`
+	Path   string `json:"path"`
+	Chunks int32  `json:"chunks"`
+}
+
+// The agent's "list files": distinct paths containing the given text, with how many chunks each has.
+func (q *Queries) ListChunkPaths(ctx context.Context, arg ListChunkPathsParams) ([]ListChunkPathsRow, error) {
+	rows, err := q.db.Query(ctx, listChunkPaths,
+		arg.Contains,
+		arg.AllRepos,
+		arg.RepoIds,
+		arg.Sources,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListChunkPathsRow{}
+	for rows.Next() {
+		var i ListChunkPathsRow
+		if err := rows.Scan(&i.Scope, &i.Path, &i.Chunks); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listThreads = `-- name: ListThreads :many
