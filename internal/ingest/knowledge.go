@@ -21,7 +21,6 @@ type KnowledgeDocs interface {
 	RemoveMissing(ctx context.Context, connectorID, space string, live []string) (int, error)
 }
 
-
 // UpstreamRules stores known-issue rules tied to Jira issues and Confluence pages (store.KnownIssues).
 type UpstreamRules interface {
 	UpstreamRules(ctx context.Context, source string, refs []string, labelManaged bool) (map[string]ports.UpstreamRule, error)
