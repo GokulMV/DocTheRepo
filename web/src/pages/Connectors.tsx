@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '@/api/client';
 import { keys, useConnectors, useInvalidating } from '@/api/hooks';
-import type { Check, Connector } from '@/api/types';
+import type { Check, Connector, RemoteResult } from '@/api/types';
 import { Badge, Button, Card, Dialog, Empty, ErrorNote, Field, Input, PageHeader, Select, Spinner, Table, Td, Textarea, statusTone } from '@/components/ui';
 import { relTime } from '@/lib/format';
 import { seal } from '@/lib/seal';
@@ -320,6 +320,34 @@ function AddKnowledge({ onCreated }: { onCreated: (type: string) => void }) {
   );
 }
 
+const remoteDone: Record<RemoteResult['action'], string> = {
+  suspended: 'The GitHub App installation is suspended: GitHub sends no events and the App cannot read your repositories until you enable it again.',
+  resumed: 'The GitHub App installation is active again.',
+  uninstalled: 'The GitHub App was uninstalled from GitHub and no longer has access to your repositories.',
+};
+
+function RemoteNotice({ name, result, onClose }: { name: string; result: RemoteResult; onClose: () => void }) {
+  return (
+    <Card title={result.ok ? `${name}: done on GitHub` : `${name}: GitHub did not confirm`} className="mb-4">
+      {result.ok ? (
+        <p className="text-sm">{remoteDone[result.action]}</p>
+      ) : (
+        <p className="text-sm text-red-700 dark:text-red-400">
+          The change was saved in the Hub, but GitHub refused to {result.action === 'uninstalled' ? 'uninstall' : result.action === 'suspended' ? 'suspend' : 'resume'} the App: {result.error}.
+          You can do it on GitHub under Settings → Applications.
+        </p>
+      )}
+      {result.action === 'uninstalled' && result.settings_url && (
+        <p className="mt-2 text-sm">
+          GitHub does not let other apps delete a GitHub App, so the App itself still exists. To delete it, open{' '}
+          <a className="text-indigo-600 underline dark:text-indigo-400" href={`${result.settings_url}/advanced`} target="_blank" rel="noreferrer">its settings → Advanced → Delete GitHub App</a>.
+        </p>
+      )}
+      <Button size="sm" variant="secondary" className="mt-2" onClick={onClose}>Dismiss</Button>
+    </Card>
+  );
+}
+
 export default function Connectors() {
   const conns = useConnectors();
   const [params, setParams] = useSearchParams();
@@ -331,8 +359,21 @@ export default function Connectors() {
   const [signal, setSignal] = useState<{ id: string; type: string; secret: string; path: string }>();
   const [knowledge, setKnowledge] = useState<string>();
   const sync = useInvalidating((id: string) => api.post<{ job_ids: string[] }>(`/connectors/${id}/sync`));
-  const del = useInvalidating((id: string) => api.del(`/connectors/${id}`), keys.connectors, keys.repos);
-  const toggle = useInvalidating((c: Connector) => api.patch(`/connectors/${c.id}`, { enabled: !c.enabled }), keys.connectors);
+  const [remote, setRemote] = useState<{ name: string; result: RemoteResult }>();
+  const del = useInvalidating(async (c: Connector) => {
+    const out = await api.del<{ github?: RemoteResult | null }>(`/connectors/${c.id}`);
+    setRemote(out?.github ? { name: c.name, result: out.github } : undefined);
+  }, keys.connectors, keys.repos);
+  const toggle = useInvalidating(async (c: Connector) => {
+    const out = await api.patch<{ github?: RemoteResult | null }>(`/connectors/${c.id}`, { enabled: !c.enabled });
+    setRemote(out?.github ? { name: c.name, result: out.github } : undefined);
+  }, keys.connectors);
+  const isApp = (c: Connector) => c.type === 'github' && !!c.config?.app_id;
+  const confirmRemove = (c: Connector) => confirm(isApp(c)
+    ? `Remove ${c.name} and its repositories?\n\nThe GitHub App is also uninstalled from GitHub, so it loses access to your repositories at once.`
+    : `Remove ${c.name} and its repositories?`);
+  const confirmDisable = (c: Connector) => !c.enabled || !isApp(c) || confirm(
+    `Disable ${c.name}?\n\nThe GitHub App installation is suspended on GitHub until you enable it again.`);
   return (
     <>
       <PageHeader title="Connectors" description="Git hosts, the error, alert, log, and event-platform sources the Inbox reads, and Confluence and Jira for knowledge. Wiz and Splunk arrive next."
@@ -382,7 +423,8 @@ export default function Connectors() {
         </Card>
       )}
       {conns.isLoading && <Spinner />}
-      <ErrorNote error={conns.error ?? sync.error ?? del.error} />
+      <ErrorNote error={conns.error ?? sync.error ?? del.error ?? toggle.error} />
+      {remote && <RemoteNotice name={remote.name} result={remote.result} onClose={() => setRemote(undefined)} />}
       {conns.data?.length === 0 && <Empty icon={Plug} title="No connectors yet">Connect GitHub or GitLab to start, then add the tools that report your errors and alerts.</Empty>}
       {!!conns.data?.length && (
         <Card>
@@ -406,8 +448,8 @@ export default function Connectors() {
                         <Button size="sm" variant="secondary" onClick={() => sync.mutate(c.id)}>Sync now</Button>
                       </>
                     )}
-                    <Button size="sm" variant="ghost" onClick={() => toggle.mutate(c)}>{c.enabled ? 'Disable' : 'Enable'}</Button>
-                    <Button size="sm" variant="ghost" onClick={() => confirm(`Remove ${c.name} and its repositories?`) && del.mutate(c.id)}>Remove</Button>
+                    <Button size="sm" variant="ghost" onClick={() => confirmDisable(c) && toggle.mutate(c)}>{c.enabled ? 'Disable' : 'Enable'}</Button>
+                    <Button size="sm" variant="ghost" onClick={() => confirmRemove(c) && del.mutate(c)}>Remove</Button>
                   </div>
                 </Td>
               </tr>

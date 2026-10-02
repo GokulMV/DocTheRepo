@@ -105,6 +105,16 @@ type Commit struct {
 	URL     string    `json:"url"`
 }
 
+// AppInstallation is implemented by hosts that act through an installed app (a GitHub App). When a host is
+// not in app mode, the methods report applied=false and change nothing.
+type AppInstallation interface {
+	// SetInstallationSuspended suspends (true) or resumes (false) the app's access to the repositories.
+	SetInstallationSuspended(ctx context.Context, suspended bool) (applied bool, err error)
+	// Uninstall removes the app from the account or organization; its access ends immediately. The app
+	// itself remains (no API deletes it); settingsURL is where its owner can delete it.
+	Uninstall(ctx context.Context) (settingsURL string, applied bool, err error)
+}
+
 // CodeHost is a git hosting provider (GitHub, GitLab). Adapters own auth, pagination, and the mapping of
 // host-specific protection/merge semantics onto these operations.
 type CodeHost interface {

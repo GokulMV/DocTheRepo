@@ -84,6 +84,8 @@ type Server struct {
 	ManifestCode string
 	// AppTokenRequests counts installation-token exchanges (GitHub App auth).
 	AppTokenRequests int
+	// Installations records App installation state by id: "suspended" or "deleted" (absent = active).
+	Installations map[string]string
 	// deliveries feeds the webhook worker (in order); deliveryLog records outcomes.
 	deliveries  chan delivery
 	deliveryLog []Delivery
@@ -95,7 +97,7 @@ type Server struct {
 // New starts an empty mock.
 func New() *Server {
 	s := &Server{repos: map[string]*Repo{}, commits: map[string]*Commit{}, trees: map[string]map[string]string{},
-		checks: map[string]string{}, teams: map[string]bool{}, BotLogin: "dth-hub[bot]", now: time.Now,
+		checks: map[string]string{}, teams: map[string]bool{}, Installations: map[string]string{}, BotLogin: "dth-hub[bot]", now: time.Now,
 		deliveries: make(chan delivery, 256)}
 	go s.deliverLoop()
 	r := chi.NewRouter()
@@ -262,8 +264,40 @@ func (s *Server) routes(r chi.Router) {
 		writeJSON(w, 200, map[string]any{"login": chi.URLParam(r, "login"), "id": 4242})
 	})
 	r.Get("/app", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"slug": strings.TrimSuffix(s.BotLogin, "[bot]"), "id": 1})
+		// Like GitHub: only the App's JWT (Bearer, three segments) works here, not an installation token.
+		tok, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if !ok || strings.Count(tok, ".") != 2 {
+			writeJSON(w, 401, map[string]any{"message": "A JSON web token could not be decoded"})
+			return
+		}
+		writeJSON(w, 200, map[string]any{"slug": strings.TrimSuffix(s.BotLogin, "[bot]"), "id": 1,
+			"owner": map[string]any{"login": "acme", "type": "Organization"}})
 	})
+	installation := func(state string) http.HandlerFunc { // suspend / unsuspend / delete; App JWT only
+		return func(w http.ResponseWriter, r *http.Request) {
+			tok, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+			if !ok || strings.Count(tok, ".") != 2 {
+				writeJSON(w, 401, map[string]any{"message": "A JSON web token could not be decoded"})
+				return
+			}
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			id := chi.URLParam(r, "id")
+			if s.Installations[id] == "deleted" {
+				notFound(w)
+				return
+			}
+			if state == "" {
+				delete(s.Installations, id)
+			} else {
+				s.Installations[id] = state
+			}
+			w.WriteHeader(http.StatusNoContent)
+		}
+	}
+	r.Put("/app/installations/{id}/suspended", installation("suspended"))
+	r.Delete("/app/installations/{id}/suspended", installation(""))
+	r.Delete("/app/installations/{id}", installation("deleted"))
 	r.Get("/installation/repositories", s.listRepos)
 	r.Post("/app-manifests/{code}/conversions", func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
@@ -300,8 +334,17 @@ func (s *Server) routes(r chi.Router) {
 			return
 		}
 		s.mu.Lock()
+		st := s.Installations[chi.URLParam(r, "id")]
 		s.AppTokenRequests++
 		s.mu.Unlock()
+		if st == "suspended" {
+			writeJSON(w, 403, map[string]any{"message": "This installation has been suspended"})
+			return
+		}
+		if st == "deleted" {
+			notFound(w)
+			return
+		}
 		writeJSON(w, 201, map[string]any{"token": "ghs_installation", "expires_at": s.now().Add(time.Hour).Format(time.RFC3339)})
 	})
 	r.Get("/orgs/{org}/teams/{slug}", func(w http.ResponseWriter, r *http.Request) {

@@ -256,9 +256,9 @@ func TestAPIEndToEnd(t *testing.T) {
 	assert.Greater(t, out["chunks_to_reembed"], float64(0))
 
 	code, _ = c.call("PATCH", "/connectors/"+connID, map[string]any{"enabled": false})
-	assert.Equal(t, http.StatusNoContent, code)
+	assert.Equal(t, http.StatusOK, code)
 	code, _ = c.call("DELETE", "/connectors/"+connID, nil)
-	assert.Equal(t, http.StatusNoContent, code)
+	assert.Equal(t, http.StatusOK, code)
 
 	resp, err := http.Get(srv.URL + "/readyz")
 	require.NoError(t, err)

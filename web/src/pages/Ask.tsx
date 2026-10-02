@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { API, ApiError, api, getCSRF, toApiError } from '@/api/client';
 import { keys, useRepos, useThread, useThreads } from '@/api/hooks';
 import type { AskResponse, Citation, Message, Thread } from '@/api/types';
-import { Bug, Check, ChevronDown, FolderGit2, GitBranch, History, MessageSquarePlus, Network, Search, Send, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
+import { Bug, Check, ChevronDown, FolderGit2, GitBranch, History, MessageSquarePlus, Network, PanelLeftClose, PanelLeftOpen, Search, Send, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
 import { Markdown } from '@/components/Markdown';
 import { Badge, Button, ErrorNote, cx } from '@/components/ui';
 import { readSSE } from '@/lib/sse';
@@ -87,27 +87,31 @@ function groupThreads(items: Thread[]): [string, Thread[]][] {
   return [...out.entries()];
 }
 
-function HistoryPanel({ threads, current, onNew }: { threads: Thread[] | undefined; current?: string; onNew: () => void }) {
+function HistoryPanel({ threads, current, onNew, onHide }: { threads: Thread[]; current?: string; onNew: () => void; onHide: () => void }) {
   const [q, setQ] = useState('');
   const nav = useNavigate();
   const qc = useQueryClient();
-  const items = (threads ?? []).filter((t) => !q || t.title.toLowerCase().includes(q.toLowerCase()));
+  const items = threads.filter((t) => !q || t.title.toLowerCase().includes(q.toLowerCase()));
   const remove = async (id: string) => {
     await api.del(`/threads/${id}`).catch(() => undefined);
     await qc.invalidateQueries({ queryKey: keys.threads });
     if (id === current) nav('/ask');
   };
   return (
-    <aside className="flex min-h-0 flex-1 flex-col rounded-2xl border border-slate-200/80 bg-white/70 shadow-card dark:border-white/[0.06] dark:bg-slate-900/40" aria-label="History">
-      <div className="flex items-center justify-between gap-2 border-b border-slate-200/80 px-3 py-2.5 dark:border-white/[0.06]">
-        <span className="flex items-center gap-2 text-sm font-semibold"><History className="h-4 w-4 text-slate-400" aria-hidden />History</span>
-        <Button size="sm" variant="secondary" onClick={onNew} title="Start a new question">
-          <MessageSquarePlus className="h-3.5 w-3.5" aria-hidden />New
-        </Button>
+    <aside className="flex min-h-0 flex-1 flex-col border-r border-slate-200/80 pr-3 dark:border-white/[0.06]" aria-label="History">
+      <div className="flex items-center gap-1 pb-2 pt-1">
+        <button type="button" onClick={onNew} title="Start a new question"
+          className="flex flex-1 items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/[0.05]">
+          <MessageSquarePlus className="h-4 w-4 text-brand-600 dark:text-brand-400" aria-hidden />New question
+        </button>
+        <button type="button" onClick={onHide} aria-label="Hide history" title="Hide history"
+          className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/[0.05] dark:hover:text-slate-200">
+          <PanelLeftClose className="h-4 w-4" aria-hidden />
+        </button>
       </div>
-      {(threads?.length ?? 0) > 0 && (
-        <div className="relative px-3 pt-3">
-          <Search className="pointer-events-none absolute left-5 top-1/2 mt-1.5 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
+      {threads.length > 5 && (
+        <div className="relative pb-1">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 -mt-0.5 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
           <input
             aria-label="Search history"
             placeholder="Search questions…"
@@ -117,13 +121,8 @@ function HistoryPanel({ threads, current, onNew }: { threads: Thread[] | undefin
           />
         </div>
       )}
-      <div className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
-        {(threads?.length ?? 0) === 0 ? (
-          <div className="px-3 py-10 text-center text-sm text-slate-500">
-            <History className="mx-auto mb-2 h-6 w-6 text-slate-300 dark:text-slate-600" aria-hidden />
-            Your questions and answers are saved here.
-          </div>
-        ) : items.length === 0 ? (
+      <div className="min-h-0 flex-1 overflow-y-auto py-1">
+        {items.length === 0 ? (
           <p className="px-3 py-6 text-center text-sm text-slate-500">No question matches “{q}”.</p>
         ) : (
           groupThreads(items).map(([label, ts]) => (
@@ -160,6 +159,25 @@ function HistoryPanel({ threads, current, onNew }: { threads: Thread[] | undefin
       </div>
     </aside>
   );
+}
+
+function useHistoryHidden(): [boolean, (v: boolean) => void] {
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return localStorage.getItem('dth.ask-history-hidden') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const set = (v: boolean) => {
+    setHidden(v);
+    try {
+      localStorage.setItem('dth.ask-history-hidden', v ? '1' : '0');
+    } catch {
+      /* private mode: remember for this visit only */
+    }
+  };
+  return [hidden, set];
 }
 
 /** ScopePicker chooses repositories (none = all you can read) and sources, in a small popover. */
@@ -225,6 +243,10 @@ export default function Ask() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const threads = useThreads();
+  const history = threads.data?.items ?? [];
+  const [historyHidden, setHistoryHidden] = useHistoryHidden();
+  // The history rail appears once there is something in it, and can be tucked away.
+  const showHistory = history.length > 0 && !historyHidden;
   const thread = useThread(threadId);
   const repos = useRepos();
   const [params] = useSearchParams();
@@ -237,7 +259,11 @@ export default function Ask() {
   const abort = useRef<AbortController>();
   const bottom = useRef<HTMLDivElement>(null);
 
-  useEffect(() => bottom.current?.scrollIntoView?.({ behavior: 'smooth' }), [thread.data, streaming]);
+  // A block body on purpose: newer browsers return a Promise from scrollIntoView, and an effect that returns
+  // anything but a function makes React call it as a cleanup ("… is not a function" on the next page).
+  useEffect(() => {
+    bottom.current?.scrollIntoView?.({ behavior: 'smooth' });
+  }, [thread.data, streaming]);
   useEffect(() => () => abort.current?.abort(), []);
 
   const ask = async (e: FormEvent) => {
@@ -308,11 +334,27 @@ export default function Ask() {
     </form>
   );
   return (
-    <div className="-my-4 grid h-[calc(100vh-4rem)] gap-5 lg:grid-cols-[17rem_minmax(0,1fr)]">
-      <div className="hidden min-h-0 lg:flex lg:flex-col">
-        <HistoryPanel threads={threads.data?.items} current={threadId} onNew={() => nav('/ask')} />
-      </div>
-      <div className="flex min-h-0 min-w-0 flex-col">
+    <div className={cx('-my-4 grid h-[calc(100vh-4rem)] gap-5', showHistory && 'lg:grid-cols-[16rem_minmax(0,1fr)]')}>
+      {showHistory && (
+        <div className="hidden min-h-0 py-3 lg:flex lg:flex-col">
+          <HistoryPanel threads={history} current={threadId} onNew={() => nav('/ask')} onHide={() => setHistoryHidden(true)} />
+        </div>
+      )}
+      <div className="relative flex min-h-0 min-w-0 flex-col">
+        {history.length > 0 && (historyHidden || !empty) && (
+          <div className={cx('absolute left-0 top-3 z-10 flex gap-1', !historyHidden && 'lg:hidden')}>
+            <button type="button" onClick={() => setHistoryHidden(false)} aria-label={`Show history (${history.length})`} title="Show history"
+              className="hidden items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-800 lg:flex dark:hover:bg-white/[0.05] dark:hover:text-slate-200">
+              <PanelLeftOpen className="h-4 w-4" aria-hidden />History
+            </button>
+            {!empty && (
+              <button type="button" onClick={() => nav('/ask')} title="Start a new question"
+                className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-white/[0.05] dark:hover:text-slate-200">
+                <MessageSquarePlus className="h-4 w-4" aria-hidden />New
+              </button>
+            )}
+          </div>
+        )}
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto max-w-3xl space-y-4 px-1 pb-4">
             {empty && (

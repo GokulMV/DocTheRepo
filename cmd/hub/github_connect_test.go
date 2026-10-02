@@ -125,6 +125,27 @@ func TestGitHubOneClickConnect(t *testing.T) {
 	code, out = c.call("GET", "/connectors/"+connID+"/available-repos", nil)
 	require.Equal(t, http.StatusOK, code, out)
 	assert.Equal(t, []any{map[string]any{"full_name": "acme/shop", "tracked": false}}, out["items"])
+
+	// Disable suspends the installation on GitHub; Enable resumes it.
+	code, out = c.call("PATCH", "/connectors/"+connID, map[string]any{"enabled": false})
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Equal(t, map[string]any{"action": "suspended", "ok": true}, out["github"])
+	assert.Equal(t, "suspended", gh.Installations["4242"])
+	code, out = c.call("PATCH", "/connectors/"+connID, map[string]any{"enabled": true})
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Equal(t, map[string]any{"action": "resumed", "ok": true}, out["github"])
+	assert.NotContains(t, gh.Installations, "4242")
+
+	// Remove uninstalls it (also when the connector was disabled first) and points at the App to delete.
+	code, _ = c.call("PATCH", "/connectors/"+connID, map[string]any{"enabled": false})
+	require.Equal(t, http.StatusOK, code)
+	code, out = c.call("DELETE", "/connectors/"+connID, nil)
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Equal(t, map[string]any{"action": "uninstalled", "ok": true,
+		"settings_url": gh.URL + "/organizations/acme/settings/apps/dth-hub"}, out["github"])
+	assert.Equal(t, "deleted", gh.Installations["4242"])
+	_, err = a.conns.GetAny(ctx, connID)
+	assert.Error(t, err)
 }
 
 func TestGitHubConnectOnLocalhostPolls(t *testing.T) {

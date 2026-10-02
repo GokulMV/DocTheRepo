@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/GokulMV/DocTheRepo/security/advisories/new
+    about: Please report security issues privately.
+  - name: Documentation
+    url: https://github.com/GokulMV/DocTheRepo/tree/main/docs
+    about: Install, connectors, settings file, security and more.

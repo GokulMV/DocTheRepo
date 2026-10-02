@@ -34,6 +34,23 @@ and works only once.
 **Changing repositories later:** use the app's **Configure** page on GitHub. The connector picks up the change
 on its own.
 
+## Disable and remove
+
+For a connector created as a GitHub App (one click, or by hand with an App key):
+
+| In the Hub | On GitHub |
+|---|---|
+| **Disable** | The App installation is **suspended**. GitHub sends no events and the App cannot read the repositories. |
+| **Enable** | The installation is resumed. |
+| **Remove** | The App is **uninstalled** from the account or organization, so its access ends at once. Then the connector and its repositories are removed from the Hub. |
+
+GitHub has no API for one app to delete another, so after **Remove** the App itself still exists, with no
+installations. The Hub links to its settings page: **Advanced → Delete GitHub App**.
+
+If GitHub refuses (for example, the App was already deleted there), the Hub still makes the change and
+shows the reason. Token connectors have nothing to suspend on GitHub. Revoke the token in GitHub's
+settings.
+
 ## By hand
 
 The same dialog takes the details directly:
