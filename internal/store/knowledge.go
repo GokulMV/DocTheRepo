@@ -27,7 +27,9 @@ type Knowledge struct {
 }
 
 // NewKnowledge returns the knowledge store; shelves places documents on Library shelves (nil disables it).
-func NewKnowledge(s *Store, shelves *library.Classifier) *Knowledge { return &Knowledge{s: s, shelves: shelves} }
+func NewKnowledge(s *Store, shelves *library.Classifier) *Knowledge {
+	return &Knowledge{s: s, shelves: shelves}
+}
 
 // KnowledgePath is a document's chunk path: <source>/<space>/<external id> (stable across renames).
 func KnowledgePath(d ports.KnowledgeDoc) string {

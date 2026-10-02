@@ -41,7 +41,9 @@ func (f *fakeKnowledgeSource) Changed(_ context.Context, _ ports.ConnectorConfig
 func (f *fakeKnowledgeSource) Labeled(context.Context, ports.ConnectorConfig, string) ([]ports.KnowledgeDoc, error) {
 	return f.labeled, nil
 }
-func (f *fakeKnowledgeSource) Owns(_ ports.ConnectorConfig, u string) bool { return u == "https://acme.atlassian.net/browse/ENG-1" }
+func (f *fakeKnowledgeSource) Owns(_ ports.ConnectorConfig, u string) bool {
+	return u == "https://acme.atlassian.net/browse/ENG-1"
+}
 func (f *fakeKnowledgeSource) Fetch(context.Context, ports.ConnectorConfig, string) (ports.KnowledgeDoc, error) {
 	return ports.KnowledgeDoc{ExternalID: "ENG-1", Source: ports.SourceJira}, nil
 }
@@ -54,7 +56,9 @@ type fakeDocs struct {
 	removed map[string][]string
 }
 
-func (f *fakeDocs) MentionIndex(context.Context) (*palace.MentionIndex, error) { return palace.NewMentionIndex(nil), nil }
+func (f *fakeDocs) MentionIndex(context.Context) (*palace.MentionIndex, error) {
+	return palace.NewMentionIndex(nil), nil
+}
 func (f *fakeDocs) Apply(_ context.Context, _ string, docs []ports.KnowledgeDoc, _ *palace.MentionIndex) (ports.KnowledgeApplied, error) {
 	f.applied = append(f.applied, docs...)
 	return ports.KnowledgeApplied{Docs: len(docs), Added: len(docs), Embed: []ports.Chunk{{ID: "c"}}}, nil
