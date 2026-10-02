@@ -141,11 +141,19 @@ func (a *Adapter) Chat(ctx context.Context, req ports.ChatRequest) (ports.ChatRe
 		maxTokens = 16000
 	}
 	p := sdk.BetaMessageNewParams{Model: sdk.Model(req.Model), MaxTokens: maxTokens}
+	// Prompt caching: a breakpoint after the system prompt, and one after the last message, so the next
+	// turn of a conversation (or the next file of a docs job, which shares the system prompt) reads the
+	// repeated prefix from the cache at a tenth of the input price. A prefix shorter than the model's
+	// minimum is simply not cached.
 	if req.System != "" {
-		p.System = []sdk.BetaTextBlockParam{{Text: req.System}}
+		p.System = []sdk.BetaTextBlockParam{{Text: req.System, CacheControl: sdk.NewBetaCacheControlEphemeralParam()}}
 	}
-	for _, m := range req.Messages {
-		block := sdk.NewBetaTextBlock(m.Content)
+	for i, m := range req.Messages {
+		text := sdk.BetaTextBlockParam{Text: m.Content}
+		if i == len(req.Messages)-1 {
+			text.CacheControl = sdk.NewBetaCacheControlEphemeralParam()
+		}
+		block := sdk.BetaContentBlockParamUnion{OfText: &text}
 		if m.Role == "assistant" {
 			p.Messages = append(p.Messages, sdk.BetaMessageParam{Role: sdk.BetaMessageParamRoleAssistant, Content: []sdk.BetaContentBlockParamUnion{block}})
 		} else {

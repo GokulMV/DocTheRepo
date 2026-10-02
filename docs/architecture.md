@@ -94,9 +94,26 @@ reconcile removes deleted pages; the `known-issue` label query creates disabled 
 by the suggest route). `POST /known-issues/from-link` fetches a URL through the owning connector.
 
 **C. Q&A**
-`POST /api/v1/ask` (SSE) → answer cache (question + scope + index version) → embed + vector search and
-full-text search → reciprocal rank fusion → ACL-scoped chunks → one-hop graph expansion → budget packing →
-model (route `qa`) → citation check → cache.
+`POST /api/v1/ask` (SSE) → answer cache → embed + vector search and full-text search (plus READMEs and
+overview docs for broad questions) → reciprocal rank fusion → ACL-scoped chunks → one-hop graph expansion →
+budget packing → model (route `qa`) → citation check → cache.
+
+Ask is retrieval-augmented generation: one retrieval pass and one model call, no tool loop.
+
+Two caches keep repeated questions cheap:
+
+- **Answer cache** (Postgres, `answer_cache`). The first question of a thread is looked up by its
+  fingerprint plus the asker's scope. The fingerprint is the question lower-cased, without punctuation,
+  filler words ("please", "can you explain", "the") or plural endings, so rephrasings share an entry. A hit
+  returns the stored answer with no model call. An entry stays valid for up to 7 days, until a chunk it
+  cites is removed or anything in a repository or space it cites changes. Pushes to other repositories
+  don't expire it. Only answers with citations are cached. Follow-up questions in a thread depend on the
+  conversation, so they always go to the model.
+- **Prompt cache** (Claude on the Claude API, Bedrock and Vertex). Each request marks the system prompt and
+  the last message as cache breakpoints. The next turn of a thread, or the next file of a docs job, then
+  reads the repeated prefix at about a tenth of the input price. Prefixes below the model's minimum length
+  are not cached. OpenAI and Gemini cache repeated prefixes on their own. Cache reads and writes are
+  reported per call; spend limits count them as full-price input, which errs on the safe side.
 
 ## 4. Data
 

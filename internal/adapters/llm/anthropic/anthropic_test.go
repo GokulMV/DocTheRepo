@@ -95,7 +95,12 @@ func TestChat_RequestShapeAndResponse(t *testing.T) {
 	msgs := b["messages"].([]any)
 	require.Len(t, msgs, 3)
 	assert.Equal(t, "assistant", msgs[1].(map[string]any)["role"])
-	assert.Equal(t, []any{map[string]any{"type": "text", "text": "You write docs."}}, b["system"])
+	eph := map[string]any{"type": "ephemeral"}
+	assert.Equal(t, []any{map[string]any{"type": "text", "text": "You write docs.", "cache_control": eph}}, b["system"],
+		"the system prompt is cached")
+	block := func(i int) map[string]any { return msgs[i].(map[string]any)["content"].([]any)[0].(map[string]any) }
+	assert.Equal(t, eph, block(2)["cache_control"], "the conversation so far is cached for the next turn")
+	assert.NotContains(t, block(0), "cache_control", "only the last message carries a breakpoint")
 }
 
 func TestChat_FallbacksOnlyWhereSupported(t *testing.T) {

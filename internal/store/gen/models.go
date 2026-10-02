@@ -1234,6 +1234,8 @@ type AnswerCache struct {
 	Citations json.RawMessage `json:"citations"`
 	CreatedAt time.Time       `json:"created_at"`
 	Hits      int64           `json:"hits"`
+	ChunkIds  []string        `json:"chunk_ids"`
+	Scopes    []string        `json:"scopes"`
 }
 
 type ApiToken struct {
@@ -1268,6 +1270,18 @@ type AuditLog struct {
 	TargetID    string          `json:"target_id"`
 	Details     json.RawMessage `json:"details"`
 	Ip          string          `json:"ip"`
+}
+
+type AuthSetting struct {
+	ID                   int16     `json:"id"`
+	PasswordEnabled      *bool     `json:"password_enabled"`
+	OidcProvider         string    `json:"oidc_provider"`
+	OidcIssuer           string    `json:"oidc_issuer"`
+	OidcClientID         string    `json:"oidc_client_id"`
+	OidcSecretCiphertext []byte    `json:"oidc_secret_ciphertext"`
+	OidcAllowedDomains   []string  `json:"oidc_allowed_domains"`
+	OidcGroupsClaim      string    `json:"oidc_groups_claim"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
 type Chunk struct {
@@ -1777,4 +1791,13 @@ type User struct {
 	Disabled     bool       `json:"disabled"`
 	CreatedAt    time.Time  `json:"created_at"`
 	LastLoginAt  *time.Time `json:"last_login_at"`
+}
+
+type UserInvite struct {
+	TokenHash []byte     `json:"token_hash"`
+	UserID    string     `json:"user_id"`
+	CreatedBy *string    `json:"created_by"`
+	ExpiresAt time.Time  `json:"expires_at"`
+	UsedAt    *time.Time `json:"used_at"`
+	CreatedAt time.Time  `json:"created_at"`
 }

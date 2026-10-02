@@ -65,6 +65,28 @@ func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const createInvite = `-- name: CreateInvite :exec
+INSERT INTO user_invites (token_hash, user_id, created_by, expires_at)
+VALUES ($1, $2, $3, $4)
+`
+
+type CreateInviteParams struct {
+	TokenHash []byte    `json:"token_hash"`
+	UserID    string    `json:"user_id"`
+	CreatedBy *string   `json:"created_by"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+func (q *Queries) CreateInvite(ctx context.Context, arg CreateInviteParams) error {
+	_, err := q.db.Exec(ctx, createInvite,
+		arg.TokenHash,
+		arg.UserID,
+		arg.CreatedBy,
+		arg.ExpiresAt,
+	)
+	return err
+}
+
 const createSession = `-- name: CreateSession :exec
 INSERT INTO sessions (id_hash, user_id, csrf_token, expires_at, idle_until, ip, user_agent)
 VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -184,6 +206,18 @@ func (q *Queries) DeleteToken(ctx context.Context, arg DeleteTokenParams) (int64
 	return result.RowsAffected(), nil
 }
 
+const deleteUser = `-- name: DeleteUser :execrows
+DELETE FROM users WHERE id = $1
+`
+
+func (q *Queries) DeleteUser(ctx context.Context, id string) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteUser, id)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const deleteUserSessions = `-- name: DeleteUserSessions :exec
 DELETE FROM sessions WHERE user_id = $1
 `
@@ -233,6 +267,56 @@ func (q *Queries) GCSessions(ctx context.Context) (int64, error) {
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const getAuthSettings = `-- name: GetAuthSettings :one
+SELECT id, password_enabled, oidc_provider, oidc_issuer, oidc_client_id, oidc_secret_ciphertext, oidc_allowed_domains, oidc_groups_claim, updated_at FROM auth_settings WHERE id = 1
+`
+
+func (q *Queries) GetAuthSettings(ctx context.Context) (AuthSetting, error) {
+	row := q.db.QueryRow(ctx, getAuthSettings)
+	var i AuthSetting
+	err := row.Scan(
+		&i.ID,
+		&i.PasswordEnabled,
+		&i.OidcProvider,
+		&i.OidcIssuer,
+		&i.OidcClientID,
+		&i.OidcSecretCiphertext,
+		&i.OidcAllowedDomains,
+		&i.OidcGroupsClaim,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getInvite = `-- name: GetInvite :one
+SELECT i.user_id, i.expires_at, i.used_at, u.email, u.name, u.disabled
+FROM user_invites i JOIN users u ON u.id = i.user_id
+WHERE i.token_hash = $1
+`
+
+type GetInviteRow struct {
+	UserID    string     `json:"user_id"`
+	ExpiresAt time.Time  `json:"expires_at"`
+	UsedAt    *time.Time `json:"used_at"`
+	Email     string     `json:"email"`
+	Name      string     `json:"name"`
+	Disabled  bool       `json:"disabled"`
+}
+
+func (q *Queries) GetInvite(ctx context.Context, tokenHash []byte) (GetInviteRow, error) {
+	row := q.db.QueryRow(ctx, getInvite, tokenHash)
+	var i GetInviteRow
+	err := row.Scan(
+		&i.UserID,
+		&i.ExpiresAt,
+		&i.UsedAt,
+		&i.Email,
+		&i.Name,
+		&i.Disabled,
+	)
+	return i, err
 }
 
 const getSession = `-- name: GetSession :one
@@ -555,6 +639,30 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 	return items, nil
 }
 
+const pendingInviteUsers = `-- name: PendingInviteUsers :many
+SELECT DISTINCT user_id FROM user_invites WHERE used_at IS NULL AND expires_at > now()
+`
+
+func (q *Queries) PendingInviteUsers(ctx context.Context) ([]string, error) {
+	rows, err := q.db.Query(ctx, pendingInviteUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var user_id string
+		if err := rows.Scan(&user_id); err != nil {
+			return nil, err
+		}
+		items = append(items, user_id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setUserPassword = `-- name: SetUserPassword :exec
 UPDATE users SET password_hash = $1 WHERE id = $2
 `
@@ -607,18 +715,25 @@ func (q *Queries) TouchUserLogin(ctx context.Context, arg TouchUserLoginParams) 
 }
 
 const updateUser = `-- name: UpdateUser :one
-UPDATE users SET role = coalesce($1, role), disabled = coalesce($2, disabled)
-WHERE id = $3 RETURNING id, email, name, oidc_subject, password_hash, role, disabled, created_at, last_login_at
+UPDATE users SET role = coalesce($1, role), disabled = coalesce($2, disabled),
+                 name = coalesce($3, name)
+WHERE id = $4 RETURNING id, email, name, oidc_subject, password_hash, role, disabled, created_at, last_login_at
 `
 
 type UpdateUserParams struct {
 	Role     *UserRole `json:"role"`
 	Disabled *bool     `json:"disabled"`
+	Name     *string   `json:"name"`
 	ID       string    `json:"id"`
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, error) {
-	row := q.db.QueryRow(ctx, updateUser, arg.Role, arg.Disabled, arg.ID)
+	row := q.db.QueryRow(ctx, updateUser,
+		arg.Role,
+		arg.Disabled,
+		arg.Name,
+		arg.ID,
+	)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -632,6 +747,40 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (User, e
 		&i.LastLoginAt,
 	)
 	return i, err
+}
+
+const upsertAuthSettings = `-- name: UpsertAuthSettings :exec
+INSERT INTO auth_settings (id, password_enabled, oidc_provider, oidc_issuer, oidc_client_id, oidc_secret_ciphertext,
+                           oidc_allowed_domains, oidc_groups_claim, updated_at)
+VALUES (1, $1, $2, $3, $4,
+        $5, $6, $7, now())
+ON CONFLICT (id) DO UPDATE SET
+    password_enabled = EXCLUDED.password_enabled, oidc_provider = EXCLUDED.oidc_provider, oidc_issuer = EXCLUDED.oidc_issuer,
+    oidc_client_id = EXCLUDED.oidc_client_id, oidc_secret_ciphertext = EXCLUDED.oidc_secret_ciphertext,
+    oidc_allowed_domains = EXCLUDED.oidc_allowed_domains, oidc_groups_claim = EXCLUDED.oidc_groups_claim, updated_at = now()
+`
+
+type UpsertAuthSettingsParams struct {
+	PasswordEnabled      *bool    `json:"password_enabled"`
+	OidcProvider         string   `json:"oidc_provider"`
+	OidcIssuer           string   `json:"oidc_issuer"`
+	OidcClientID         string   `json:"oidc_client_id"`
+	OidcSecretCiphertext []byte   `json:"oidc_secret_ciphertext"`
+	OidcAllowedDomains   []string `json:"oidc_allowed_domains"`
+	OidcGroupsClaim      string   `json:"oidc_groups_claim"`
+}
+
+func (q *Queries) UpsertAuthSettings(ctx context.Context, arg UpsertAuthSettingsParams) error {
+	_, err := q.db.Exec(ctx, upsertAuthSettings,
+		arg.PasswordEnabled,
+		arg.OidcProvider,
+		arg.OidcIssuer,
+		arg.OidcClientID,
+		arg.OidcSecretCiphertext,
+		arg.OidcAllowedDomains,
+		arg.OidcGroupsClaim,
+	)
+	return err
 }
 
 const upsertGroup = `-- name: UpsertGroup :one
@@ -649,6 +798,16 @@ func (q *Queries) UpsertGroup(ctx context.Context, arg UpsertGroupParams) (strin
 	var id string
 	err := row.Scan(&id)
 	return id, err
+}
+
+const useInvites = `-- name: UseInvites :exec
+UPDATE user_invites SET used_at = now() WHERE user_id = $1 AND used_at IS NULL
+`
+
+// Accepting one link retires every open link for that person.
+func (q *Queries) UseInvites(ctx context.Context, userID string) error {
+	_, err := q.db.Exec(ctx, useInvites, userID)
+	return err
 }
 
 const userRepoIDs = `-- name: UserRepoIDs :many

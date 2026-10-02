@@ -114,7 +114,7 @@ func (q *QA) SymbolNeighbors(ctx context.Context, keys []string, limit int) ([]s
 	return q.s.Q.SymbolNeighbors(ctx, gen.SymbolNeighborsParams{Keys: keys, Lim: int32(limit)})
 }
 
-// CachedAnswer returns a fresh cached answer.
+// CachedAnswer returns a cached answer whose sources have not changed since (see GetCachedAnswer).
 func (q *QA) CachedAnswer(ctx context.Context, key string) (rag.Answer, bool, error) {
 	row, err := q.s.Q.GetCachedAnswer(ctx, key)
 	if IsNoRows(err) {
@@ -131,7 +131,11 @@ func (q *QA) CachedAnswer(ctx context.Context, key string) (rag.Answer, bool, er
 // PutAnswer caches an answer.
 func (q *QA) PutAnswer(ctx context.Context, key string, a rag.Answer) error {
 	b, _ := json.Marshal(a.Citations)
-	return q.s.Q.PutCachedAnswer(ctx, gen.PutCachedAnswerParams{Key: key, Answer: a.Text, Citations: b})
+	ids := make([]string, 0, len(a.Citations))
+	for _, c := range a.Citations {
+		ids = append(ids, c.ChunkID)
+	}
+	return q.s.Q.PutCachedAnswer(ctx, gen.PutCachedAnswerParams{Key: key, Answer: a.Text, Citations: b, ChunkIds: ids})
 }
 
 // GCCache drops expired answers.
