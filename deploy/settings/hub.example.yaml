@@ -1,0 +1,48 @@
+# DocTheRepo Hub settings — apply with:  dth apply -f deploy/settings/ --dry-run   (then without --dry-run)
+# Secrets are references resolved where you run dth apply; the file is safe to commit.
+version: 1
+
+providers:
+  - name: anthropic
+    kind: anthropic
+    api_key: ${env:ANTHROPIC_API_KEY}            # GitHub Actions: env: ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  - name: openai
+    kind: openai
+    api_key: ${vault:secret/data/dth#openai}     # Vault KV v2 (VAULT_ADDR + VAULT_TOKEN)
+
+routes:
+  docgen:    { provider: anthropic, model: claude-opus-5-5, effort: high }
+  qa:        { provider: anthropic, model: claude-sonnet-5-5, fallback: { provider: openai, model: gpt-5 } }
+  decode:    { provider: anthropic, model: claude-sonnet-5-5 }
+  embedding: { provider: openai, model: text-embedding-3-small }
+
+connectors:
+  - name: github
+    type: github
+    mode: webhook
+    credentials: ${file:~/.config/dth/keys.json#github.token}    # a key inside a JSON file
+    webhook_secret: ${gopass:dth/github-webhook}
+  - name: sentry
+    type: sentry
+    webhook_secret: ${file:application.properties#sentry.webhook.secret}
+  - name: wiz
+    type: wiz
+    mode: poll
+    config: { api_url: "https://api.us17.app.wiz.io/graphql", never_send_to_llm: "true" }
+    credentials:                                  # a mapping is sent as JSON
+      client_id: ${awssm:prod/dth/wiz#client_id}
+      client_secret: ${awssm:prod/dth/wiz#client_secret}
+  - name: confluence
+    type: confluence
+    config: { base_url: "https://acme.atlassian.net/wiki", email: "dth-bot@acme.com", spaces: "ENG,OPS" }
+    credentials: ${gcpsm:acme-prod/dth-atlassian}
+
+repos:
+  - { full_name: acme/payments, connector: github, docs_path: docs/generated/, push_mode: pr_auto_merge, owners: [team-payments] }
+  - { full_name: acme/orders, connector: github }
+
+spend:
+  limits:
+    - { scope: global, window: day, max_tokens: 2000000 }
+    - { scope: provider, key: anthropic, window: month, max_cost_usd: 300, on_breach: block_and_alert, alert_url: "https://hooks.slack.com/services/…" }
+    - { scope: feature, key: docgen, window: day, max_tokens: 800000 }
