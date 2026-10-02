@@ -7,7 +7,7 @@
 #
 # It checks every prerequisite and installs what is missing, unattended:
 #   git, curl, tar, make, openssl, a C compiler (the Tree-sitter grammars are C, so the hub builds with cgo),
-#   Go 1.25.11 and Node.js 22.12+ (into ~/.dth-quickstart/toolchain when the system ones are missing or too old),
+#   Go 1.25.13 and Node.js 22.12+ (into ~/.dth-quickstart/toolchain when the system ones are missing or too old),
 #   and Docker + Compose v2 for PostgreSQL/pgvector (Linux: get.docker.com; macOS: Homebrew + Colima).
 # Then it builds the UI and the hub from this checkout (make release), starts PostgreSQL in Docker, runs the
 # hub, signs in, and opens the UI. Re-running is safe: passwords are reused and the hub is rebuilt/restarted.
@@ -36,7 +36,7 @@ NO_BROWSER="${DTH_NO_BROWSER:-}"
 ACTION=up
 WIPE=
 MODE="${DTH_QUICKSTART_MODE:-native}"
-GO_VERSION=1.25.11
+GO_VERSION=1.25.13
 NODE_VERSION=22.12.0
 PG_PORT="${DTH_PG_PORT:-54329}"
 

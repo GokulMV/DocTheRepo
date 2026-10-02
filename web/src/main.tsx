@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { ApiError } from '@/api/client';
 import App from './App';
 import { initTheme } from './theme';
+import { installErrorLog } from './lib/errorLog';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -19,6 +20,7 @@ const queryClient = new QueryClient({
 });
 
 initTheme();
+installErrorLog();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

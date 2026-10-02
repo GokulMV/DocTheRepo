@@ -1,5 +1,6 @@
-import { Component, type ReactNode } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { RefreshCw, TriangleAlert } from 'lucide-react';
+import { recentErrors } from '@/lib/errorLog';
 
 // Messages browsers use when a lazily loaded page chunk cannot be fetched — typically a tab left open
 // across a Hub upgrade, whose old chunk names no longer exist.
@@ -26,21 +27,36 @@ function reloadOnce(): boolean {
 interface State {
   error?: unknown;
   reloading?: boolean;
+  where?: string;
 }
 
 /**
  * ErrorBoundary keeps one broken page from blanking the whole app: a stale chunk reloads the page once
  * (picking up the new build); anything else shows what failed, with a way out.
  */
-export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
+export class ErrorBoundary extends Component<{ children: ReactNode; resetKey?: string }, State> {
   state: State = {};
+
+  // Navigating away clears the error without remounting the subtree, so a page switch never flashes.
+  componentDidUpdate(prev: { resetKey?: string }) {
+    if (this.state.error && prev.resetKey !== this.props.resetKey) this.setState({ error: undefined, reloading: false, where: undefined });
+  }
 
   static getDerivedStateFromError(error: unknown): State {
     return { error };
   }
 
-  componentDidCatch(error: unknown) {
+  componentDidCatch(error: unknown, info: ErrorInfo) {
+    this.setState({ where: info.componentStack ?? undefined });
     if (isChunkError(error) && reloadOnce()) this.setState({ reloading: true });
+  }
+
+  details(): string {
+    const e = this.state.error;
+    const stack = e instanceof Error ? e.stack ?? `${e.name}: ${e.message}` : String(e);
+    const comp = (this.state.where ?? '').trim().split('\n').slice(0, 8).join('\n');
+    const recent = recentErrors();
+    return `${window.location.pathname}\n${navigator.userAgent}\n\n${stack}\n\nComponents:\n${comp}${recent ? `\n\nRecent errors:\n${recent}` : ''}`;
   }
 
   render() {
@@ -62,6 +78,15 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, State> {
           >
             <RefreshCw className="h-4 w-4" aria-hidden /> Reload
           </button>
+        )}
+        {!stale && (
+          <details className="mt-4 text-left text-xs text-slate-600 dark:text-slate-300">
+            <summary className="cursor-pointer select-none text-center">Details for a bug report</summary>
+            <pre className="mt-2 max-h-60 overflow-auto whitespace-pre-wrap rounded-lg bg-white/70 p-2 font-mono text-[11px] dark:bg-black/30">{this.details()}</pre>
+            <button type="button" className="mt-2 text-brand-600 hover:underline dark:text-brand-300" onClick={() => navigator.clipboard?.writeText(this.details()).catch(() => undefined)}>
+              Copy details
+            </button>
+          </details>
         )}
       </div>
     );

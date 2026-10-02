@@ -130,7 +130,7 @@ Under construction, milestone by milestone (plan § 14). Implemented so far:
 git clone https://github.com/GokulMV/DocTheRepo && cd DocTheRepo && ./scripts/quickstart.sh
 ```
 
-Checks and installs what is missing, unattended: git, curl, tar, make, openssl, a C compiler, Go 1.25.11
+Checks and installs what is missing, unattended: git, curl, tar, make, openssl, a C compiler, Go 1.25.13
 and Node.js 22.12+ (private copies under `~/.dth-quickstart/toolchain` when the system ones are missing or too
 old), and Docker + Compose (Linux: get.docker.com; macOS: Homebrew + Colima). It then builds the UI and the
 hub (`make release`), starts PostgreSQL/pgvector in Docker, runs the hub, creates the owner account, and
