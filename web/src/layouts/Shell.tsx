@@ -1,11 +1,12 @@
 import { Suspense } from 'react';
 import { NavLink, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Hexagon, LogOut, Monitor, Moon, Sun } from 'lucide-react';
+import { LogOut, Monitor, Moon, Sun } from 'lucide-react';
 import { api, ApiError } from '@/api/client';
 import { useMe } from '@/api/hooks';
 import { atLeast, type Role } from '@/api/types';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { Logo } from '@/components/Logo';
 import { Spinner, cx } from '@/components/ui';
 import { setTheme, useTheme, type ThemeChoice } from '@/theme';
 import { NAV } from './nav';
@@ -73,9 +74,7 @@ export function Shell() {
     <div className="flex min-h-screen">
       <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col border-r border-slate-200/80 bg-white/80 backdrop-blur dark:border-white/[0.06] dark:bg-slate-950/70">
         <div className="flex items-center gap-2.5 px-5 py-5">
-          <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-brand-500 to-violet-600 text-white shadow-md shadow-brand-500/30">
-            <Hexagon className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden />
-          </span>
+          <Logo className="h-8 w-8" />
           <div className="leading-tight">
             <span className="block text-[15px] font-semibold tracking-tight">DocTheRepo</span>
             <span className="block text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400">Hub</span>
