@@ -33,7 +33,7 @@ test('cold start: connect, push, docs PR merged, cited answer', async ({ page })
   const connect = page.getByRole('dialog', { name: 'Connect GitHub or GitLab' });
   await connect.getByLabel('API base URL').fill(s.github_api_url);
   await connect.getByLabel('Access token').fill('ghp_e2e_token');
-  await connect.getByRole('button', { name: 'Connect' }).click();
+  await connect.getByRole('button', { name: 'Connect', exact: true }).click();
   await expect(page.getByText('Finish webhook setup')).toBeVisible();
   await page.getByRole('button', { name: 'Done' }).click();
   await page.getByRole('button', { name: 'Test' }).click();

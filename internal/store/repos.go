@@ -33,6 +33,8 @@ func NewConnectors(s *Store, box Sealer, credsAAD, webhookAAD func(string) []byt
 
 // NewConnector is a connector to create.
 type NewConnector struct {
+	// ID is optional: a caller that must know the id in advance (a GitHub App's webhook URL) sets it.
+	ID               string
 	Type, Name, Mode string
 	PollSeconds      int64
 	Config           map[string]string
@@ -42,7 +44,10 @@ type NewConnector struct {
 
 // Create stores a connector, sealing its secrets.
 func (c *Connectors) Create(ctx context.Context, n NewConnector) (string, error) {
-	id := ports.NewID()
+	id := n.ID
+	if id == "" {
+		id = ports.NewID()
+	}
 	cfg, _ := json.Marshal(orEmpty(n.Config))
 	p := gen.CreateConnectorParams{ID: id, Type: gen.ConnectorType(n.Type), Name: n.Name, Config: cfg,
 		Mode: gen.ConnectorMode(defaultStr(n.Mode, "webhook")), PollSeconds: float64(defaultInt(n.PollSeconds, defaultPollSeconds(n.Type)))}

@@ -1,5 +1,6 @@
-import { Plug } from 'lucide-react';
+import { ChevronDown, Plug } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '@/api/client';
 import { keys, useConnectors, useInvalidating } from '@/api/hooks';
 import type { Check, Connector } from '@/api/types';
@@ -11,6 +12,105 @@ function randomSecret() {
   const b = new Uint8Array(24);
   crypto.getRandomValues(b);
   return Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
+}
+
+/** GitHubMark is GitHub's logo, for the "Connect with GitHub" button. */
+function GitHubMark({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" className={className} fill="currentColor" aria-hidden>
+      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+    </svg>
+  );
+}
+
+/** ConnectGitHub starts the one-click flow: GitHub creates a private app for this Hub, then you pick repositories. */
+function ConnectGitHub() {
+  const [more, setMore] = useState(false);
+  const [org, setOrg] = useState('');
+  const [base, setBase] = useState('');
+  const go = () => {
+    const q = new URLSearchParams();
+    if (org.trim()) q.set('org', org.trim());
+    if (base.trim()) q.set('base_url', base.trim());
+    window.location.assign(`/api/v1/github/connect/start?${q.toString()}`);
+  };
+  return (
+    <div className="rounded-xl border border-brand-200 bg-brand-50/60 p-4 dark:border-brand-500/30 dark:bg-brand-500/10">
+      <p className="text-sm font-medium">Recommended: one click</p>
+      <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">
+        GitHub creates a private app for this Hub and asks which repositories it may use. No tokens or keys to copy: the Hub receives them from GitHub and keeps them encrypted.
+      </p>
+      <button type="button" onClick={go} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200">
+        <GitHubMark className="h-4 w-4" /> Connect with GitHub
+      </button>
+      <button type="button" onClick={() => setMore((m) => !m)} className="mt-2 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200" aria-expanded={more}>
+        <ChevronDown className={more ? 'h-3.5 w-3.5 rotate-180' : 'h-3.5 w-3.5'} aria-hidden /> Organization or GitHub Enterprise
+      </button>
+      {more && (
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <Field label="Organization (optional)" hint="Create the app in an org you administer."><Input value={org} onChange={(e) => setOrg(e.target.value)} placeholder="acme" /></Field>
+          <Field label="Enterprise Server URL (optional)" hint="Empty for github.com."><Input value={base} onChange={(e) => setBase(e.target.value)} placeholder="https://ghe.example.com" /></Field>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** PickRepos lists what a just-connected git host can read and tracks the selected repositories. */
+function PickRepos({ connectorId, onDone }: { connectorId: string; onDone: () => void }) {
+  const [items, setItems] = useState<{ full_name: string; tracked: boolean }[]>();
+  const [err, setErr] = useState<unknown>();
+  const [sel, setSel] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(0);
+  useEffect(() => {
+    api.get<{ items: { full_name: string; tracked: boolean }[] }>(`/connectors/${connectorId}/available-repos`).then((r) => setItems(r.items), setErr);
+  }, [connectorId]);
+  const track = async () => {
+    setBusy(true);
+    setErr(undefined);
+    try {
+      for (const full_name of sel) {
+        await api.post('/repos', { connector_id: connectorId, full_name });
+        setDone((n) => n + 1);
+      }
+      onDone();
+    } catch (e) {
+      setErr(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const open = (items ?? []).filter((i) => !i.tracked);
+  return (
+    <Card title="GitHub connected — choose repositories to document" className="mb-4">
+      {!items && !err && <Spinner />}
+      <ErrorNote error={err} />
+      {items && open.length === 0 && <p className="text-sm text-slate-600 dark:text-slate-400">Every repository the app can read is already tracked. Change which repositories it can read under the app's settings on GitHub.</p>}
+      {open.length > 0 && (
+        <>
+          <div className="mb-2 flex items-center gap-3 text-xs">
+            <button type="button" className="text-brand-600 hover:underline dark:text-brand-300" onClick={() => setSel(open.map((i) => i.full_name))}>Select all ({open.length})</button>
+            <button type="button" className="text-slate-500 hover:underline" onClick={() => setSel([])}>None</button>
+          </div>
+          <div className="grid max-h-72 gap-1 overflow-y-auto sm:grid-cols-2">
+            {open.map((i) => (
+              <label key={i.full_name} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50 dark:hover:bg-white/[0.04]">
+                <input type="checkbox" checked={sel.includes(i.full_name)} onChange={(e) => setSel((s) => (e.target.checked ? [...s, i.full_name] : s.filter((x) => x !== i.full_name)))} />
+                <span className="truncate">{i.full_name}</span>
+              </label>
+            ))}
+          </div>
+          <div className="mt-3 flex items-center gap-2">
+            <Button disabled={!sel.length || busy} onClick={track}>{busy ? `Tracking ${done}/${sel.length}…` : `Track ${sel.length || ''} repositor${sel.length === 1 ? 'y' : 'ies'}`}</Button>
+            <Button variant="ghost" onClick={onDone}>Later</Button>
+          </div>
+          <p className="mt-2 text-xs text-slate-500">Each tracked repository is documented on its next push; a dry run and doc import are on the Repositories page.</p>
+        </>
+      )}
+      {items && open.length === 0 && <Button size="sm" variant="secondary" className="mt-2" onClick={onDone}>Done</Button>}
+    </Card>
+  );
 }
 
 function AddGit({ onCreated }: { onCreated: (id: string, type: string, secret: string) => void }) {
@@ -40,6 +140,8 @@ function AddGit({ onCreated }: { onCreated: (id: string, type: string, secret: s
     <>
       <Button onClick={() => setOpen(true)}>Connect git host</Button>
       <Dialog open={open} onOpenChange={setOpen} title="Connect GitHub or GitLab" description="Read access to code, and write access limited to the generated-docs path (enforced by the Hub).">
+        <ConnectGitHub />
+        <div className="my-4 flex items-center gap-3 text-xs text-slate-400"><span className="h-px flex-1 bg-slate-200 dark:bg-white/10" />or enter the details yourself (GitLab, a token, or an existing app)<span className="h-px flex-1 bg-slate-200 dark:bg-white/10" /></div>
         <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit(); }}>
           <Field label="Host">
             <Select value={type} onChange={(e) => setType(e.target.value as 'github' | 'gitlab')}>
@@ -218,6 +320,10 @@ function AddKnowledge({ onCreated }: { onCreated: (type: string) => void }) {
 
 export default function Connectors() {
   const conns = useConnectors();
+  const [params, setParams] = useSearchParams();
+  const ghConnected = params.get('github') === 'connected' ? params.get('connector') : null;
+  const ghError = params.get('github_error');
+  const clearGitHub = () => setParams({}, { replace: true });
   const [testing, setTesting] = useState<string>();
   const [created, setCreated] = useState<{ id: string; type: string; secret: string }>();
   const [signal, setSignal] = useState<{ id: string; type: string; secret: string; path: string }>();
@@ -229,6 +335,13 @@ export default function Connectors() {
     <>
       <PageHeader title="Connectors" description="Git hosts, the error, alert, log, and event-platform sources the Inbox reads, and Confluence and Jira for knowledge. Wiz and Splunk arrive next."
         actions={<div className="flex flex-wrap gap-2"><AddKnowledge onCreated={setKnowledge} /><AddSignal onCreated={setSignal} /><AddGit onCreated={(id, type, secret) => setCreated({ id, type, secret })} /></div>} />
+      {ghError && (
+        <Card title="GitHub was not connected" className="mb-4">
+          <p className="text-sm text-red-700 dark:text-red-400">{ghError}</p>
+          <Button size="sm" variant="secondary" className="mt-2" onClick={clearGitHub}>Dismiss</Button>
+        </Card>
+      )}
+      {ghConnected && <PickRepos connectorId={ghConnected} onDone={clearGitHub} />}
       {knowledge && (
         <Card title="Syncing" className="mb-4">
           <p className="text-sm">Saved. The first {knowledgeSpec(knowledge)?.label} sync starts within a minute; pages and issues then appear in Ask, the Library, and (when labelled) Known Issues. Health shows here after each sync.</p>

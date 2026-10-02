@@ -77,6 +77,7 @@ func AdminRoutes(d AdminDeps) func(chi.Router) {
 			r.Patch("/connectors/{id}", h.patchConnector)
 			r.Delete("/connectors/{id}", h.deleteConnector)
 			r.Post("/connectors/{id}/test", h.testConnector)
+			r.Get("/connectors/{id}/available-repos", h.availableRepos)
 			r.Post("/connectors/{id}/sync", h.syncConnector)
 			r.Get("/providers", h.listProviders)
 			r.Post("/providers", h.createProvider)
@@ -360,6 +361,45 @@ func (h *adminHandlers) testConnector(w http.ResponseWriter, r *http.Request) {
 		checks = append(checks, check{Name: "list_repositories", OK: true, Detail: strings.Join(firstN(repos, 20), ", ")})
 	}
 	WriteJSON(w, http.StatusOK, map[string]any{"ok": ok, "checks": checks})
+}
+
+// availableRepos lists what the git host lets the connector read, marking the repositories already tracked.
+func (h *adminHandlers) availableRepos(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if h.d.Host == nil {
+		WriteErr(w, r, ports.ErrNotFound)
+		return
+	}
+	host, err := h.d.Host(r.Context(), id)
+	if err != nil {
+		WriteErr(w, r, &ports.ValidationError{Code: "CONNECTOR_NOT_READY", Message: err.Error()})
+		return
+	}
+	names, err := host.ListRepos(r.Context())
+	if err != nil {
+		WriteErr(w, r, &ports.ValidationError{Code: "HOST_ERROR", Message: "could not list repositories: " + err.Error()})
+		return
+	}
+	all, err := h.d.Repos.ListAll(r.Context())
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	tracked := map[string]bool{}
+	for _, rc := range all {
+		if rc.ConnectorID == id {
+			tracked[rc.FullName] = true
+		}
+	}
+	type item struct {
+		FullName string `json:"full_name"`
+		Tracked  bool   `json:"tracked"`
+	}
+	out := make([]item, 0, len(names))
+	for _, n := range names {
+		out = append(out, item{FullName: n, Tracked: tracked[n]})
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"items": out})
 }
 
 func firstN(xs []string, n int) []string {
