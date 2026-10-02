@@ -100,6 +100,22 @@ Under construction, milestone by milestone (plan § 14). Implemented so far:
 
 ## Install
 
+### From source, fully automatic (one command)
+
+```sh
+git clone https://github.com/GokulMV/DocTheRepo && cd DocTheRepo && ./scripts/quickstart.sh
+```
+
+Checks and installs what is missing, unattended: git, curl, tar, make, openssl, a C compiler, Go 1.25.11
+and Node.js 22 (private copies under `~/.dth-quickstart/toolchain` when the system ones are missing or too
+old), and Docker + Compose (Linux: get.docker.com; macOS: Homebrew + Colima). It then builds the UI and the
+hub (`make release`), starts PostgreSQL/pgvector in Docker, runs the hub, creates the owner account, and
+opens <http://localhost:8080> with the credentials printed (and saved in `~/.dth-quickstart/credentials.txt`).
+Set `ANTHROPIC_API_KEY` and/or `OPENAI_API_KEY` first to have the model routes configured too. Stop with
+`./scripts/quickstart.sh --down` (`--wipe` deletes the data); `--container` builds and runs the container
+image instead of using a host toolchain; `--help` lists every option. See
+[docs/architecture.md](docs/architecture.md) for how the pieces fit.
+
 ### Local (one command)
 
 Requires Docker. `dth up` writes `~/.dth/compose.yaml`, starts PostgreSQL (pgvector) and the hub, creates
