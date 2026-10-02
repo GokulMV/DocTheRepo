@@ -55,6 +55,22 @@ type Store interface {
 	IndexVersion(ctx context.Context) (int64, error)
 }
 
+// Overviewer is a Store that can find material describing repositories as a whole.
+type Overviewer interface {
+	Overview(ctx context.Context, s Scope, k int) ([]ports.VectorHit, error)
+}
+
+var (
+	overviewSubject = regexp.MustCompile(`\b(repo|repos|repository|repositories|project|codebase|code base|service|services|app|application|system|platform|architecture)\b`)
+	overviewAsk     = regexp.MustCompile(`\b(explain|overview|summar\w*|describe|introduce|how (does|do|is|are)\b.*\bwork|what (is|does|are)\b|architecture|structure|walk me through|get started|onboard\w*)`)
+)
+
+// IsOverviewQuestion reports questions about a repository or system as a whole.
+func IsOverviewQuestion(q string) bool {
+	q = strings.ToLower(q)
+	return overviewSubject.MatchString(q) && overviewAsk.MatchString(q)
+}
+
 // Savings records avoided spend (answer cache hits).
 type Savings interface {
 	Record(ctx context.Context, kind string, tokens int64, costUSD float64, ref string) error
@@ -260,7 +276,15 @@ func (e *Engine) retrieve(ctx context.Context, meta llmgateway.CallMeta, questio
 		return nil, err
 	}
 	stage("full_text")
-	fused := Fuse(RRFK, vec, fts)
+	lists := [][]ports.VectorHit{vec, fts}
+	// A broad question ("how does this repo work?") is best answered from READMEs and overview docs,
+	// which rarely share its words.
+	if o, ok := e.Store.(Overviewer); ok && IsOverviewQuestion(question) {
+		if ov, err := o.Overview(ctx, s, CandidatesPerMethod); err == nil && len(ov) > 0 {
+			lists = append([][]ports.VectorHit{ov}, lists...)
+		}
+	}
+	fused := Fuse(RRFK, lists...)
 	if len(fused) > FusedTop {
 		fused = fused[:FusedTop]
 	}
