@@ -7,6 +7,7 @@ import Inbox from '@/pages/Inbox';
 import IssueDetail from '@/pages/IssueDetail';
 import KnownIssues from '@/pages/KnownIssues';
 import { me, mockApi, renderAt } from './helpers';
+import { openSealed } from './helpers';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -122,7 +123,8 @@ describe('Connectors: signal sources', () => {
     expect(await screen.findByText(/\/hooks\/sentry\/c9/)).toBeInTheDocument();
     const body = JSON.parse(String(calls.find((c) => c.method === 'POST')!.init?.body));
     expect(body.type).toBe('sentry');
-    expect(body.webhook_secret).toMatch(/^[0-9a-f]{48}$/);
-    expect(screen.getByText(body.webhook_secret)).toBeInTheDocument();
+    const secret = openSealed(body.webhook_secret, 'connector.webhook_secret'); // sent sealed
+    expect(secret).toMatch(/^[0-9a-f]{48}$/);
+    expect(screen.getByText(secret)).toBeInTheDocument(); // shown once, in the clear, to the person setting it up
   });
 });

@@ -4,6 +4,8 @@ import { api } from '@/api/client';
 import { keys, useInvalidating, useProviders, useRoutes } from '@/api/hooks';
 import type { Provider, Route } from '@/api/types';
 import { Badge, Button, Card, Dialog, Empty, ErrorNote, Field, Input, PageHeader, Select, Spinner, Table, Td, Toggle } from '@/components/ui';
+import { SealedBadge, SealedHint } from '@/components/Sealed';
+import { seal } from '@/lib/seal';
 
 const FEATURE_HELP: Record<string, string> = {
   docgen: 'Writes documentation for changed code',
@@ -46,7 +48,7 @@ function AddProvider({ kinds }: { kinds: string[] }) {
             e.preventDefault();
             const ex: Record<string, string> = {};
             extra.split('\n').map((l) => l.split('=')).forEach(([k, ...v]) => k.trim() && (ex[k.trim()] = v.join('=').trim()));
-            await create.mutateAsync({ kind, name: name || kind, base_url: baseURL || undefined, api_key: key || undefined, extra: ex, redact_pii: redact });
+            await create.mutateAsync({ kind, name: name || kind, base_url: baseURL || undefined, api_key: key ? await seal(key, 'provider.api_key') : undefined, extra: ex, redact_pii: redact });
             setOpen(false);
           }}
         >
@@ -57,13 +59,32 @@ function AddProvider({ kinds }: { kinds: string[] }) {
           </Field>
           <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder={kind} /></Field>
           <Field label="Base URL" hint="Only for self-hosted or proxied endpoints."><Input value={baseURL} onChange={(e) => setBaseURL(e.target.value)} /></Field>
-          <Field label="API key" hint="Encrypted at rest; never returned by the API."><Input type="password" value={key} onChange={(e) => setKey(e.target.value)} /></Field>
+          <Field label="API key" hint={<SealedHint />}><Input type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} /></Field>
           <Field label="Extra settings" hint="key=value per line, e.g. region=us-east-1, project=my-proj, deployment=gpt4o">
             <textarea className="w-full rounded-md border border-slate-300 p-2 font-mono text-xs dark:border-slate-700 dark:bg-slate-900" rows={3} value={extra} onChange={(e) => setExtra(e.target.value)} />
           </Field>
           <Toggle label="Redact personal data before sending" checked={redact} onChange={setRedact} />
           <ErrorNote error={create.error} />
           <Button type="submit" disabled={create.isPending}>Add</Button>
+        </form>
+      </Dialog>
+    </>
+  );
+}
+
+/** ReplaceKey sets a new key; the old one cannot be seen, only replaced. */
+function ReplaceKey({ p }: { p: Provider }) {
+  const [open, setOpen] = useState(false);
+  const [key, setKey] = useState('');
+  const save = useInvalidating(async () => api.patch(`/providers/${p.id}`, { api_key: await seal(key, 'provider.api_key') }), keys.providers);
+  return (
+    <>
+      <Button size="sm" variant="ghost" onClick={() => setOpen(true)}>{p.has_key ? 'Replace key' : 'Set key'}</Button>
+      <Dialog open={open} onOpenChange={setOpen} title={`${p.has_key ? 'Replace' : 'Set'} the ${p.name} key`} description="The current key is write-only: it cannot be shown, only replaced.">
+        <form className="space-y-3" onSubmit={async (e) => { e.preventDefault(); await save.mutateAsync(); setKey(''); setOpen(false); }}>
+          <Field label="New API key" hint={<SealedHint />}><Input type="password" autoComplete="off" required value={key} onChange={(e) => setKey(e.target.value)} /></Field>
+          <ErrorNote error={save.error} />
+          <Button type="submit" disabled={save.isPending || !key}>Save</Button>
         </form>
       </Dialog>
     </>
@@ -80,7 +101,12 @@ function ProviderRow({ p }: { p: Provider }) {
     <tr>
       <Td><span className="font-medium">{p.name}</span> {!p.enabled && <Badge tone="amber">disabled</Badge>}</Td>
       <Td>{p.kind}</Td>
-      <Td>{p.has_key ? <Badge tone="green">key set</Badge> : <Badge>no key</Badge>}</Td>
+      <Td>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {p.has_key ? <SealedBadge meta={p.key_meta} /> : <Badge>no key</Badge>}
+          <ReplaceKey p={p} />
+        </div>
+      </Td>
       <Td>
         <div className="flex items-center gap-1">
           <Input aria-label="Model to test" className="h-8 w-40 text-xs" placeholder="model" value={model} onChange={(e) => setModel(e.target.value)} />

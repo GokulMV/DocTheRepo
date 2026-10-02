@@ -1,0 +1,3 @@
+ALTER TABLE connectors DROP COLUMN IF EXISTS creds_set_at, DROP COLUMN IF EXISTS creds_hint;
+ALTER TABLE llm_providers DROP COLUMN IF EXISTS key_set_at, DROP COLUMN IF EXISTS key_hint;
+DROP TABLE IF EXISTS seal_keys;
