@@ -111,7 +111,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: "1.25.11" }
+        with: { go-version: "1.25.13" }
       - run: CGO_ENABLED=0 go install github.com/GokulMV/DocTheRepo/cmd/dth@main
       - run: dth apply -f deploy/settings/
         env:

@@ -8,8 +8,8 @@ import { me, mockApi, renderAt } from './helpers';
 
 // Cytoscape needs a real canvas; the graph itself is exercised in the browser E2E run.
 vi.mock('cytoscape', () => {
-  const coll = { addClass: () => coll, removeClass: () => coll, filter: () => coll, unselect: () => coll, select: () => coll, length: 0, not: () => coll, edges: () => coll };
-  const cy = { on: () => undefined, destroy: () => undefined, getElementById: () => coll, nodes: () => coll, elements: () => coll, animate: () => undefined };
+  const coll = { addClass: () => coll, removeClass: () => coll, filter: () => coll, unselect: () => coll, select: () => coll, length: 0, not: () => coll, edges: () => coll, stop: () => coll };
+  const cy = { on: () => undefined, destroy: () => undefined, destroyed: () => false, stop: () => undefined, layout: () => ({ run: () => undefined, stop: () => undefined }), getElementById: () => coll, nodes: () => coll, elements: () => coll, animate: () => undefined };
   return { default: () => cy };
 });
 

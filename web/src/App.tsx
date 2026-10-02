@@ -1,33 +1,47 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { RequireRole, Shell } from '@/layouts/Shell';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Spinner } from '@/components/ui';
 import Login from '@/pages/Login';
 
-// Pages load on demand so the first paint ships only the shell and the current page.
-const Ask = lazy(() => import('@/pages/Ask'));
-const Docs = lazy(() => import('@/pages/Docs'));
-const Palace = lazy(() => import('@/pages/Palace'));
-const Architecture = lazy(() => import('@/pages/Architecture'));
-const Library = lazy(() => import('@/pages/Library'));
-const Repos = lazy(() => import('@/pages/Repos'));
-const Connectors = lazy(() => import('@/pages/Connectors'));
-const Providers = lazy(() => import('@/pages/Providers'));
-const Spend = lazy(() => import('@/pages/Spend'));
-const Analytics = lazy(() => import('@/pages/Analytics'));
-const Activity = lazy(() => import('@/pages/Activity'));
-const Users = lazy(() => import('@/pages/Users'));
-const Account = lazy(() => import('@/pages/Account'));
-const Setup = lazy(() => import('@/pages/Setup'));
-const SettingsFile = lazy(() => import('@/pages/SettingsFile'));
-const Inbox = lazy(() => import('@/pages/Inbox'));
-const IssueDetail = lazy(() => import('@/pages/IssueDetail'));
-const KnownIssues = lazy(() => import('@/pages/KnownIssues'));
+// Pages ship with the app, so switching pages never waits on the network (and never meets a stale chunk
+// after an upgrade). Only the two heavy ones — the graph and the charts — load separately, prefetched once
+// the app is idle.
+import Ask from '@/pages/Ask';
+import Docs from '@/pages/Docs';
+import Architecture from '@/pages/Architecture';
+import Library from '@/pages/Library';
+import Repos from '@/pages/Repos';
+import Connectors from '@/pages/Connectors';
+import Providers from '@/pages/Providers';
+import Spend from '@/pages/Spend';
+import Activity from '@/pages/Activity';
+import Users from '@/pages/Users';
+import Account from '@/pages/Account';
+import Setup from '@/pages/Setup';
+import SettingsFile from '@/pages/SettingsFile';
+import Inbox from '@/pages/Inbox';
+import IssueDetail from '@/pages/IssueDetail';
+import KnownIssues from '@/pages/KnownIssues';
+const loadPalace = () => import('@/pages/Palace');
+const loadAnalytics = () => import('@/pages/Analytics');
+const Palace = lazy(loadPalace);
+const Analytics = lazy(loadAnalytics);
+
+function usePrefetchHeavyPages() {
+  useEffect(() => {
+    const run = () => void Promise.all([loadPalace(), loadAnalytics()]).catch(() => undefined);
+    const w = window as Window & { requestIdleCallback?: (cb: () => void) => number };
+    if (w.requestIdleCallback) w.requestIdleCallback(run);
+    else setTimeout(run, 1500);
+  }, []);
+}
 
 const admin = (el: JSX.Element) => <RequireRole min="admin">{el}</RequireRole>;
 
 export default function App() {
+  usePrefetchHeavyPages();
   return (
     <ErrorBoundary>
     <Suspense fallback={<Spinner />}>

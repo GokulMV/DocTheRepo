@@ -130,8 +130,12 @@ export function GraphView({ nodes, edges, focus, selected, layout = 'force', que
         { selector: 'edge.hl', style: { label: 'data(label)', 'line-color': '#6090fa', 'target-arrow-color': '#6090fa', opacity: 1, 'z-index': 9 } },
         { selector: '.faded', style: { opacity: 0.12 } },
       ],
-      layout: layoutOptions(layout, nodes.length, focus),
+      layout: { name: 'preset' }, // the real layout runs below, where it can be stopped
     });
+    // Run the layout ourselves so it can be stopped on unmount.
+    const running = c.layout(layoutOptions(layout, nodes.length, focus));
+    (c as unknown as { layoutRunning?: { stop: () => void } }).layoutRunning = running;
+    running.run();
     if (focus) c.getElementById(focus).addClass('focus');
     c.on('tap', 'node', (e) => select.current(e.target.id()));
     c.on('tap', (e) => {
@@ -148,7 +152,15 @@ export function GraphView({ nodes, edges, focus, selected, layout = 'force', que
       if (el.current) el.current.style.cursor = '';
     });
     cy.current = c;
-    return () => c.destroy();
+    return () => {
+      // Leaving mid-layout: stop the running layout and animations first, or Cytoscape's batch end touches
+      // a destroyed renderer ("reading 'notify'").
+      c.stop(true, false);
+      c.elements().stop(true, false);
+      (c as unknown as { layoutRunning?: { stop: () => void } }).layoutRunning?.stop();
+      if (cy.current === c) cy.current = undefined;
+      c.destroy();
+    };
   }, [nodes, edges, focus, layout, dark]);
 
   useEffect(() => {
@@ -166,11 +178,11 @@ export function GraphView({ nodes, edges, focus, selected, layout = 'force', que
     if (q.length < 2) return;
     const hits = c.nodes().filter((n) => String(n.data('label')).toLowerCase().includes(q));
     hits.addClass('match');
-    if (hits.length) c.animate({ fit: { eles: hits, padding: 80 }, duration: 300 });
+    if (hits.length && !c.destroyed()) c.animate({ fit: { eles: hits, padding: 80 }, duration: 300 });
   }, [query, nodes]);
 
   useEffect(() => {
-    if (fitSignal) cy.current?.animate({ fit: { eles: cy.current.elements(), padding: 30 }, duration: 300 });
+    if (fitSignal && cy.current && !cy.current.destroyed()) cy.current.animate({ fit: { eles: cy.current.elements(), padding: 30 }, duration: 300 });
   }, [fitSignal]);
 
   return (
