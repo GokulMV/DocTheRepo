@@ -4,7 +4,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { API, ApiError, api, getCSRF, toApiError } from '@/api/client';
 import { keys, useRepos, useThread, useThreads } from '@/api/hooks';
 import type { AskResponse, Citation, Message } from '@/api/types';
-import { Bug, Check, ChevronDown, FolderGit2, GitBranch, History, Network, Send, ShieldCheck, Sparkles } from 'lucide-react';
+import { Bug, Check, ChevronDown, FolderGit2, GitBranch, History, Network, Send, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { Markdown } from '@/components/Markdown';
 import { Badge, Button, ErrorNote, cx } from '@/components/ui';
 import { readSSE } from '@/lib/sse';
@@ -48,11 +48,14 @@ function Feedback({ m }: { m: Message }) {
   };
   return (
     <div className="mt-2 flex items-center gap-1 text-xs text-slate-500">
-      <button aria-label="Helpful" className={cx('rounded px-1.5 hover:bg-slate-100', value === 'up' && 'text-emerald-600')} onClick={() => send('up')}>
-        ▲
+      <span className="mr-1">{value ? 'Thanks for the feedback' : 'Was this helpful?'}</span>
+      <button type="button" aria-label="Helpful" aria-pressed={value === 'up'} title="Helpful"
+        className={cx('rounded-md p-1.5 hover:bg-slate-100 dark:hover:bg-white/[0.06]', value === 'up' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400')} onClick={() => send('up')}>
+        <ThumbsUp className={cx('h-3.5 w-3.5', value === 'up' && 'fill-current')} aria-hidden />
       </button>
-      <button aria-label="Not helpful" className={cx('rounded px-1.5 hover:bg-slate-100', value === 'down' && 'text-red-600')} onClick={() => send('down')}>
-        ▼
+      <button type="button" aria-label="Not helpful" aria-pressed={value === 'down'} title="Not helpful"
+        className={cx('rounded-md p-1.5 hover:bg-slate-100 dark:hover:bg-white/[0.06]', value === 'down' ? 'text-red-600 dark:text-red-400' : 'text-slate-400')} onClick={() => send('down')}>
+        <ThumbsDown className={cx('h-3.5 w-3.5', value === 'down' && 'fill-current')} aria-hidden />
       </button>
       {m.cached && <Badge>cached</Badge>}
       {m.usage && m.usage.cost_usd > 0 && <span>{usd(m.usage.cost_usd)}</span>}
