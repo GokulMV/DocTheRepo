@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"sync"
@@ -14,14 +15,20 @@ import (
 
 	"github.com/GokulMV/DocTheRepo/internal/auth"
 	"github.com/GokulMV/DocTheRepo/internal/observability"
+	"github.com/GokulMV/DocTheRepo/internal/secrets"
+	"github.com/GokulMV/DocTheRepo/internal/store"
 )
 
 const oidcStateCookie = "dth_oidc"
 
 type authHandlers struct {
 	svc    *auth.Service
-	oidc   *auth.OIDC
 	secure bool
+	// sealKeys open the client secret the browser sealed to the Hub (nil: plain only).
+	sealKeys      *store.SealKeys
+	requireSealed bool
+	// publicURL is the Hub's external URL (the single sign-on callback is under it); empty: from the request.
+	publicURL string
 	// loginLimit throttles password attempts per client IP.
 	mu         sync.Mutex
 	loginLimit map[string]*rate.Limiter
@@ -32,6 +39,8 @@ func (h *authHandlers) routes(r chi.Router) {
 	r.Get("/auth/login", h.login)
 	r.Get("/auth/callback", h.callback)
 	r.Post("/auth/local/login", h.localLogin)
+	r.Get("/auth/invite/{token}", h.getInvite)
+	r.Post("/auth/invite/{token}", h.acceptInvite)
 	r.Post("/auth/logout", h.logout)
 	r.Group(func(r chi.Router) {
 		r.Use(requireRole(auth.RoleViewer))
@@ -43,10 +52,18 @@ func (h *authHandlers) routes(r chi.Router) {
 	r.Group(func(r chi.Router) {
 		r.Use(requireRole(auth.RoleAdmin))
 		r.Get("/users", h.listUsers)
+		r.Post("/users", h.createUser)
 		r.Patch("/users/{id}", h.updateUser)
+		r.Delete("/users/{id}", h.deleteUser)
+		r.Post("/users/{id}/invite", h.createInvite)
 		r.Get("/users/{id}/repo-access", h.getRepoAccess)
 		r.Put("/users/{id}/repo-access", h.setRepoAccess)
 		r.Get("/audit", h.listAudit)
+	})
+	r.Group(func(r chi.Router) {
+		r.Use(requireRole(auth.RoleOwner))
+		r.Get("/auth/settings", h.getSignIn)
+		r.Put("/auth/settings", h.putSignIn)
 	})
 }
 
@@ -64,24 +81,29 @@ func safeReturn(p string) string {
 }
 
 // config tells the login page which sign-in methods exist (public).
-func (h *authHandlers) config(w http.ResponseWriter, _ *http.Request) {
-	WriteJSON(w, http.StatusOK, map[string]any{"mode": h.svc.Config().Mode, "sso": h.oidc != nil, "password": h.svc.Config().Mode == "local"})
+func (h *authHandlers) config(w http.ResponseWriter, r *http.Request) {
+	WriteJSON(w, http.StatusOK, map[string]any{"mode": h.svc.Config().Mode, "sso": h.svc.OIDC() != nil, "password": h.svc.PasswordEnabled(r.Context())})
 }
 
 func (h *authHandlers) login(w http.ResponseWriter, r *http.Request) {
-	if h.oidc == nil {
+	if h.svc.OIDC() == nil {
 		WriteError(w, r, http.StatusNotFound, "OIDC_NOT_CONFIGURED", "single sign-on is not configured; use local login", nil)
 		return
 	}
+	o := h.svc.OIDC()
 	ls := auth.NewLoginState(safeReturn(r.URL.Query().Get("return")))
+	if !o.HasRedirect() {
+		ls.Redirect = h.callbackURL(r)
+	}
 	b, _ := json.Marshal(ls)
 	http.SetCookie(w, &http.Cookie{Name: oidcStateCookie, Value: base64.RawURLEncoding.EncodeToString(b), Path: "/api/v1/auth",
 		MaxAge: 600, HttpOnly: true, Secure: h.secure, SameSite: http.SameSiteLaxMode})
-	http.Redirect(w, r, h.oidc.AuthURL(ls), http.StatusFound)
+	http.Redirect(w, r, o.AuthURL(ls), http.StatusFound)
 }
 
 func (h *authHandlers) callback(w http.ResponseWriter, r *http.Request) {
-	if h.oidc == nil {
+	o := h.svc.OIDC()
+	if o == nil {
 		WriteError(w, r, http.StatusNotFound, "OIDC_NOT_CONFIGURED", "single sign-on is not configured", nil)
 		return
 	}
@@ -102,7 +124,7 @@ func (h *authHandlers) callback(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, http.StatusUnauthorized, "IDP_ERROR", "the identity provider returned "+e, nil)
 		return
 	}
-	claims, err := h.oidc.Exchange(r.Context(), r.URL.Query().Get("code"), ls)
+	claims, err := o.Exchange(r.Context(), r.URL.Query().Get("code"), ls)
 	if err != nil {
 		observability.Logger(r.Context()).Warn("oidc callback failed", "err", err)
 		WriteError(w, r, http.StatusUnauthorized, "OIDC_FAILED", "single sign-on failed; try again", nil)
@@ -138,7 +160,7 @@ func (h *authHandlers) allowLogin(ip string) bool {
 }
 
 func (h *authHandlers) localLogin(w http.ResponseWriter, r *http.Request) {
-	if h.svc.Config().Mode != "local" {
+	if !h.svc.PasswordEnabled(r.Context()) {
 		WriteError(w, r, http.StatusNotFound, "LOCAL_LOGIN_DISABLED", "password login is disabled; use single sign-on", nil)
 		return
 	}
@@ -257,6 +279,7 @@ func (h *authHandlers) listUsers(w http.ResponseWriter, r *http.Request) {
 
 func (h *authHandlers) updateUser(w http.ResponseWriter, r *http.Request) {
 	var in struct {
+		Name     *string `json:"name"`
 		Role     *string `json:"role"`
 		Disabled *bool   `json:"disabled"`
 	}
@@ -275,7 +298,7 @@ func (h *authHandlers) updateUser(w http.ResponseWriter, r *http.Request) {
 	}
 	p := auth.FromContext(r.Context())
 	id := chi.URLParam(r, "id")
-	u, err := h.svc.UpdateUser(r.Context(), p, id, role, in.Disabled)
+	u, err := h.svc.UpdateUser(r.Context(), p, id, in.Name, role, in.Disabled)
 	if err != nil {
 		fail(w, r, err)
 		return
@@ -343,4 +366,188 @@ func (h *authHandlers) listAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteJSON(w, http.StatusOK, newPage(es, limit, func(e auth.AuditEntry) any { return map[string]any{"b": e.At} }))
+}
+
+// invitePath is where the set-password page lives in the UI.
+func invitePath(token string) string { return "/invite/" + token }
+
+func (h *authHandlers) createUser(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Email  string `json:"email"`
+		Name   string `json:"name"`
+		Role   string `json:"role"`
+		Invite bool   `json:"invite"`
+	}
+	if err := decodeJSON(w, r, &in); err != nil {
+		fail(w, r, err)
+		return
+	}
+	if in.Role == "" {
+		in.Role = string(auth.RoleViewer)
+	}
+	role, err := auth.ParseRole(in.Role)
+	if err != nil {
+		fail(w, r, errBadParam(err.Error()))
+		return
+	}
+	p := auth.FromContext(r.Context())
+	u, err := h.svc.CreateUser(r.Context(), p, in.Email, in.Name, role)
+	if err != nil {
+		fail(w, r, err)
+		return
+	}
+	_ = h.svc.Audit(r.Context(), p, "user.create", "user", u.ID, map[string]string{"email": u.Email, "role": string(u.Role)}, clientIP(r))
+	out := map[string]any{"user": u}
+	if in.Invite && h.svc.PasswordEnabled(r.Context()) {
+		token, exp, err := h.svc.CreateInvite(r.Context(), p, u.ID)
+		if err != nil {
+			fail(w, r, err)
+			return
+		}
+		_ = h.svc.Audit(r.Context(), p, "user.invite", "user", u.ID, nil, clientIP(r))
+		out["invite"] = map[string]any{"path": invitePath(token), "expires_at": exp}
+	}
+	WriteJSON(w, http.StatusCreated, out)
+}
+
+func (h *authHandlers) createInvite(w http.ResponseWriter, r *http.Request) {
+	if !h.svc.PasswordEnabled(r.Context()) {
+		WriteError(w, r, http.StatusBadRequest, "PASSWORD_LOGIN_DISABLED", "password sign-in is off, so people sign in with single sign-on instead", nil)
+		return
+	}
+	p := auth.FromContext(r.Context())
+	id := chi.URLParam(r, "id")
+	token, exp, err := h.svc.CreateInvite(r.Context(), p, id)
+	if err != nil {
+		fail(w, r, err)
+		return
+	}
+	_ = h.svc.Audit(r.Context(), p, "user.invite", "user", id, nil, clientIP(r))
+	WriteJSON(w, http.StatusCreated, map[string]any{"path": invitePath(token), "expires_at": exp})
+}
+
+func (h *authHandlers) deleteUser(w http.ResponseWriter, r *http.Request) {
+	p := auth.FromContext(r.Context())
+	id := chi.URLParam(r, "id")
+	u, err := h.svc.GetUser(r.Context(), id)
+	if err == nil {
+		err = h.svc.DeleteUser(r.Context(), p, id)
+	}
+	if err != nil {
+		fail(w, r, err)
+		return
+	}
+	_ = h.svc.Audit(r.Context(), p, "user.delete", "user", id, map[string]string{"email": u.Email}, clientIP(r))
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// getInvite tells the set-password page whose link it is (public; the token is the credential).
+func (h *authHandlers) getInvite(w http.ResponseWriter, r *http.Request) {
+	info, err := h.svc.Invite(r.Context(), chi.URLParam(r, "token"))
+	if err != nil {
+		writeInviteErr(w, r, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"email": info.Email, "name": info.Name, "expires_at": info.ExpiresAt,
+		"password": h.svc.PasswordEnabled(r.Context()), "sso": h.svc.OIDC() != nil})
+}
+
+// acceptInvite sets the password and signs the person in.
+func (h *authHandlers) acceptInvite(w http.ResponseWriter, r *http.Request) {
+	if !h.allowLogin("invite:" + clientIP(r)) {
+		w.Header().Set("Retry-After", "6")
+		WriteError(w, r, http.StatusTooManyRequests, "RATE_LIMITED", "too many attempts", nil)
+		return
+	}
+	if !h.svc.PasswordEnabled(r.Context()) {
+		WriteError(w, r, http.StatusBadRequest, "PASSWORD_LOGIN_DISABLED", "password sign-in is off; sign in with single sign-on", nil)
+		return
+	}
+	var in struct {
+		Password string `json:"password"`
+	}
+	if err := decodeJSON(w, r, &in); err != nil {
+		fail(w, r, err)
+		return
+	}
+	u, err := h.svc.AcceptInvite(r.Context(), chi.URLParam(r, "token"), in.Password)
+	if err != nil {
+		writeInviteErr(w, r, err)
+		return
+	}
+	s, err := h.svc.CreateSession(r.Context(), u.ID, clientIP(r), r.UserAgent())
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	h.setSession(w, s)
+	_ = h.svc.Audit(r.Context(), &auth.Principal{UserID: u.ID}, "auth.password_set", "user", u.ID, nil, clientIP(r))
+	WriteJSON(w, http.StatusOK, map[string]any{"user": u, "csrf_token": s.CSRF})
+}
+
+func writeInviteErr(w http.ResponseWriter, r *http.Request, err error) {
+	if errors.Is(err, auth.ErrInviteInvalid) {
+		WriteError(w, r, http.StatusGone, "INVITE_INVALID", err.Error(), nil)
+		return
+	}
+	fail(w, r, err)
+}
+
+// callbackURL is the single sign-on redirect URL to register with the identity provider.
+func (h *authHandlers) callbackURL(r *http.Request) string {
+	base := strings.TrimRight(h.publicURL, "/")
+	if base == "" {
+		scheme := "http"
+		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+			scheme = "https"
+		}
+		base = scheme + "://" + r.Host
+	}
+	return base + "/api/v1/auth/callback"
+}
+
+func (h *authHandlers) getSignIn(w http.ResponseWriter, r *http.Request) {
+	st, err := h.svc.SignIn(r.Context())
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"state": st, "callback_url": h.callbackURL(r)})
+}
+
+func (h *authHandlers) putSignIn(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Password *bool `json:"password"`
+		SSO      *struct {
+			Provider       string   `json:"provider"`
+			Issuer         string   `json:"issuer"`
+			ClientID       string   `json:"client_id"`
+			ClientSecret   string   `json:"client_secret"`
+			AllowedDomains []string `json:"allowed_domains"`
+			GroupsClaim    string   `json:"groups_claim"`
+		} `json:"sso"`
+		ClearSSO bool `json:"clear_sso"`
+	}
+	if err := decodeJSON(w, r, &in); err != nil {
+		fail(w, r, err)
+		return
+	}
+	save := auth.SaveSignIn{Password: in.Password, ClearSSO: in.ClearSSO}
+	audit := map[string]any{"password": in.Password, "clear_sso": in.ClearSSO}
+	if in.SSO != nil {
+		if err := openSealed(r.Context(), h.sealKeys, h.requireSealed, &in.SSO.ClientSecret, secrets.PurposeOIDCClientSecret); err != nil {
+			fail(w, r, err)
+			return
+		}
+		save.SSO = &auth.SSOSettings{Provider: in.SSO.Provider, Issuer: in.SSO.Issuer, ClientID: in.SSO.ClientID,
+			AllowedDomains: in.SSO.AllowedDomains, GroupsClaim: in.SSO.GroupsClaim}
+		save.ClientSecret = in.SSO.ClientSecret
+		audit["issuer"], audit["client_id"], audit["allowed_domains"] = in.SSO.Issuer, in.SSO.ClientID, in.SSO.AllowedDomains
+	}
+	if err := h.svc.UpdateSignIn(r.Context(), save); err != nil {
+		fail(w, r, err)
+		return
+	}
+	_ = h.svc.Audit(r.Context(), auth.FromContext(r.Context()), "auth.settings", "auth_settings", "1", audit, clientIP(r))
+	h.getSignIn(w, r)
 }

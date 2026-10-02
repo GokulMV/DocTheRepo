@@ -186,7 +186,7 @@ func run(cfgPath string) error {
 
 	var servers []*http.Server
 	if cfg.HasRole(config.RoleAPI) {
-		h := api.NewRouter(api.Deps{Log: log, Metrics: metrics, Checks: a.readiness(), Git: a.ingest, Signals: a.signals, Auth: a.auth, OIDC: a.oidc, SecureCookies: strings.HasPrefix(cfg.Server.PublicURL, "https://"),
+		h := api.NewRouter(api.Deps{Log: log, Metrics: metrics, Checks: a.readiness(), Git: a.ingest, Signals: a.signals, Auth: a.auth, OIDC: a.oidc, PublicURL: cfg.Server.PublicURL, SealKeys: a.sealKeys, RequireSealed: cfg.Settings.RequireSealed, SecureCookies: strings.HasPrefix(cfg.Server.PublicURL, "https://"),
 			V1: a.v1Routes(), UI: webui.Handler(),
 			Settings: &api.SettingsPolicy{Sources: cfg.Settings.SecretSources, EnvPrefix: cfg.Settings.EnvPrefix, FileRoot: cfg.Settings.FileRoot}})
 		servers = append(servers, &http.Server{
