@@ -14,12 +14,12 @@ import (
 
 // KnownIssue is a known-issue rule with its bookkeeping.
 type KnownIssue struct {
-	ID          string            `json:"id"`
-	Title       string            `json:"title"`
-	Description string            `json:"description"`
-	Explanation string            `json:"explanation"`
-	SourceText  string            `json:"source_text,omitempty"`
-	JiraKey     string            `json:"jira_key,omitempty"`
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Explanation string `json:"explanation"`
+	SourceText  string `json:"source_text,omitempty"`
+	JiraKey     string `json:"jira_key,omitempty"`
 	// ConfluencePageID links a rule to the page it was imported or explained from.
 	ConfluencePageID string `json:"confluence_page_id,omitempty"`
 	// UpstreamStatus is the linked Jira issue's status (or Confluence page status) at the last sync;
@@ -27,19 +27,19 @@ type KnownIssue struct {
 	UpstreamStatus string `json:"upstream_status,omitempty"`
 	UpstreamNote   string `json:"upstream_note,omitempty"`
 	// LabelManaged rules were imported from a labelled issue or page and follow the label.
-	LabelManaged bool `json:"label_managed"`
-	Reason      string            `json:"reason"`
-	Match       knownissues.Match `json:"match"`
-	Action      string            `json:"action"`
-	Enabled     bool              `json:"enabled"`
-	ExpiresAt   *time.Time        `json:"expires_at,omitempty"`
-	Source      string            `json:"source"`
-	OwnerUserID string            `json:"owner_user_id,omitempty"`
-	TicketURL   string            `json:"ticket_url,omitempty"`
-	Hits        int64             `json:"hits"`
-	LastHitAt   *time.Time        `json:"last_hit_at,omitempty"`
-	CreatedAt   time.Time         `json:"created_at"`
-	UpdatedAt   time.Time         `json:"updated_at"`
+	LabelManaged bool              `json:"label_managed"`
+	Reason       string            `json:"reason"`
+	Match        knownissues.Match `json:"match"`
+	Action       string            `json:"action"`
+	Enabled      bool              `json:"enabled"`
+	ExpiresAt    *time.Time        `json:"expires_at,omitempty"`
+	Source       string            `json:"source"`
+	OwnerUserID  string            `json:"owner_user_id,omitempty"`
+	TicketURL    string            `json:"ticket_url,omitempty"`
+	Hits         int64             `json:"hits"`
+	LastHitAt    *time.Time        `json:"last_hit_at,omitempty"`
+	CreatedAt    time.Time         `json:"created_at"`
+	UpdatedAt    time.Time         `json:"updated_at"`
 }
 
 // KnownIssues stores known-issue rules.
