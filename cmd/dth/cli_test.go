@@ -230,4 +230,3 @@ func TestInitWizard(t *testing.T) {
 	root.SetArgs([]string{"init", "-o", out})
 	assert.ErrorContains(t, root.Execute(), "exists")
 }
-
