@@ -1,3 +1,4 @@
+import { Logo } from '@/components/Logo';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -40,6 +41,7 @@ export default function Login() {
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
       <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <Logo className="mb-4 h-10 w-10" />
         <h1 className="text-lg font-semibold">Sign in to DocTheRepo Hub</h1>
         <p className="mt-1 text-sm text-slate-500">Your repositories, docs, and answers in one place.</p>
         <div className="mt-5 space-y-4">
