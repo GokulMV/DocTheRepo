@@ -1,5 +1,5 @@
 import {
-  Activity, BookOpen, ChartColumn, FolderGit2, Inbox, Library, MessageSquareText, Network, Plug, Rocket, ShieldCheck, SlidersHorizontal,
+  Activity, BookOpen, ChartColumn, FileCog, FolderGit2, Inbox, Library, MessageSquareText, Network, Plug, Rocket, ShieldCheck, SlidersHorizontal,
   Users, Wallet, type LucideIcon,
 } from 'lucide-react';
 import type { Role } from '@/api/types';
@@ -45,6 +45,7 @@ export const NAV: { section: string; items: NavItem[] }[] = [
       { to: '/providers', label: 'Providers & routing', min: 'admin', icon: SlidersHorizontal },
       { to: '/spend', label: 'Spend limits', min: 'admin', icon: Wallet },
       { to: '/users', label: 'Users & access', min: 'admin', icon: Users },
+      { to: '/settings-file', label: 'Settings file', min: 'admin', icon: FileCog },
       { to: '/setup', label: 'Setup', min: 'admin', icon: Rocket },
     ],
   },

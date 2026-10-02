@@ -44,11 +44,14 @@ type Deps struct {
 	V1 []func(r chi.Router)
 	// UI serves the web app for every path the API does not own (nil: API only).
 	UI http.Handler
+	// Settings is the secret-reference policy for /settings/apply (nil: the settings endpoints are off).
+	Settings *SettingsPolicy
 }
 
 // NewRouter builds the HTTP handler tree.
 func NewRouter(d Deps) http.Handler {
 	r := chi.NewRouter()
+	root := r // the settings endpoints call the API in process through the finished router
 	r.Use(securityHeaders, correlation(d.Log), recoverer, instrument(d.Metrics))
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -77,6 +80,9 @@ func NewRouter(d Deps) http.Handler {
 				ah.routes(r)
 				for _, mount := range d.V1 {
 					mount(r)
+				}
+				if d.Settings != nil {
+					settingsRoutes(*d.Settings, func() http.Handler { return root })(r)
 				}
 			})
 		})

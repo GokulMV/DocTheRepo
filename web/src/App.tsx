@@ -19,6 +19,7 @@ const Activity = lazy(() => import('@/pages/Activity'));
 const Users = lazy(() => import('@/pages/Users'));
 const Account = lazy(() => import('@/pages/Account'));
 const Setup = lazy(() => import('@/pages/Setup'));
+const SettingsFile = lazy(() => import('@/pages/SettingsFile'));
 const Inbox = lazy(() => import('@/pages/Inbox'));
 const IssueDetail = lazy(() => import('@/pages/IssueDetail'));
 const KnownIssues = lazy(() => import('@/pages/KnownIssues'));
@@ -53,6 +54,7 @@ export default function App() {
           <Route path="/spend" element={admin(<Spend />)} />
           <Route path="/users" element={admin(<Users />)} />
           <Route path="/setup" element={admin(<Setup />)} />
+          <Route path="/settings-file" element={admin(<SettingsFile />)} />
           <Route path="*" element={<p className="text-sm text-slate-500">Page not found.</p>} />
         </Route>
       </Routes>

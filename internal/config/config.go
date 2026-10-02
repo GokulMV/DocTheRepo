@@ -44,6 +44,18 @@ type Config struct {
 	Grammars  GrammarsConfig  `yaml:"grammars"`
 	Vector    VectorConfig    `yaml:"vector"`
 	Decide    DecideConfig    `yaml:"decide"`
+	Settings  SettingsConfig  `yaml:"settings"`
+}
+
+// SettingsConfig is the policy for settings files pasted into the UI (Administration → Settings file).
+// Their ${…} secret references are resolved by the Hub itself, so every source is off unless listed.
+type SettingsConfig struct {
+	// SecretSources are the enabled reference schemes: env, file, vault, gopass, awssm, gcpsm.
+	SecretSources []string `yaml:"secret_sources"`
+	// EnvPrefix is required at the start of ${env:NAME} (default DTH_SECRET_).
+	EnvPrefix string `yaml:"env_prefix"`
+	// FileRoot is the only directory ${file:…} may read (file stays off without it).
+	FileRoot string `yaml:"file_root"`
 }
 
 // DecideConfig controls decisions behind confidence gates (plan Phase 11.5). They only run when a
@@ -235,22 +247,24 @@ func Load(path string) (Config, error) {
 // applyEnv maps DTH_* variables onto the keys operators most often set per environment.
 func applyEnv(cfg *Config) error {
 	str := map[string]*string{
-		"DTH_LISTEN":            &cfg.Server.Listen,
-		"DTH_METRICS_LISTEN":    &cfg.Server.MetricsListen,
-		"DTH_PUBLIC_URL":        &cfg.Server.PublicURL,
-		"DTH_SECRETS_PROVIDER":  &cfg.Secrets.Provider,
-		"DTH_LOCAL_KEY_FILE":    &cfg.Secrets.LocalKeyFile,
-		"DTH_KMS_KEY_ID":        &cfg.Secrets.KMSKeyID,
-		"DTH_AUTH_MODE":         &cfg.Auth.Mode,
-		"DTH_OIDC_ISSUER":       &cfg.Auth.OIDC.Issuer,
-		"DTH_OIDC_CLIENT_ID":    &cfg.Auth.OIDC.ClientID,
-		"DTH_OIDC_REDIRECT_URL": &cfg.Auth.OIDC.RedirectURL,
-		"DTH_LOG_FORMAT":        &cfg.Logging.Format,
-		"DTH_LOG_LEVEL":         &cfg.Logging.Level,
-		"DTH_OTLP_ENDPOINT":     &cfg.Tracing.OTLPEndpoint,
-		"DTH_GRAMMARS_DIR":      &cfg.Grammars.LoadDir,
-		"DTH_VECTOR_BACKEND":    &cfg.Vector.Backend,
-		"DTH_QDRANT_URL":        &cfg.Vector.QdrantURL,
+		"DTH_LISTEN":              &cfg.Server.Listen,
+		"DTH_METRICS_LISTEN":      &cfg.Server.MetricsListen,
+		"DTH_PUBLIC_URL":          &cfg.Server.PublicURL,
+		"DTH_SECRETS_PROVIDER":    &cfg.Secrets.Provider,
+		"DTH_LOCAL_KEY_FILE":      &cfg.Secrets.LocalKeyFile,
+		"DTH_KMS_KEY_ID":          &cfg.Secrets.KMSKeyID,
+		"DTH_AUTH_MODE":           &cfg.Auth.Mode,
+		"DTH_OIDC_ISSUER":         &cfg.Auth.OIDC.Issuer,
+		"DTH_OIDC_CLIENT_ID":      &cfg.Auth.OIDC.ClientID,
+		"DTH_OIDC_REDIRECT_URL":   &cfg.Auth.OIDC.RedirectURL,
+		"DTH_LOG_FORMAT":          &cfg.Logging.Format,
+		"DTH_LOG_LEVEL":           &cfg.Logging.Level,
+		"DTH_OTLP_ENDPOINT":       &cfg.Tracing.OTLPEndpoint,
+		"DTH_GRAMMARS_DIR":        &cfg.Grammars.LoadDir,
+		"DTH_VECTOR_BACKEND":      &cfg.Vector.Backend,
+		"DTH_QDRANT_URL":          &cfg.Vector.QdrantURL,
+		"DTH_SETTINGS_ENV_PREFIX": &cfg.Settings.EnvPrefix,
+		"DTH_SETTINGS_FILE_ROOT":  &cfg.Settings.FileRoot,
 	}
 	for k, dst := range str {
 		if v, ok := os.LookupEnv(k); ok {
@@ -262,6 +276,9 @@ func applyEnv(cfg *Config) error {
 		for _, r := range splitList(v) {
 			cfg.Roles = append(cfg.Roles, Role(r))
 		}
+	}
+	if v, ok := os.LookupEnv("DTH_SETTINGS_SECRET_SOURCES"); ok {
+		cfg.Settings.SecretSources = splitList(v)
 	}
 	if v, ok := os.LookupEnv("DTH_OIDC_ALLOWED_DOMAINS"); ok {
 		cfg.Auth.OIDC.AllowedDomains = splitList(v)
