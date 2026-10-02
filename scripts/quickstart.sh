@@ -7,7 +7,7 @@
 #
 # It checks every prerequisite and installs what is missing, unattended:
 #   git, curl, tar, make, openssl, a C compiler (the Tree-sitter grammars are C, so the hub builds with cgo),
-#   Go 1.25.11 and Node.js 22 (into ~/.dth-quickstart/toolchain when the system ones are missing or too old),
+#   Go 1.25.11 and Node.js 22.12+ (into ~/.dth-quickstart/toolchain when the system ones are missing or too old),
 #   and Docker + Compose v2 for PostgreSQL/pgvector (Linux: get.docker.com; macOS: Homebrew + Colima).
 # Then it builds the UI and the hub from this checkout (make release), starts PostgreSQL in Docker, runs the
 # hub, signs in, and opens the UI. Re-running is safe: passwords are reused and the hub is rebuilt/restarted.
@@ -38,7 +38,6 @@ WIPE=
 MODE="${DTH_QUICKSTART_MODE:-native}"
 GO_VERSION=1.25.11
 NODE_VERSION=22.12.0
-NODE_MIN_MAJOR=20
 PG_PORT="${DTH_PG_PORT:-54329}"
 
 while [ $# -gt 0 ]; do
@@ -154,12 +153,19 @@ ensure_go() {
   say "Go $(go env GOVERSION) is ready"
 }
 
-# ensure_node puts Node.js >= $NODE_MIN_MAJOR (with npm) on PATH: the system one or a private download.
+# node_ok: the UI build (Vite 8) needs Node.js ^20.19 or >=22.12.
+node_ok() {
+  have node && have npm || return 1
+  local v major minor
+  v="$(node -p 'process.versions.node' 2>/dev/null)" || return 1
+  major="${v%%.*}"; minor="$(echo "$v" | cut -d. -f2)"
+  [ "$major" -gt 22 ] || { [ "$major" -eq 22 ] && [ "$minor" -ge 12 ]; } || { [ "$major" -eq 20 ] && [ "$minor" -ge 19 ]; }
+}
+
+# ensure_node puts a suitable Node.js (with npm) on PATH: the system one or a private download.
 ensure_node() {
   local tc="$STATE_DIR/toolchain/node-v$NODE_VERSION"
-  local major=0
-  if have node && have npm; then major="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"; fi
-  if [ "$major" -ge "$NODE_MIN_MAJOR" ]; then :
+  if node_ok; then :
   elif [ -x "$tc/bin/node" ]; then export PATH="$tc/bin:$PATH"
   else
     local os arch
@@ -247,6 +253,13 @@ compose() {
   "${DOCKER[@]}" compose -p "$PROJECT" --env-file "$STATE_DIR/.env" -f "$STATE_DIR/compose.yaml" "$@"
 }
 
+# The data volume outlives the state directory: if .env was deleted, Postgres still has the old password and
+# the hub cannot connect. Inside the container the local socket is trusted, so re-apply the current password.
+sync_db_password() {
+  compose exec -T postgres psql -q -U dth -d dth -v ON_ERROR_STOP=1 \
+    -c "ALTER USER dth WITH PASSWORD '$DB_PW'" >/dev/null || die "could not set the database password"
+}
+
 # ---------------------------------------------------------------------------------------------------------
 # Down
 # ---------------------------------------------------------------------------------------------------------
@@ -288,6 +301,10 @@ fi
 ensure_docker
 
 ENV_FILE="$STATE_DIR/.env"
+# A database volume without its .env means the owner password and master key that go with it are gone.
+if [ ! -f "$ENV_FILE" ] && "${DOCKER[@]}" volume inspect "${PROJECT}_pgdata" >/dev/null 2>&1; then
+  die "found a database from an earlier quickstart, but its credentials ($ENV_FILE) are gone: run '$0 --down --wipe' to start fresh"
+fi
 get_env() { if [ -f "$ENV_FILE" ]; then sed -n "s/^$1=//p" "$ENV_FILE" | tail -1; fi; }
 DB_PW="$(get_env DTH_DB_PASSWORD)"; [ -n "$DB_PW" ] || DB_PW="$(openssl rand -hex 24)"
 OWNER_PW="$(get_env DTH_OWNER_PASSWORD)"; [ -n "$OWNER_PW" ] || OWNER_PW="$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-20)"
@@ -356,6 +373,7 @@ fi
 if [ "$MODE" = native ]; then
   say "Starting PostgreSQL (pgvector) on 127.0.0.1:$PG_PORT"
   compose up -d --remove-orphans --wait
+  sync_db_password
   if port_busy "$PORT"; then compose down >/dev/null 2>&1 || true; die "port $PORT is in use: re-run with --port <free port>"; fi
   say "Starting the hub (log: $LOG_FILE)"
   (
@@ -370,6 +388,8 @@ if [ "$MODE" = native ]; then
   )
 else
   say "Starting PostgreSQL (pgvector) and the hub container"
+  compose up -d --remove-orphans --wait postgres
+  sync_db_password
   compose up -d --remove-orphans
 fi
 

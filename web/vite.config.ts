@@ -1,5 +1,5 @@
 /// <reference types="vitest" />
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';
 
@@ -18,11 +18,14 @@ export default defineConfig({
     chunkSizeWarningLimit: 1500,
     rollupOptions: {
       output: {
-        manualChunks: {
-          react: ['react', 'react-dom', 'react-router-dom', '@tanstack/react-query'],
-          charts: ['recharts'],
-          graph: ['cytoscape'],
-          markdown: ['react-markdown', 'remark-gfm', 'rehype-sanitize'],
+        // Long-lived vendor chunks: an app change does not invalidate the browser's copy of these.
+        manualChunks(id: string) {
+          if (!id.includes('node_modules')) return undefined;
+          if (/[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|@tanstack|scheduler)[\\/]/.test(id)) return 'react';
+          if (/[\\/]node_modules[\\/](recharts|d3-[^\\/]+|victory-vendor)[\\/]/.test(id)) return 'charts';
+          if (/[\\/]node_modules[\\/]cytoscape[\\/]/.test(id)) return 'graph';
+          if (/[\\/]node_modules[\\/](react-markdown|remark-[^\\/]+|rehype-[^\\/]+|micromark[^\\/]*|mdast-[^\\/]+|hast-[^\\/]+|unified|unist-[^\\/]+)[\\/]/.test(id)) return 'markdown';
+          return undefined;
         },
       },
     },

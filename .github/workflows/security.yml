@@ -1,0 +1,44 @@
+name: security
+# New advisories appear without code changes: re-run the gates weekly on the default branch.
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: govulncheck (shipped binaries)
+        run: make vuln
+      - name: npm audit
+        run: cd web && npm ci --no-audit --no-fund && cd .. && make audit
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          push: false
+          load: true
+          tags: dth-hub:scan
+      - name: Trivy image scan (fixable HIGH/CRITICAL fail)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: dth-hub:scan
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"

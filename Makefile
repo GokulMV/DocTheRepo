@@ -4,7 +4,7 @@ VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo de
 LDFLAGS   := -s -w -X main.version=$(VERSION)
 SQLC      ?= sqlc
 
-.PHONY: all build test test-unit test-integration cover lint vet fmt generate vuln clean web web-test release image cli-release deploy-lint e2e stack perf-push perf-qa perf-signals
+.PHONY: all build test test-unit test-integration cover lint vet fmt generate vuln audit security sbom scan-image clean web web-test release image cli-release deploy-lint e2e stack perf-push perf-qa perf-signals
 
 all: lint test build
 
@@ -88,8 +88,30 @@ lint: vet ## gofmt check + vet
 generate: ## Regenerate sqlc code from migrations + queries
 	$(SQLC) generate
 
-vuln: ## Known-vulnerability scan
-	$(GO) run golang.org/x/vuln/cmd/govulncheck@latest ./...
+# Security gates (plan § 15). Tool versions are pinned so a new release cannot change the gate under us.
+GOVULNCHECK ?= golang.org/x/vuln/cmd/govulncheck@v1.7.0
+# vuln.go.dev is served from this bucket; override for an internal mirror (file:// works too).
+GOVULNDB    ?= https://vuln.go.dev
+CYCLONEDX_GOMOD ?= github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@v1.10.0
+CYCLONEDX_NPM   ?= @cyclonedx/cyclonedx-npm@6.0.1
+TRIVY       ?= aquasec/trivy:0.58.1
+
+security: vuln audit ## All source-level security gates (Go + npm)
+
+vuln: ## govulncheck on what ships (hub + CLI): fails on any reachable known vulnerability
+	$(GO) run $(GOVULNCHECK) -db $(GOVULNDB) ./cmd/hub ./cmd/dth
+
+audit: ## npm audit of the UI (runtime and build dependencies): fails on high or critical
+	cd web && npm audit --audit-level=high
+
+sbom: ## CycloneDX SBOMs for the hub, the CLI, and the UI into ./dist/sbom
+	mkdir -p dist/sbom
+	$(GO) run $(CYCLONEDX_GOMOD) app -json -licenses -main cmd/hub -output dist/sbom/dth-hub.cdx.json .
+	$(GO) run $(CYCLONEDX_GOMOD) app -json -licenses -main cmd/dth -output dist/sbom/dth.cdx.json .
+	cd web && npx --yes $(CYCLONEDX_NPM) --omit dev --output-format JSON --output-file ../dist/sbom/web.cdx.json
+
+scan-image: image ## Trivy scan of the container image: fails on fixable HIGH/CRITICAL findings
+	docker run --rm -v /var/run/docker.sock:/var/run/docker.sock $(TRIVY) image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed $(IMAGE)
 
 clean:
 	rm -rf bin dist coverage.out .perf
