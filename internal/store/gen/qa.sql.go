@@ -100,7 +100,7 @@ func (q *Queries) DeleteThread(ctx context.Context, arg DeleteThreadParams) (int
 }
 
 const gCAnswerCache = `-- name: GCAnswerCache :execrows
-DELETE FROM answer_cache WHERE created_at < now() - interval '24 hours'
+DELETE FROM answer_cache WHERE created_at < now() - interval '7 days'
 `
 
 func (q *Queries) GCAnswerCache(ctx context.Context) (int64, error) {
@@ -112,7 +112,10 @@ func (q *Queries) GCAnswerCache(ctx context.Context) (int64, error) {
 }
 
 const getCachedAnswer = `-- name: GetCachedAnswer :one
-UPDATE answer_cache SET hits = hits + 1 WHERE key = $1 AND created_at > now() - interval '24 hours'
+UPDATE answer_cache a SET hits = hits + 1
+WHERE a.key = $1 AND a.created_at > now() - interval '7 days'
+  AND (SELECT count(*) FROM chunks c WHERE c.chunk_id = ANY(a.chunk_ids) AND c.deleted_at IS NULL) = cardinality(a.chunk_ids)
+  AND NOT EXISTS (SELECT 1 FROM chunks c WHERE c.scope = ANY(a.scopes) AND c.updated_at > a.created_at)
 RETURNING answer, citations
 `
 
@@ -121,6 +124,8 @@ type GetCachedAnswerRow struct {
 	Citations json.RawMessage `json:"citations"`
 }
 
+// A cached answer is served while every chunk it cites still exists and nothing in the repositories or
+// spaces it cites changed since it was cached.
 func (q *Queries) GetCachedAnswer(ctx context.Context, key string) (GetCachedAnswerRow, error) {
 	row := q.db.QueryRow(ctx, getCachedAnswer, key)
 	var i GetCachedAnswerRow
@@ -283,18 +288,27 @@ func (q *Queries) OverviewChunks(ctx context.Context, arg OverviewChunksParams) 
 }
 
 const putCachedAnswer = `-- name: PutCachedAnswer :exec
-INSERT INTO answer_cache (key, answer, citations) VALUES ($1, $2, $3)
-ON CONFLICT (key) DO UPDATE SET answer = EXCLUDED.answer, citations = EXCLUDED.citations, created_at = now()
+INSERT INTO answer_cache (key, answer, citations, chunk_ids, scopes)
+VALUES ($1, $2, $3, $4::text[],
+        (SELECT coalesce(array_agg(DISTINCT c.scope), '{}')::text[] FROM chunks c WHERE c.chunk_id = ANY($4::text[])))
+ON CONFLICT (key) DO UPDATE SET answer = EXCLUDED.answer, citations = EXCLUDED.citations, chunk_ids = EXCLUDED.chunk_ids,
+    scopes = EXCLUDED.scopes, created_at = now(), hits = 0
 `
 
 type PutCachedAnswerParams struct {
 	Key       string          `json:"key"`
 	Answer    string          `json:"answer"`
 	Citations json.RawMessage `json:"citations"`
+	ChunkIds  []string        `json:"chunk_ids"`
 }
 
 func (q *Queries) PutCachedAnswer(ctx context.Context, arg PutCachedAnswerParams) error {
-	_, err := q.db.Exec(ctx, putCachedAnswer, arg.Key, arg.Answer, arg.Citations)
+	_, err := q.db.Exec(ctx, putCachedAnswer,
+		arg.Key,
+		arg.Answer,
+		arg.Citations,
+		arg.ChunkIds,
+	)
 	return err
 }
 

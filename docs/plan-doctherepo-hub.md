@@ -318,7 +318,7 @@ KUBERNETES (helm): Deployments api / worker / scheduler(replicas: 1) + external 
 
 **Flow C — question → cited answer**
 1. User asks in the UI (SSE stream), API, or `dth ask`.
-2. Answer-cache lookup keyed by normalized question + scope + index version → hit returns immediately.
+2. Answer-cache lookup keyed by question fingerprint + scope; valid while its cited sources are unchanged → hit returns immediately.
 3. Hybrid retrieval: pgvector ANN (top 40) + Postgres full-text (top 40) fused by Reciprocal Rank Fusion
    → 1-hop Palace expansion from top entities → ACL filter by the user's repo access → top 12 chunks.
 4. Spend guard → LLM answer constrained to cite chunk IDs → citations resolved to links → streamed.
@@ -542,7 +542,7 @@ Timestamps are `timestamptz`. JSON is `jsonb`.
 - **In memory**: grammar registry, compiled known-issue rules (reloaded on change via `LISTEN/NOTIFY`),
   per-connector rate limiters, LRU of recently seen fingerprints (10k entries) to skip DB reads on hot
   error storms.
-- **Caches**: answer cache in Postgres (TTL 24h, invalidated by index_version bump on any chunk write);
+- **Caches**: answer cache in Postgres (TTL 7 days, invalidated when a cited chunk goes or its repository/space changes);
   decode reuse by fingerprint (no TTL — invalidated when the linked code chunks change).
 - **Git (repo)**: generated Markdown under `docs_path` is the canonical, reviewable copy of the Tree.
 

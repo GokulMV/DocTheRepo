@@ -29,8 +29,41 @@ UPDATE users SET password_hash = sqlc.arg(password_hash) WHERE id = sqlc.arg(id)
 SELECT * FROM users WHERE email > sqlc.arg(after) ORDER BY email LIMIT sqlc.arg(lim);
 
 -- name: UpdateUser :one
-UPDATE users SET role = coalesce(sqlc.narg(role), role), disabled = coalesce(sqlc.narg(disabled), disabled)
+UPDATE users SET role = coalesce(sqlc.narg(role), role), disabled = coalesce(sqlc.narg(disabled), disabled),
+                 name = coalesce(sqlc.narg(name), name)
 WHERE id = sqlc.arg(id) RETURNING *;
+
+-- name: DeleteUser :execrows
+DELETE FROM users WHERE id = sqlc.arg(id);
+
+-- name: CreateInvite :exec
+INSERT INTO user_invites (token_hash, user_id, created_by, expires_at)
+VALUES (sqlc.arg(token_hash), sqlc.arg(user_id), sqlc.narg(created_by), sqlc.arg(expires_at));
+
+-- name: GetInvite :one
+SELECT i.user_id, i.expires_at, i.used_at, u.email, u.name, u.disabled
+FROM user_invites i JOIN users u ON u.id = i.user_id
+WHERE i.token_hash = sqlc.arg(token_hash);
+
+-- name: UseInvites :exec
+-- Accepting one link retires every open link for that person.
+UPDATE user_invites SET used_at = now() WHERE user_id = sqlc.arg(user_id) AND used_at IS NULL;
+
+-- name: PendingInviteUsers :many
+SELECT DISTINCT user_id FROM user_invites WHERE used_at IS NULL AND expires_at > now();
+
+-- name: GetAuthSettings :one
+SELECT * FROM auth_settings WHERE id = 1;
+
+-- name: UpsertAuthSettings :exec
+INSERT INTO auth_settings (id, password_enabled, oidc_provider, oidc_issuer, oidc_client_id, oidc_secret_ciphertext,
+                           oidc_allowed_domains, oidc_groups_claim, updated_at)
+VALUES (1, sqlc.narg(password_enabled), sqlc.arg(oidc_provider), sqlc.arg(oidc_issuer), sqlc.arg(oidc_client_id),
+        sqlc.narg(oidc_secret_ciphertext), sqlc.arg(oidc_allowed_domains), sqlc.arg(oidc_groups_claim), now())
+ON CONFLICT (id) DO UPDATE SET
+    password_enabled = EXCLUDED.password_enabled, oidc_provider = EXCLUDED.oidc_provider, oidc_issuer = EXCLUDED.oidc_issuer,
+    oidc_client_id = EXCLUDED.oidc_client_id, oidc_secret_ciphertext = EXCLUDED.oidc_secret_ciphertext,
+    oidc_allowed_domains = EXCLUDED.oidc_allowed_domains, oidc_groups_claim = EXCLUDED.oidc_groups_claim, updated_at = now();
 
 -- name: CountOwners :one
 SELECT count(*) FROM users WHERE role = 'owner' AND NOT disabled;

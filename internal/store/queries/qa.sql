@@ -28,15 +28,23 @@ WHERE s.kind = 'symbol' AND s.key = ANY(sqlc.arg(keys)::text[]) AND n.kind = 'sy
 LIMIT sqlc.arg(lim);
 
 -- name: GetCachedAnswer :one
-UPDATE answer_cache SET hits = hits + 1 WHERE key = sqlc.arg(key) AND created_at > now() - interval '24 hours'
+-- A cached answer is served while every chunk it cites still exists and nothing in the repositories or
+-- spaces it cites changed since it was cached.
+UPDATE answer_cache a SET hits = hits + 1
+WHERE a.key = sqlc.arg(key) AND a.created_at > now() - interval '7 days'
+  AND (SELECT count(*) FROM chunks c WHERE c.chunk_id = ANY(a.chunk_ids) AND c.deleted_at IS NULL) = cardinality(a.chunk_ids)
+  AND NOT EXISTS (SELECT 1 FROM chunks c WHERE c.scope = ANY(a.scopes) AND c.updated_at > a.created_at)
 RETURNING answer, citations;
 
 -- name: PutCachedAnswer :exec
-INSERT INTO answer_cache (key, answer, citations) VALUES (sqlc.arg(key), sqlc.arg(answer), sqlc.arg(citations))
-ON CONFLICT (key) DO UPDATE SET answer = EXCLUDED.answer, citations = EXCLUDED.citations, created_at = now();
+INSERT INTO answer_cache (key, answer, citations, chunk_ids, scopes)
+VALUES (sqlc.arg(key), sqlc.arg(answer), sqlc.arg(citations), sqlc.arg(chunk_ids)::text[],
+        (SELECT coalesce(array_agg(DISTINCT c.scope), '{}')::text[] FROM chunks c WHERE c.chunk_id = ANY(sqlc.arg(chunk_ids)::text[])))
+ON CONFLICT (key) DO UPDATE SET answer = EXCLUDED.answer, citations = EXCLUDED.citations, chunk_ids = EXCLUDED.chunk_ids,
+    scopes = EXCLUDED.scopes, created_at = now(), hits = 0;
 
 -- name: GCAnswerCache :execrows
-DELETE FROM answer_cache WHERE created_at < now() - interval '24 hours';
+DELETE FROM answer_cache WHERE created_at < now() - interval '7 days';
 
 -- name: CreateThread :exec
 INSERT INTO qa_threads (id, user_id, title, scope) VALUES (sqlc.arg(id), sqlc.arg(user_id), sqlc.arg(title), sqlc.arg(scope));

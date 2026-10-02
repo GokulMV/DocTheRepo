@@ -48,12 +48,28 @@ func TestCiteDropsFabricatedAndRenumbers(t *testing.T) {
 	assert.Empty(t, none)
 }
 
+func TestFingerprint(t *testing.T) {
+	for q, want := range map[string]string{
+		"Can you explain how the payment retries work?": "how payment retry work",
+		"how payment retry works":                       "how payment retry work",
+		"What does src/api/server.go do?":               "what src/api/server.go",
+		"Who calls ChargeCard?":                         "who call chargecard",
+		"does the class handle process errors":          "class handle process error",
+		"?!":                                            "",
+	} {
+		assert.Equal(t, want, Fingerprint(q), q)
+	}
+	assert.Equal(t, Fingerprint("Can you explain how the payment retries work?"), Fingerprint("how payment retry works"))
+	assert.NotEqual(t, Fingerprint("does A call B"), Fingerprint("does B call A"), "word order is kept")
+}
+
 func TestCacheKeyAndSources(t *testing.T) {
 	s := Scope{RepoIDs: []string{"b", "a"}, Sources: []ports.ChunkSource{ports.SourceCode}}
-	k1 := CacheKey("  How  does refund WORK? ", s, 3)
-	assert.Equal(t, k1, CacheKey("how does refund work?", Scope{RepoIDs: []string{"a", "b"}, Sources: s.Sources}, 3))
-	assert.NotEqual(t, k1, CacheKey("how does refund work?", s, 4), "index version invalidates")
-	assert.NotEqual(t, k1, CacheKey("how does refund work?", Scope{All: true}, 3), "scope is part of the key")
+	k1 := CacheKey("  How  does refund WORK? ", s)
+	assert.Equal(t, k1, CacheKey("how does refund work?", Scope{RepoIDs: []string{"a", "b"}, Sources: s.Sources}))
+	assert.Equal(t, k1, CacheKey("Can you please explain how the refunds work", s), "rephrasing with filler hits the same entry")
+	assert.NotEqual(t, k1, CacheKey("why does refund work?", s), "the question word matters")
+	assert.NotEqual(t, k1, CacheKey("how does refund work?", Scope{All: true}), "scope is part of the key")
 	src, err := Sources([]string{"code", "docs"})
 	require.NoError(t, err)
 	assert.Equal(t, []ports.ChunkSource{ports.SourceCode, ports.SourceGeneratedDoc, ports.SourceImportedDoc}, src)

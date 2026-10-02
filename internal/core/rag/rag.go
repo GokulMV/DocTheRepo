@@ -52,7 +52,6 @@ type Store interface {
 	SymbolNeighbors(ctx context.Context, keys []string, limit int) ([]string, error)
 	CachedAnswer(ctx context.Context, key string) (Answer, bool, error)
 	PutAnswer(ctx context.Context, key string, a Answer) error
-	IndexVersion(ctx context.Context) (int64, error)
 }
 
 // Overviewer is a Store that can find material describing repositories as a whole.
@@ -128,8 +127,9 @@ var ErrEmptyQuestion = errors.New("question must be 1 to 4000 characters")
 // Normalize trims and collapses whitespace; the cache key additionally lowercases.
 func Normalize(q string) string { return strings.Join(strings.Fields(q), " ") }
 
-// CacheKey identifies an answer: normalized question + scope + index version.
-func CacheKey(question string, s Scope, indexVersion int64) string {
+// CacheKey identifies an answer: the question's fingerprint + scope. Whether a cached answer is still
+// current is decided by the store, from the sources it cites.
+func CacheKey(question string, s Scope) string {
 	repos := append([]string(nil), s.RepoIDs...)
 	sort.Strings(repos)
 	srcs := make([]string, len(s.Sources))
@@ -137,9 +137,42 @@ func CacheKey(question string, s Scope, indexVersion int64) string {
 		srcs[i] = string(x)
 	}
 	sort.Strings(srcs)
-	b, _ := json.Marshal([]any{strings.ToLower(Normalize(question)), s.All, repos, srcs, indexVersion})
+	b, _ := json.Marshal([]any{Fingerprint(question), s.All, repos, srcs})
 	h := sha256.Sum256(b)
 	return hex.EncodeToString(h[:])
+}
+
+// filler words change how a question is phrased, not what it asks.
+var filler = map[string]bool{
+	"a": true, "an": true, "the": true, "please": true, "pls": true, "kindly": true, "hey": true, "hi": true,
+	"can": true, "could": true, "would": true, "will": true, "you": true, "me": true, "us": true, "i": true, "we": true,
+	"tell": true, "explain": true, "describe": true, "want": true, "to": true, "know": true, "about": true,
+	"is": true, "are": true, "was": true, "were": true, "do": true, "does": true, "did": true,
+}
+
+var fpWord = regexp.MustCompile(`[\p{L}\p{N}_][\p{L}\p{N}_./-]*[\p{L}\p{N}_]|[\p{L}\p{N}_]`)
+
+// Fingerprint reduces a question to the words that carry its meaning, in order: case, punctuation,
+// filler ("please", "can you tell me", "the") and plural "s" are dropped. "Can you explain how the
+// payment retries work?" and "how payment retry works" share a fingerprint. Identifiers such as
+// src/api.go keep their dots and slashes. Order is kept, so "A calls B" and "B calls A" differ.
+func Fingerprint(question string) string {
+	words := fpWord.FindAllString(strings.ToLower(question), -1)
+	out := words[:0]
+	for _, w := range words {
+		if filler[w] {
+			continue
+		}
+		switch {
+		case strings.ContainsAny(w, "./"):
+		case len(w) > 4 && strings.HasSuffix(w, "ies"):
+			w = w[:len(w)-3] + "y"
+		case len(w) > 3 && strings.HasSuffix(w, "s") && !strings.HasSuffix(w, "ss"):
+			w = w[:len(w)-1]
+		}
+		out = append(out, w)
+	}
+	return strings.Join(out, " ")
 }
 
 // Fuse combines ranked lists with Reciprocal Rank Fusion: score = Σ 1/(k + rank).
@@ -175,11 +208,7 @@ func (e *Engine) Ask(ctx context.Context, q Query) (Answer, error) {
 	}
 	var key string
 	if len(q.History) == 0 {
-		v, err := e.Store.IndexVersion(ctx)
-		if err != nil {
-			return Answer{}, err
-		}
-		key = CacheKey(question, q.Scope, v)
+		key = CacheKey(question, q.Scope)
 		if a, ok, err := e.Store.CachedAnswer(ctx, key); err == nil && ok {
 			a.Cached = true
 			if e.Savings != nil {
