@@ -1,0 +1,81 @@
+# Prometheus alerting rules for DocTheRepo Hub. Load with `rule_files:` in prometheus.yml, or wrap the
+# groups in a PrometheusRule (Prometheus Operator; see docs/operations.md). Thresholds follow the plan's
+# defaults; tune them to your traffic. The scrape job is assumed to be named "dth".
+groups:
+  - name: dth-hub
+    rules:
+      - alert: DTHHubDown
+        expr: up{job="dth"} == 0
+        for: 2m
+        labels: { severity: critical }
+        annotations:
+          summary: "Hub instance {{ $labels.instance }} is not being scraped"
+          description: "Check the pod/task, then /readyz (database, migrations). Logs say why it stopped."
+
+      - alert: DTHHTTPErrors
+        expr: |
+          sum(rate(dth_http_requests_total{code=~"5.."}[5m])) / clamp_min(sum(rate(dth_http_requests_total[5m])), 1e-9) > 0.05
+          and sum(rate(dth_http_requests_total[5m])) > 0.1
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "More than 5% of API requests fail"
+          description: "Look up a correlation ID from a failing response in the logs (field correlation_id)."
+
+      - alert: DTHQueueBacklog
+        expr: max by (type) (dth_queue_depth) > 500
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $value }} {{ $labels.type }} jobs waiting"
+          description: "Workers are not keeping up: add worker replicas, or check for a spend limit or a failing model (DTHModelErrors)."
+
+      - alert: DTHJobsFailing
+        expr: |
+          sum(increase(dth_jobs_total{status=~"failed|dead"}[1h])) / clamp_min(sum(increase(dth_jobs_total[1h])), 1) > 0.05
+          and sum(increase(dth_jobs_total[1h])) > 20
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "More than 5% of jobs failed in the last hour"
+          description: "Activity → Jobs shows each failure's error; Retry once the cause is fixed."
+
+      - alert: DTHModelErrors
+        expr: |
+          sum by (provider) (rate(dth_llm_calls_total{outcome="error"}[10m]))
+            / clamp_min(sum by (provider) (rate(dth_llm_calls_total[10m])), 1e-9) > 0.2
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: "More than 20% of {{ $labels.provider }} model calls fail"
+          description: "Usually a revoked key, exhausted credits, an unknown model name, or a provider outage. Providers & routing → Test."
+
+      - alert: DTHSpendLimitBlocking
+        expr: sum by (feature) (increase(dth_llm_calls_total{outcome="blocked"}[15m])) > 0
+        labels: { severity: info }
+        annotations:
+          summary: "A spend limit is blocking {{ $labels.feature }} model calls"
+          description: "Working as configured; raise the limit under Spend limits if this is expected traffic."
+
+      - alert: DTHAskSlow
+        expr: histogram_quantile(0.95, sum by (le) (rate(dth_retrieval_duration_seconds_bucket{stage="total"}[10m]))) > 3
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: "Ask retrieval p95 above 3 s"
+          description: "Check database load and the vector index; the stage label (embed, vector_search, full_text, load_expand) shows which part."
+
+      - alert: DTHSignalBackpressure
+        expr: max(dth_signal_pending_windows) > 3
+        for: 5m
+        labels: { severity: warning }
+        annotations:
+          summary: "Signal ingestion is applying backpressure"
+          description: "The database is not keeping up with event flushes; webhooks may get 503 and retry."
+
+      - alert: DTHSignalsDropped
+        expr: sum by (source) (increase(dth_ingress_events_total{outcome="overloaded"}[10m])) > 0
+        labels: { severity: warning }
+        annotations:
+          summary: "{{ $labels.source }} events were refused while overloaded"
+          description: "Senders that retry (most webhooks) deliver them later; scale the api role or the database."

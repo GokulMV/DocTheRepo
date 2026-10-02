@@ -67,6 +67,15 @@ start as a viewer. To give someone another role from the start, add them first.
 The client secret is sealed in the browser to the Hub's key, then stored encrypted. It is never shown
 again; leave the field empty to keep it.
 
+### Locked out
+
+If single sign-on breaks while passwords are off:
+1. Restart the Hub with `DTH_SETTINGS='auth: {password: true}'`.
+2. Run `dth-hub invite <your email>` where the Hub runs, for example
+   `docker compose exec hub /dth-hub invite you@acme.com` or
+   `kubectl exec deploy/dth-api -- /dth-hub invite you@acme.com`. It uses the Hub's own database and public
+   URL, creates the user if needed (as owner), and prints a one-time password link.
+
 ### Single sign-on in the config file
 
 Deployments can also configure single sign-on in the config file or environment (`auth.mode: oidc`,

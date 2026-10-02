@@ -28,6 +28,11 @@ type Metrics struct {
 	SignalFlush   prometheus.Histogram
 	SignalPending prometheus.Gauge
 	EventsFlushed prometheus.Counter
+	// LLM calls by feature, provider kind and outcome (ok, error, blocked by a spend limit, ledger_error),
+	// their tokens and latency.
+	LLMCalls    *prometheus.CounterVec
+	LLMTokens   *prometheus.CounterVec
+	LLMDuration *prometheus.HistogramVec
 }
 
 // NewMetrics registers all collectors on a fresh registry (never the global one, so tests stay isolated).
@@ -76,9 +81,19 @@ func NewMetrics() *Metrics {
 		EventsFlushed: prometheus.NewCounter(prometheus.CounterOpts{
 			Name: "dth_signal_events_flushed_total", Help: "Events persisted by aggregation flushes (suppressed included).",
 		}),
+		LLMCalls: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "dth_llm_calls_total", Help: "Model calls by feature, provider kind and outcome (ok, error, blocked, ledger_error).",
+		}, []string{"feature", "provider", "outcome"}),
+		LLMTokens: prometheus.NewCounterVec(prometheus.CounterOpts{
+			Name: "dth_llm_tokens_total", Help: "Model tokens by feature, provider kind and direction (input, output, cache_read, cache_write).",
+		}, []string{"feature", "provider", "direction"}),
+		LLMDuration: prometheus.NewHistogramVec(prometheus.HistogramOpts{
+			Name: "dth_llm_call_duration_seconds", Help: "Model call latency by feature and provider kind.",
+			Buckets: []float64{0.25, 0.5, 1, 2, 5, 10, 20, 40, 80, 160},
+		}, []string{"feature", "provider"}),
 	}
 	reg.MustRegister(m.HTTPRequests, m.HTTPDuration, m.JobsTotal, m.JobDuration, m.QueueDepth, m.JobsInFlight, m.Retrieval,
-		m.SignalEvents, m.IssuesNew, m.SignalFlush, m.SignalPending, m.EventsFlushed)
+		m.SignalEvents, m.IssuesNew, m.SignalFlush, m.SignalPending, m.EventsFlushed, m.LLMCalls, m.LLMTokens, m.LLMDuration)
 	return m
 }
 

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -82,4 +83,6 @@ func TestAskBroadQuestion(t *testing.T) {
 	cites, _ := out["citations"].([]any)
 	require.NotEmpty(t, cites, "the answer cites the README: %v", out)
 	assert.Equal(t, "README.md", cites[0].(map[string]any)["path"])
+	assert.GreaterOrEqual(t, testutil.ToFloat64(m.LLMCalls.WithLabelValues("qa", "openai_compat", "ok")), 1.0, "model calls are counted for alerting")
+	assert.Positive(t, testutil.ToFloat64(m.LLMTokens.WithLabelValues("qa", "openai_compat", "input")))
 }

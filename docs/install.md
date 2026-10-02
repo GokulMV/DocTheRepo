@@ -1,5 +1,17 @@
 # Install and deploy
 
+## Before you deploy
+
+Run `dth init` first (`make build`, then `./bin/dth init`). It asks:
+- where the Hub runs and its address;
+- how people sign in (SSO and/or passwords);
+- who the owners are;
+- which model and git host it uses.
+
+It writes a settings file and prints the prerequisites, the secrets to set and the deploy command for
+your target. The Hub applies the file on every start, so sign-in, owners, models and repositories are in
+place before anyone opens it. Prerequisites per target are in the [README](../README.md#prerequisites),
+and the ways to pass the file are in [settings-file.md](settings-file.md#applied-when-the-hub-starts).
 
 ## From source, fully automatic (one command)
 

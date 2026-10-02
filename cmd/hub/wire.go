@@ -111,6 +111,18 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 	a.llmPool = llm.NewPool(a.provSrc, 5*time.Minute)
 	a.routes = store.NewRoutes(st)
 	gw := llmgateway.New(a.enforcer, a.routes, a.llmPool, cfg.Spend.AllowUnreportedUsage)
+	gw.OnCall = func(c llmgateway.CallRecord) {
+		m.LLMCalls.WithLabelValues(c.Feature, c.ProviderKind, c.Outcome).Inc()
+		for dir, n := range map[string]int64{"input": c.Usage.InputTokens, "output": c.Usage.OutputTokens,
+			"cache_read": c.Usage.CacheReadTokens, "cache_write": c.Usage.CacheWriteTokens} {
+			if n > 0 {
+				m.LLMTokens.WithLabelValues(c.Feature, c.ProviderKind, dir).Add(float64(n))
+			}
+		}
+		if c.Latency > 0 {
+			m.LLMDuration.WithLabelValues(c.Feature, c.ProviderKind).Observe(c.Latency.Seconds())
+		}
+	}
 
 	switch cfg.Vector.Backend {
 	case "qdrant":
