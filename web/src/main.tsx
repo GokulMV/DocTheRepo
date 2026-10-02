@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { ApiError } from '@/api/client';
 import App from './App';
+import { initTheme } from './theme';
 import './index.css';
 
 const queryClient = new QueryClient({
@@ -17,7 +18,7 @@ const queryClient = new QueryClient({
   },
 });
 
-if (window.matchMedia?.('(prefers-color-scheme: dark)').matches) document.documentElement.classList.add('dark');
+initTheme();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

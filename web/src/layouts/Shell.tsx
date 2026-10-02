@@ -1,12 +1,13 @@
 import { Suspense } from 'react';
 import { NavLink, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { Hexagon, LogOut } from 'lucide-react';
+import { Hexagon, LogOut, Monitor, Moon, Sun } from 'lucide-react';
 import { api, ApiError } from '@/api/client';
 import { useMe } from '@/api/hooks';
 import { atLeast, type Role } from '@/api/types';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Spinner, cx } from '@/components/ui';
+import { setTheme, useTheme, type ThemeChoice } from '@/theme';
 import { NAV } from './nav';
 
 export { NAV } from './nav';
@@ -14,6 +15,41 @@ export { NAV } from './nav';
 function initials(s: string) {
   const parts = s.replace(/@.*/, '').split(/[\s._-]+/).filter(Boolean);
   return ((parts[0]?.[0] ?? '?') + (parts[1]?.[0] ?? '')).toUpperCase();
+}
+
+const THEMES: { value: ThemeChoice; label: string; icon: typeof Sun }[] = [
+  { value: 'light', label: 'Light', icon: Sun },
+  { value: 'dark', label: 'Dark', icon: Moon },
+  { value: 'system', label: 'System', icon: Monitor },
+];
+
+/** ThemeSwitch is a three-way light / dark / follow-the-OS control. */
+export function ThemeSwitch() {
+  const { choice } = useTheme();
+  return (
+    <div role="radiogroup" aria-label="Theme" className="flex rounded-lg bg-slate-100 p-0.5 dark:bg-white/[0.05]">
+      {THEMES.map((t) => (
+        <button
+          key={t.value}
+          type="button"
+          role="radio"
+          aria-checked={choice === t.value}
+          aria-label={`${t.label} theme`}
+          title={`${t.label} theme`}
+          onClick={() => setTheme(t.value)}
+          className={cx(
+            'flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium transition-colors',
+            choice === t.value
+              ? 'bg-white text-slate-900 shadow-sm dark:bg-white/[0.12] dark:text-white'
+              : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200',
+          )}
+        >
+          <t.icon className="h-3.5 w-3.5" aria-hidden />
+          {t.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 /** Shell is the authenticated layout: sidebar navigation filtered by role, and the page outlet. */
@@ -83,7 +119,10 @@ export function Shell() {
             );
           })}
         </nav>
-        <div className="flex items-center gap-3 border-t border-slate-200/80 px-4 py-3 dark:border-white/[0.06]">
+        <div className="border-t border-slate-200/80 px-4 pt-3 dark:border-white/[0.06]">
+          <ThemeSwitch />
+        </div>
+        <div className="flex items-center gap-3 px-4 py-3">
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-slate-200 to-slate-300 text-xs font-semibold text-slate-700 dark:from-slate-700 dark:to-slate-800 dark:text-slate-200">
             {initials(who)}
           </span>
