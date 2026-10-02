@@ -354,6 +354,8 @@ func (a *app) v1Routes() []func(chi.Router) {
 			Suggestions: a.suggestions, Suggest: a.suggest, Queue: a.q, ReloadRules: a.signals.Reload,
 			FetchLink: a.knowledge.FetchLink}),
 		api.ArchitectureRoutes(api.ArchitectureDeps{Auth: a.auth, Store: a.arch, Scan: a.archSync.Scan}),
+		api.GitHubConnectRoutes(api.GitHubConnectDeps{Auth: a.auth, Connectors: a.conns, Seal: a.box.Seal, Open: a.box.Open,
+			PublicURL: a.cfg.Server.PublicURL, InvalidateHost: a.hosts.Invalidate}),
 	}
 }
 

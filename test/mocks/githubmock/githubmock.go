@@ -7,11 +7,15 @@ package githubmock
 import (
 	"bytes"
 	"crypto/hmac"
+	"crypto/rand"
+	"crypto/rsa"
 	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
@@ -75,6 +79,9 @@ type Server struct {
 	teams   map[string]bool              // "org/slug"
 	// BotLogin is what GET /user and /app report.
 	BotLogin string
+	// ManifestCode is the one-time code POST /app-manifests/{code}/conversions accepts (the GitHub App
+	// manifest flow); the conversion returns a new app with a real RSA key.
+	ManifestCode string
 	// AppTokenRequests counts installation-token exchanges (GitHub App auth).
 	AppTokenRequests int
 	// deliveries feeds the webhook worker (in order); deliveryLog records outcomes.
@@ -258,6 +265,26 @@ func (s *Server) routes(r chi.Router) {
 		writeJSON(w, 200, map[string]any{"slug": strings.TrimSuffix(s.BotLogin, "[bot]"), "id": 1})
 	})
 	r.Get("/installation/repositories", s.listRepos)
+	r.Post("/app-manifests/{code}/conversions", func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		ok := s.ManifestCode != "" && chi.URLParam(r, "code") == s.ManifestCode
+		if ok {
+			s.ManifestCode = "" // single use, like GitHub
+		}
+		s.mu.Unlock()
+		if !ok {
+			writeJSON(w, 404, map[string]any{"message": "Not Found"})
+			return
+		}
+		key, err := rsa.GenerateKey(rand.Reader, 2048)
+		if err != nil {
+			writeJSON(w, 500, map[string]any{"message": err.Error()})
+			return
+		}
+		pemKey := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
+		writeJSON(w, 201, map[string]any{"id": 777, "slug": "docTheRepo-test", "name": "DocTheRepo test", "pem": string(pemKey),
+			"webhook_secret": "whsec-from-manifest", "client_id": "Iv1.test", "owner": map[string]any{"login": "acme"}})
+	})
 	r.Get("/user/repos", func(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
