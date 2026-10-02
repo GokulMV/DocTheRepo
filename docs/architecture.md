@@ -38,6 +38,20 @@ everything that talks to the outside world is an adapter.
 Roles are chosen with `--roles` / `DTH_ROLES` (`cmd/hub/main.go`); `cmd/hub/wire.go` is the composition
 root that builds every adapter and service once.
 
+### Diagrams
+
+Interactive diagrams (standalone HTML, open offline in a browser; generated with
+[archify](https://github.com/tt-a1i/archify) from the JSON next to each file, with source links pinned to
+commit `d2b1330`):
+
+| Diagram | Type | Files |
+|---|---|---|
+| System architecture: roles, ports & adapters, stores, providers, clients | architecture | [HTML](architecture/system-architecture.html) · [JSON](architecture/system-architecture.architecture.json) |
+| Flow A: code push → docs → index | dataflow | [HTML](architecture/code-push-docs.html) · [JSON](architecture/code-push-docs.dataflow.json) |
+| Flow B: signals → Inbox → decode (incl. never-send-to-LLM) | workflow | [HTML](architecture/signals-inbox.html) · [JSON](architecture/signals-inbox.workflow.json) |
+| Flow C: Q&A (RAG) request | sequence | [HTML](architecture/qa-rag.html) · [JSON](architecture/qa-rag.sequence.json) |
+| Flow D: Confluence & Jira knowledge sync | dataflow | [HTML](architecture/knowledge-sync.html) · [JSON](architecture/knowledge-sync.dataflow.json) |
+
 ## 2. Packages
 
 | Layer | Packages | Responsibility |

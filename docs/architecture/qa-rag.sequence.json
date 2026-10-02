@@ -1,0 +1,346 @@
+{
+  "schema_version": 1,
+  "diagram_type": "sequence",
+  "meta": {
+    "title": "Flow C — Q&A (RAG) request",
+    "output": "qa-rag.html",
+    "quality_profile": "showcase",
+    "locale": "en",
+    "viewBox": [
+      1080,
+      696
+    ],
+    "column_fit": "spread",
+    "repository": {
+      "url": "https://github.com/GokulMV/DocTheRepo",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "d2b1330899ee4d336f8a43e4f0a3c19ce7a7b988"
+    }
+  },
+  "participants": [
+    {
+      "id": "user",
+      "type": "frontend",
+      "label": "Client",
+      "sublabel": "Web UI · dth · MCP",
+      "sources": [
+        {
+          "path": "internal/api/ask_handlers.go",
+          "line": 28,
+          "end_line": 34
+        },
+        {
+          "path": "internal/mcp/server.go",
+          "line": 1,
+          "end_line": 4
+        }
+      ]
+    },
+    {
+      "id": "api",
+      "type": "security",
+      "label": "/api/v1/ask",
+      "sublabel": "auth + repo ACL",
+      "sources": [
+        {
+          "path": "internal/api/ask_handlers.go",
+          "line": 92,
+          "end_line": 175
+        },
+        {
+          "path": "internal/api/ask_handlers.go",
+          "line": 109,
+          "end_line": 109,
+          "label": "RepoScope"
+        }
+      ]
+    },
+    {
+      "id": "rag",
+      "type": "backend",
+      "label": "rag.Engine",
+      "sublabel": "core/rag",
+      "sources": [
+        {
+          "path": "internal/core/rag/rag.go",
+          "line": 1,
+          "end_line": 5
+        },
+        {
+          "path": "internal/core/rag/rag.go",
+          "line": 150,
+          "end_line": 217
+        }
+      ]
+    },
+    {
+      "id": "pg",
+      "type": "database",
+      "label": "PostgreSQL",
+      "sublabel": "cache · FTS · chunks",
+      "sources": [
+        {
+          "path": "internal/core/rag/rag.go",
+          "line": 160,
+          "end_line": 176,
+          "label": "answer cache"
+        },
+        {
+          "path": "internal/core/rag/rag.go",
+          "line": 258,
+          "end_line": 271,
+          "label": "FTS + chunks"
+        },
+        {
+          "path": "internal/core/rag/rag.go",
+          "line": 290,
+          "end_line": 320,
+          "label": "graph expand"
+        }
+      ]
+    },
+    {
+      "id": "vec",
+      "type": "database",
+      "label": "Vector index",
+      "sublabel": "pgvector | Qdrant",
+      "sources": [
+        {
+          "path": "internal/core/rag/rag.go",
+          "line": 236,
+          "end_line": 255
+        },
+        {
+          "path": "cmd/hub/wire.go",
+          "line": 112,
+          "end_line": 117
+        }
+      ]
+    },
+    {
+      "id": "gw",
+      "type": "security",
+      "label": "LLM gateway",
+      "sublabel": "routes + spendguard",
+      "sources": [
+        {
+          "path": "internal/core/llmgateway/gateway.go",
+          "line": 1,
+          "end_line": 5
+        },
+        {
+          "path": "internal/core/rag/rag.go",
+          "line": 198,
+          "end_line": 198
+        }
+      ]
+    },
+    {
+      "id": "llm",
+      "type": "cloud",
+      "label": "Model provider",
+      "sublabel": "embed + chat",
+      "sources": [
+        {
+          "path": "internal/adapters/llm/pool.go",
+          "line": 63,
+          "end_line": 75
+        }
+      ]
+    }
+  ],
+  "segments": [
+    {
+      "from": 238,
+      "to": 402,
+      "label": "Hybrid retrieval"
+    },
+    {
+      "from": 406,
+      "to": 598,
+      "label": "Answer + cite"
+    }
+  ],
+  "messages": [
+    {
+      "id": "ask",
+      "from": "user",
+      "to": "api",
+      "y": 166,
+      "label": "POST /ask (SSE)",
+      "variant": "emphasis"
+    },
+    {
+      "id": "scoped",
+      "from": "api",
+      "to": "rag",
+      "y": 194,
+      "label": "Ask(q, ACL scope)",
+      "variant": "security"
+    },
+    {
+      "id": "cache-get",
+      "from": "rag",
+      "to": "pg",
+      "y": 222,
+      "label": "cached answer? (miss)",
+      "note": "key: question + scope + index version"
+    },
+    {
+      "id": "embed",
+      "from": "rag",
+      "to": "gw",
+      "y": 250,
+      "label": "embed question"
+    },
+    {
+      "id": "embed-call",
+      "from": "gw",
+      "to": "llm",
+      "y": 278,
+      "label": "embed (route embedding)"
+    },
+    {
+      "id": "vsearch",
+      "from": "rag",
+      "to": "vec",
+      "y": 306,
+      "label": "vector search (repo filter)"
+    },
+    {
+      "id": "fts",
+      "from": "rag",
+      "to": "pg",
+      "y": 334,
+      "label": "full-text search",
+      "note": "fused by RRF (k=60)"
+    },
+    {
+      "id": "chunks",
+      "from": "rag",
+      "to": "pg",
+      "y": 362,
+      "label": "ACL chunks + 1-hop graph"
+    },
+    {
+      "id": "chunks-ret",
+      "from": "pg",
+      "to": "rag",
+      "y": 390,
+      "label": "chunks",
+      "variant": "return"
+    },
+    {
+      "id": "chat",
+      "from": "rag",
+      "to": "gw",
+      "y": 418,
+      "label": "packed prompt",
+      "variant": "emphasis",
+      "note": "budget packing"
+    },
+    {
+      "id": "chat-call",
+      "from": "gw",
+      "to": "llm",
+      "y": 446,
+      "label": "route qa (stream)",
+      "variant": "emphasis"
+    },
+    {
+      "id": "deltas",
+      "from": "gw",
+      "to": "rag",
+      "y": 474,
+      "label": "token deltas",
+      "variant": "return"
+    },
+    {
+      "id": "ondelta",
+      "from": "rag",
+      "to": "api",
+      "y": 502,
+      "label": "OnDelta",
+      "variant": "dashed"
+    },
+    {
+      "id": "sse",
+      "from": "api",
+      "to": "user",
+      "y": 530,
+      "label": "SSE deltas",
+      "variant": "dashed"
+    },
+    {
+      "id": "cite",
+      "from": "rag",
+      "to": "pg",
+      "y": 558,
+      "label": "put answer (if cited)",
+      "variant": "dashed",
+      "note": "citation check"
+    },
+    {
+      "id": "answer",
+      "from": "api",
+      "to": "user",
+      "y": 586,
+      "label": "answer + citations",
+      "variant": "return"
+    }
+  ],
+  "activations": [
+    {
+      "participant": "api",
+      "from": 161,
+      "to": 592,
+      "type": "security"
+    },
+    {
+      "participant": "rag",
+      "from": 189,
+      "to": 564,
+      "type": "backend"
+    },
+    {
+      "participant": "gw",
+      "from": 245,
+      "to": 284,
+      "type": "security"
+    },
+    {
+      "participant": "gw",
+      "from": 413,
+      "to": 480,
+      "type": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Retrieval",
+      "items": [
+        "Vector search and Postgres full-text search, fused with Reciprocal Rank Fusion",
+        "Top code chunks expand one hop to callers / callees",
+        "Every store read is scoped to the caller's repository ACL"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Answer contract",
+      "items": [
+        "The model may cite only chunks it was given; others are dropped",
+        "No packed sources → a fixed not-found answer, no model call"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Cache",
+      "items": [
+        "Key = normalized question + scope + index version",
+        "Follow-up questions (with history) skip the cache; hits record savings"
+      ]
+    }
+  ]
+}

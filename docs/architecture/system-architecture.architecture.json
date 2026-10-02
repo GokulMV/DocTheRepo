@@ -1,0 +1,590 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "DocTheRepo Hub — System Architecture",
+    "output": "system-architecture.html",
+    "quality_profile": "showcase",
+    "locale": "en",
+    "repository": {
+      "url": "https://github.com/GokulMV/DocTheRepo",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "d2b1330899ee4d336f8a43e4f0a3c19ce7a7b988"
+    }
+  },
+  "components": [
+    {
+      "id": "signalsrc",
+      "type": "external",
+      "label": "Signal sources",
+      "sublabel": "Sentry, PagerDuty, Wiz, Splunk…",
+      "pos": [
+        600,
+        70
+      ],
+      "size": [
+        180,
+        64
+      ],
+      "sources": [
+        {
+          "path": "internal/adapters/signal/registry/registry.go",
+          "line": 1,
+          "end_line": 3,
+          "label": "webhook adapters"
+        },
+        {
+          "path": "internal/api/server.go",
+          "line": 63,
+          "end_line": 69,
+          "label": "/hooks routes"
+        }
+      ]
+    },
+    {
+      "id": "githosts",
+      "type": "external",
+      "label": "Git hosts",
+      "sublabel": "GitHub · GitLab",
+      "pos": [
+        880,
+        70
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "internal/ports/codehost.go",
+          "line": 113,
+          "end_line": 117,
+          "label": "CodeHost webhooks"
+        },
+        {
+          "path": "internal/ingest/ingest.go",
+          "line": 89,
+          "end_line": 89,
+          "label": "GitWebhook"
+        }
+      ]
+    },
+    {
+      "id": "browser",
+      "type": "frontend",
+      "label": "Web UI",
+      "sublabel": "React SPA, embedded",
+      "pos": [
+        40,
+        230
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "internal/webui/webui.go",
+          "line": 1,
+          "end_line": 3
+        },
+        {
+          "path": "cmd/hub/main.go",
+          "line": 190,
+          "end_line": 190,
+          "label": "UI mounted on api"
+        }
+      ]
+    },
+    {
+      "id": "cli",
+      "type": "frontend",
+      "label": "dth CLI",
+      "sublabel": "REST + personal token",
+      "pos": [
+        40,
+        340
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "cmd/dth/main.go",
+          "line": 1,
+          "end_line": 3
+        },
+        {
+          "path": "cmd/dth/client.go",
+          "line": 82,
+          "end_line": 86,
+          "label": "Bearer token"
+        }
+      ]
+    },
+    {
+      "id": "mcp",
+      "type": "frontend",
+      "label": "dth mcp",
+      "sublabel": "read-only MCP server (stdio)",
+      "pos": [
+        40,
+        450
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "cmd/dth/mcp.go",
+          "line": 12,
+          "end_line": 35
+        },
+        {
+          "path": "internal/mcp/server.go",
+          "line": 1,
+          "end_line": 4
+        }
+      ]
+    },
+    {
+      "id": "api",
+      "type": "backend",
+      "label": "role: api",
+      "sublabel": "/api/v1 · /hooks · auth · UI",
+      "tag": "internal/api",
+      "pos": [
+        320,
+        230
+      ],
+      "size": [
+        180,
+        150
+      ],
+      "sources": [
+        {
+          "path": "internal/api/server.go",
+          "line": 53,
+          "end_line": 90
+        },
+        {
+          "path": "cmd/hub/wire.go",
+          "line": 329,
+          "end_line": 350,
+          "label": "v1Routes"
+        }
+      ]
+    },
+    {
+      "id": "worker",
+      "type": "backend",
+      "label": "role: worker",
+      "sublabel": "queue.Pool + job handlers",
+      "pos": [
+        320,
+        500
+      ],
+      "size": [
+        180,
+        70
+      ],
+      "sources": [
+        {
+          "path": "cmd/hub/main.go",
+          "line": 100,
+          "end_line": 111
+        },
+        {
+          "path": "cmd/hub/wire.go",
+          "line": 235,
+          "end_line": 254,
+          "label": "registerHandlers"
+        }
+      ]
+    },
+    {
+      "id": "scheduler",
+      "type": "backend",
+      "label": "role: scheduler",
+      "sublabel": "leader via PG advisory lock",
+      "pos": [
+        320,
+        680
+      ],
+      "size": [
+        180,
+        70
+      ],
+      "sources": [
+        {
+          "path": "internal/scheduler/scheduler.go",
+          "line": 1,
+          "end_line": 17
+        },
+        {
+          "path": "cmd/hub/wire.go",
+          "line": 256,
+          "end_line": 300,
+          "label": "tasks"
+        }
+      ]
+    },
+    {
+      "id": "core",
+      "type": "backend",
+      "label": "Core services",
+      "sublabel": "pipeline · rag · decode · signals",
+      "tag": "internal/core",
+      "pos": [
+        600,
+        230
+      ],
+      "size": [
+        190,
+        150
+      ],
+      "sources": [
+        {
+          "path": "cmd/hub/wire.go",
+          "line": 189,
+          "end_line": 232
+        },
+        {
+          "path": "internal/ingest/signals.go",
+          "line": 210,
+          "end_line": 263,
+          "label": "SignalIngest"
+        }
+      ]
+    },
+    {
+      "id": "gateway",
+      "type": "security",
+      "label": "LLM gateway",
+      "sublabel": "routes · spendguard · ledger",
+      "pos": [
+        600,
+        620
+      ],
+      "size": [
+        190,
+        70
+      ],
+      "sources": [
+        {
+          "path": "internal/core/llmgateway/gateway.go",
+          "line": 1,
+          "end_line": 5
+        },
+        {
+          "path": "cmd/hub/wire.go",
+          "line": 104,
+          "end_line": 110
+        }
+      ]
+    },
+    {
+      "id": "adapters",
+      "type": "backend",
+      "label": "Adapters (ports)",
+      "sublabel": "codehost · push · signal · knowledge",
+      "tag": "internal/adapters",
+      "pos": [
+        880,
+        230
+      ],
+      "size": [
+        190,
+        150
+      ],
+      "sources": [
+        {
+          "path": "cmd/hub/wire.go",
+          "line": 14,
+          "end_line": 34,
+          "label": "adapter imports"
+        },
+        {
+          "path": "internal/ports/codehost.go",
+          "line": 113,
+          "end_line": 117
+        }
+      ]
+    },
+    {
+      "id": "postgres",
+      "type": "database",
+      "label": "PostgreSQL 16",
+      "sublabel": "+ pgvector: state, queue, chunks",
+      "pos": [
+        880,
+        470
+      ],
+      "size": [
+        190,
+        70
+      ],
+      "sources": [
+        {
+          "path": "cmd/hub/main.go",
+          "line": 66,
+          "end_line": 80
+        },
+        {
+          "path": "internal/queue/queue.go",
+          "line": 1,
+          "end_line": 2,
+          "label": "Postgres job queue"
+        },
+        {
+          "path": "cmd/hub/wire.go",
+          "line": 112,
+          "end_line": 117,
+          "label": "pgvector default"
+        }
+      ]
+    },
+    {
+      "id": "atlassian",
+      "type": "external",
+      "label": "Confluence / Jira",
+      "sublabel": "read-only CQL / JQL",
+      "pos": [
+        1180,
+        230
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "internal/adapters/knowledge/confluence/confluence.go",
+          "line": 1,
+          "end_line": 3
+        },
+        {
+          "path": "internal/adapters/knowledge/jira/jira.go",
+          "line": 1,
+          "end_line": 3
+        }
+      ]
+    },
+    {
+      "id": "qdrant",
+      "type": "database",
+      "label": "Qdrant",
+      "sublabel": "optional vector backend",
+      "pos": [
+        1180,
+        360
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "sources": [
+        {
+          "path": "cmd/hub/wire.go",
+          "line": 112,
+          "end_line": 117
+        }
+      ]
+    },
+    {
+      "id": "llm",
+      "type": "cloud",
+      "label": "LLM / embedding",
+      "sublabel": "Anthropic, OpenAI, Bedrock…",
+      "pos": [
+        1180,
+        620
+      ],
+      "size": [
+        170,
+        70
+      ],
+      "sources": [
+        {
+          "path": "internal/adapters/llm/pool.go",
+          "line": 63,
+          "end_line": 75
+        }
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "dth-hub binary (cmd/hub) — roles via --roles / DTH_ROLES",
+      "wraps": [
+        "api",
+        "worker",
+        "scheduler",
+        "core",
+        "gateway",
+        "adapters"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "ui-rest",
+      "from": "browser",
+      "to": "api",
+      "label": "REST + SSE",
+      "variant": "emphasis"
+    },
+    {
+      "id": "cli-rest",
+      "from": "cli",
+      "to": "api",
+      "label": "REST"
+    },
+    {
+      "id": "mcp-rest",
+      "from": "mcp",
+      "to": "api",
+      "label": "REST (PAT)"
+    },
+    {
+      "id": "git-webhooks",
+      "from": "githosts",
+      "to": "api",
+      "label": "push webhooks",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "top",
+      "via": [
+        [
+          965,
+          34
+        ],
+        [
+          410,
+          34
+        ]
+      ]
+    },
+    {
+      "id": "signal-webhooks",
+      "from": "signalsrc",
+      "to": "api",
+      "label": "alerts / Firehose",
+      "variant": "dashed"
+    },
+    {
+      "id": "api-enqueue",
+      "from": "api",
+      "to": "worker",
+      "label": "enqueue jobs"
+    },
+    {
+      "id": "sched-enqueue",
+      "from": "scheduler",
+      "to": "worker",
+      "label": "enqueue (leader)"
+    },
+    {
+      "id": "api-core",
+      "from": "api",
+      "to": "core",
+      "label": "ask · ingest",
+      "variant": "emphasis"
+    },
+    {
+      "id": "worker-core",
+      "from": "worker",
+      "to": "core",
+      "label": "run job"
+    },
+    {
+      "id": "core-adapters",
+      "from": "core",
+      "to": "adapters",
+      "label": "ports"
+    },
+    {
+      "id": "core-gateway",
+      "from": "core",
+      "to": "gateway",
+      "label": "paid calls",
+      "variant": "security"
+    },
+    {
+      "id": "core-store",
+      "from": "core",
+      "to": "postgres",
+      "label": "sqlc store",
+      "fromSide": "bottom",
+      "toSide": "left"
+    },
+    {
+      "id": "gateway-llm",
+      "from": "gateway",
+      "to": "llm",
+      "label": "chat · embed · decide",
+      "variant": "security"
+    },
+    {
+      "id": "adapters-git",
+      "from": "adapters",
+      "to": "githosts",
+      "label": "diff · land docs"
+    },
+    {
+      "id": "adapters-signals",
+      "from": "adapters",
+      "to": "signalsrc",
+      "label": "poll · pull"
+    },
+    {
+      "id": "adapters-atlassian",
+      "from": "adapters",
+      "to": "atlassian",
+      "label": "sync"
+    },
+    {
+      "id": "adapters-qdrant",
+      "from": "adapters",
+      "to": "qdrant",
+      "label": "vectors",
+      "variant": "dashed"
+    },
+    {
+      "id": "adapters-pgvector",
+      "from": "adapters",
+      "to": "postgres",
+      "label": "pgvector"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "One binary, three roles",
+      "items": [
+        "Local: all roles in one process; prod: api, worker, scheduler as separate services",
+        "The job queue is a Postgres table claimed with FOR UPDATE SKIP LOCKED"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Ports and adapters",
+      "items": [
+        "Core depends only on internal/ports interfaces",
+        "cmd/hub/wire.go is the composition root"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "Spend + secrets",
+      "items": [
+        "Every paid model call goes through llmgateway + spendguard",
+        "Connector creds and provider keys are AES-GCM envelope-encrypted (local, AWS KMS, GCP KMS)"
+      ]
+    }
+  ]
+}

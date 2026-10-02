@@ -1,0 +1,445 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Flow B — Signals → Inbox → decode",
+    "output": "signals-inbox.html",
+    "quality_profile": "showcase",
+    "locale": "en",
+    "repository": {
+      "url": "https://github.com/GokulMV/DocTheRepo",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "d2b1330899ee4d336f8a43e4f0a3c19ce7a7b988"
+    }
+  },
+  "lanes": [
+    {
+      "id": "ingest",
+      "label": "Ingest (api + worker)"
+    },
+    {
+      "id": "decode",
+      "label": "Decode (worker: decode_issue)"
+    },
+    {
+      "id": "stops",
+      "label": "No full decode",
+      "variant": "exception"
+    }
+  ],
+  "phases": [
+    {
+      "id": "intake",
+      "label": "Normalize + match",
+      "fromCol": 0,
+      "toCol": 2
+    },
+    {
+      "id": "group",
+      "label": "Group + gate",
+      "fromCol": 3,
+      "toCol": 4,
+      "variant": "emphasis"
+    },
+    {
+      "id": "explain",
+      "label": "Explain + index",
+      "fromCol": 5,
+      "toCol": 5,
+      "variant": "dashed"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "src",
+      "lane": "ingest",
+      "col": 0,
+      "type": "external",
+      "label": "Signal sources",
+      "sublabel": "webhooks · streams · polls",
+      "width": 128,
+      "sources": [
+        {
+          "path": "cmd/hub/wire.go",
+          "line": 152,
+          "end_line": 166
+        },
+        {
+          "path": "internal/adapters/signal/registry/registry.go",
+          "line": 1,
+          "end_line": 3
+        }
+      ]
+    },
+    {
+      "id": "prepare",
+      "lane": "ingest",
+      "col": 1,
+      "type": "security",
+      "label": "Prepare",
+      "sublabel": "no_llm · scrub · PII",
+      "width": 128,
+      "sources": [
+        {
+          "path": "internal/ingest/signals.go",
+          "line": 92,
+          "end_line": 107,
+          "label": "dth.no_llm"
+        },
+        {
+          "path": "internal/ingest/signals.go",
+          "line": 220,
+          "end_line": 246
+        },
+        {
+          "path": "internal/core/signals/fingerprint.go",
+          "line": 80,
+          "end_line": 95
+        }
+      ]
+    },
+    {
+      "id": "match",
+      "lane": "ingest",
+      "col": 2,
+      "type": "backend",
+      "label": "Known issues",
+      "sublabel": "suppress · label",
+      "width": 128,
+      "sources": [
+        {
+          "path": "internal/ingest/signals.go",
+          "line": 247,
+          "end_line": 256
+        }
+      ]
+    },
+    {
+      "id": "agg",
+      "lane": "ingest",
+      "col": 3,
+      "type": "messagebus",
+      "label": "1 s aggregator",
+      "sublabel": "by fingerprint",
+      "width": 128,
+      "sources": [
+        {
+          "path": "internal/core/aggregate/aggregate.go",
+          "line": 134,
+          "end_line": 137
+        },
+        {
+          "path": "cmd/hub/wire.go",
+          "line": 144,
+          "end_line": 151
+        }
+      ]
+    },
+    {
+      "id": "issues",
+      "lane": "ingest",
+      "col": 4,
+      "type": "database",
+      "label": "Inbox issues",
+      "sublabel": "issues · samples",
+      "width": 128,
+      "sources": [
+        {
+          "path": "internal/store/signals.go",
+          "line": 39,
+          "end_line": 40
+        },
+        {
+          "path": "internal/store/signals.go",
+          "line": 108,
+          "end_line": 110
+        }
+      ]
+    },
+    {
+      "id": "job",
+      "lane": "decode",
+      "col": 0,
+      "type": "messagebus",
+      "label": "decode_issue",
+      "sublabel": "new / regressed",
+      "width": 128,
+      "sources": [
+        {
+          "path": "cmd/hub/wire.go",
+          "line": 132,
+          "end_line": 141
+        },
+        {
+          "path": "cmd/hub/wire.go",
+          "line": 241,
+          "end_line": 241
+        }
+      ]
+    },
+    {
+      "id": "policy",
+      "lane": "decode",
+      "col": 1,
+      "type": "security",
+      "label": "Policy check",
+      "sublabel": "no_llm? suppressed?",
+      "width": 128,
+      "sources": [
+        {
+          "path": "internal/core/decode/decode.go",
+          "line": 148,
+          "end_line": 158
+        }
+      ]
+    },
+    {
+      "id": "reuse",
+      "lane": "decode",
+      "col": 2,
+      "type": "backend",
+      "label": "Reuse check",
+      "sublabel": "code unchanged?",
+      "width": 128,
+      "sources": [
+        {
+          "path": "internal/core/decode/decode.go",
+          "line": 159,
+          "end_line": 174
+        }
+      ]
+    },
+    {
+      "id": "gate",
+      "lane": "decode",
+      "col": 3,
+      "type": "security",
+      "label": "Decision gate",
+      "sublabel": "Jev or chat JSON",
+      "width": 128,
+      "sources": [
+        {
+          "path": "internal/core/decode/decode.go",
+          "line": 236,
+          "end_line": 260
+        },
+        {
+          "path": "internal/core/llmgateway/decide.go",
+          "line": 23,
+          "end_line": 44
+        }
+      ]
+    },
+    {
+      "id": "decode",
+      "lane": "decode",
+      "col": 4,
+      "type": "cloud",
+      "label": "Full decode",
+      "sublabel": "12k-token context",
+      "width": 128,
+      "sources": [
+        {
+          "path": "internal/core/decode/decode.go",
+          "line": 1,
+          "end_line": 5
+        },
+        {
+          "path": "internal/core/decode/decode.go",
+          "line": 184,
+          "end_line": 196
+        }
+      ]
+    },
+    {
+      "id": "index",
+      "lane": "decode",
+      "col": 5,
+      "type": "database",
+      "label": "Save + index",
+      "sublabel": "issue_decode chunk",
+      "width": 128,
+      "sources": [
+        {
+          "path": "internal/core/decode/decode.go",
+          "line": 222,
+          "end_line": 227
+        },
+        {
+          "path": "internal/core/decode/decode.go",
+          "line": 327,
+          "end_line": 336
+        }
+      ]
+    },
+    {
+      "id": "skipped",
+      "lane": "stops",
+      "col": 1,
+      "type": "security",
+      "label": "Skipped",
+      "sublabel": "never sent to LLM",
+      "width": 128,
+      "sources": [
+        {
+          "path": "internal/core/decode/decode.go",
+          "line": 43,
+          "end_line": 44
+        },
+        {
+          "path": "internal/store/decodes.go",
+          "line": 51,
+          "end_line": 52
+        }
+      ]
+    },
+    {
+      "id": "reused",
+      "lane": "stops",
+      "col": 2,
+      "type": "backend",
+      "label": "Reused",
+      "sublabel": "savings recorded",
+      "width": 128,
+      "sources": [
+        {
+          "path": "internal/core/decode/decode.go",
+          "line": 167,
+          "end_line": 172
+        }
+      ]
+    },
+    {
+      "id": "gated",
+      "lane": "stops",
+      "col": 3,
+      "type": "backend",
+      "label": "Known noise",
+      "sublabel": "suggest a rule",
+      "width": 128,
+      "sources": [
+        {
+          "path": "internal/core/decode/decode.go",
+          "line": 257,
+          "end_line": 260
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-events",
+      "from": "src",
+      "to": "prepare",
+      "label": "events",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e-prepared",
+      "from": "prepare",
+      "to": "match",
+      "label": "prepared"
+    },
+    {
+      "id": "e-matched",
+      "from": "match",
+      "to": "agg",
+      "label": "matched"
+    },
+    {
+      "id": "e-flush",
+      "from": "agg",
+      "to": "issues",
+      "label": "flush"
+    },
+    {
+      "id": "e-enqueue",
+      "from": "issues",
+      "to": "job",
+      "label": "enqueue",
+      "variant": "dashed",
+      "role": "return"
+    },
+    {
+      "id": "e-claim",
+      "from": "job",
+      "to": "policy"
+    },
+    {
+      "id": "e-allowed",
+      "from": "policy",
+      "to": "reuse",
+      "label": "allowed"
+    },
+    {
+      "id": "e-stale",
+      "from": "reuse",
+      "to": "gate",
+      "label": "stale / none"
+    },
+    {
+      "id": "e-actionable",
+      "from": "gate",
+      "to": "decode",
+      "label": "not noise",
+      "variant": "emphasis"
+    },
+    {
+      "id": "e-save",
+      "from": "decode",
+      "to": "index",
+      "label": "decode JSON"
+    },
+    {
+      "id": "e-skip",
+      "from": "policy",
+      "to": "skipped",
+      "label": "blocked",
+      "variant": "security",
+      "role": "error"
+    },
+    {
+      "id": "e-reuse",
+      "from": "reuse",
+      "to": "reused",
+      "label": "fresh",
+      "variant": "dashed",
+      "role": "branch"
+    },
+    {
+      "id": "e-gated",
+      "from": "gate",
+      "to": "gated",
+      "label": "noise",
+      "variant": "dashed",
+      "role": "branch"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "rose",
+      "title": "Never-send-to-LLM",
+      "items": [
+        "Events from a connector set to never send data to a model get attr dth.no_llm=true at ingest",
+        "Their issue is never decoded, even when a user forces a decode — policy, not cost"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Known issues",
+      "items": [
+        "Suppressed events still group and count, but are not decoded unless forced",
+        "Daily auto-suggestions and paste-text proposals create rules a human enables"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Decode context",
+      "items": [
+        "Redacted samples, frame → code, docs, commits from the last 7 days, similar issues, runbooks",
+        "Every decode is indexed so later issues find it as similar"
+      ]
+    }
+  ]
+}

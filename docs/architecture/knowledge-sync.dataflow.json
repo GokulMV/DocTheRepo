@@ -1,0 +1,403 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Flow D — Confluence & Jira knowledge sync",
+    "output": "knowledge-sync.html",
+    "quality_profile": "showcase",
+    "locale": "en",
+    "viewBox": [
+      1080,
+      560
+    ],
+    "repository": {
+      "url": "https://github.com/GokulMV/DocTheRepo",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "d2b1330899ee4d336f8a43e4f0a3c19ce7a7b988"
+    }
+  },
+  "stages": [
+    {
+      "label": "Trigger + source"
+    },
+    {
+      "label": "Fetch (worker)"
+    },
+    {
+      "label": "Apply"
+    },
+    {
+      "label": "Store + index"
+    },
+    {
+      "label": "Commit"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "sched",
+      "type": "backend",
+      "label": "Scheduler",
+      "sublabel": "every 30 s",
+      "width": 146,
+      "stage": 0,
+      "row": 0,
+      "sources": [
+        {
+          "path": "cmd/hub/wire.go",
+          "line": 281,
+          "end_line": 284
+        },
+        {
+          "path": "internal/ingest/knowledge.go",
+          "line": 107,
+          "end_line": 144
+        }
+      ]
+    },
+    {
+      "id": "atl",
+      "type": "external",
+      "label": "Confluence / Jira",
+      "sublabel": "read-only REST",
+      "width": 146,
+      "stage": 0,
+      "row": 2,
+      "sources": [
+        {
+          "path": "internal/adapters/knowledge/confluence/confluence.go",
+          "line": 1,
+          "end_line": 3
+        },
+        {
+          "path": "internal/adapters/knowledge/jira/jira.go",
+          "line": 1,
+          "end_line": 3
+        }
+      ]
+    },
+    {
+      "id": "job",
+      "type": "messagebus",
+      "label": "knowledge_sync",
+      "sublabel": "job per connector",
+      "width": 146,
+      "stage": 1,
+      "row": 0,
+      "sources": [
+        {
+          "path": "internal/ingest/knowledge.go",
+          "line": 131,
+          "end_line": 133
+        },
+        {
+          "path": "internal/ingest/knowledge.go",
+          "line": 146,
+          "end_line": 176
+        },
+        {
+          "path": "cmd/hub/wire.go",
+          "line": 242,
+          "end_line": 242
+        }
+      ]
+    },
+    {
+      "id": "changed",
+      "type": "backend",
+      "label": "Changed docs",
+      "sublabel": "since cursor: CQL / JQL",
+      "width": 146,
+      "stage": 1,
+      "row": 1,
+      "sources": [
+        {
+          "path": "internal/ingest/knowledge.go",
+          "line": 212,
+          "end_line": 232
+        },
+        {
+          "path": "internal/adapters/knowledge/confluence/confluence.go",
+          "line": 136,
+          "end_line": 142
+        }
+      ]
+    },
+    {
+      "id": "labeled",
+      "type": "backend",
+      "label": "Labelled docs",
+      "sublabel": "known-issue label",
+      "width": 146,
+      "stage": 1,
+      "row": 2,
+      "sources": [
+        {
+          "path": "internal/ingest/knowledge.go",
+          "line": 255,
+          "end_line": 275
+        }
+      ]
+    },
+    {
+      "id": "apply",
+      "type": "backend",
+      "label": "Knowledge.Apply",
+      "sublabel": "manifest diff → Markdown",
+      "width": 146,
+      "stage": 2,
+      "row": 1,
+      "sources": [
+        {
+          "path": "internal/ingest/knowledge.go",
+          "line": 191,
+          "end_line": 210
+        },
+        {
+          "path": "internal/store/knowledge.go",
+          "line": 81,
+          "end_line": 84
+        }
+      ]
+    },
+    {
+      "id": "upstream",
+      "type": "security",
+      "label": "Upstream check",
+      "sublabel": "Jira Done → label only",
+      "width": 146,
+      "stage": 2,
+      "row": 2,
+      "sources": [
+        {
+          "path": "internal/ingest/knowledge.go",
+          "line": 294,
+          "end_line": 332
+        }
+      ]
+    },
+    {
+      "id": "embed",
+      "type": "database",
+      "label": "Vector index",
+      "sublabel": "route embedding",
+      "width": 146,
+      "stage": 3,
+      "row": 0,
+      "sources": [
+        {
+          "path": "internal/ingest/knowledge.go",
+          "line": 199,
+          "end_line": 209
+        }
+      ]
+    },
+    {
+      "id": "docs",
+      "type": "database",
+      "label": "knowledge_docs",
+      "sublabel": "chunks · Palace · Library",
+      "width": 146,
+      "stage": 3,
+      "row": 1,
+      "sources": [
+        {
+          "path": "internal/store/knowledge.go",
+          "line": 81,
+          "end_line": 84
+        }
+      ]
+    },
+    {
+      "id": "rules",
+      "type": "database",
+      "label": "Known-issue rules",
+      "sublabel": "drafts start disabled",
+      "width": 146,
+      "stage": 3,
+      "row": 2,
+      "sources": [
+        {
+          "path": "internal/ingest/knowledge.go",
+          "line": 334,
+          "end_line": 400
+        }
+      ]
+    },
+    {
+      "id": "cursor",
+      "type": "database",
+      "label": "Cursor",
+      "sublabel": "per stream, after page",
+      "width": 146,
+      "stage": 4,
+      "row": 1,
+      "sources": [
+        {
+          "path": "internal/ingest/knowledge.go",
+          "line": 214,
+          "end_line": 228
+        }
+      ]
+    },
+    {
+      "id": "reload",
+      "type": "security",
+      "label": "Matcher reload",
+      "sublabel": "signal ingest rules",
+      "width": 146,
+      "stage": 4,
+      "row": 2,
+      "sources": [
+        {
+          "path": "internal/ingest/knowledge.go",
+          "line": 277,
+          "end_line": 281
+        },
+        {
+          "path": "cmd/hub/wire.go",
+          "line": 218,
+          "end_line": 220
+        }
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "id": "k-enqueue",
+      "from": "sched",
+      "to": "job",
+      "label": "15 min",
+      "variant": "dashed"
+    },
+    {
+      "id": "k-streams",
+      "from": "job",
+      "to": "changed",
+      "label": "each stream",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "straight",
+      "labelAt": [
+        315,
+        214
+      ]
+    },
+    {
+      "id": "k-pages",
+      "from": "atl",
+      "to": "changed",
+      "label": "pages",
+      "variant": "emphasis"
+    },
+    {
+      "id": "k-label",
+      "from": "atl",
+      "to": "labeled",
+      "label": "label",
+      "route": "straight",
+      "fromSide": "right",
+      "toSide": "left",
+      "labelAt": [
+        207,
+        402
+      ]
+    },
+    {
+      "id": "k-apply",
+      "from": "changed",
+      "to": "apply",
+      "label": "docs",
+      "variant": "emphasis",
+      "route": "straight",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "k-check",
+      "from": "labeled",
+      "to": "upstream",
+      "label": "docs",
+      "route": "straight",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "k-write",
+      "from": "apply",
+      "to": "docs",
+      "label": "write",
+      "variant": "emphasis",
+      "route": "straight",
+      "fromSide": "right",
+      "toSide": "left",
+      "labelAt": [
+        637,
+        288
+      ]
+    },
+    {
+      "id": "k-embed",
+      "from": "apply",
+      "to": "embed",
+      "label": "embed",
+      "variant": "dashed"
+    },
+    {
+      "id": "k-rules",
+      "from": "upstream",
+      "to": "rules",
+      "label": "draft",
+      "route": "straight",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "k-cursor",
+      "from": "docs",
+      "to": "cursor",
+      "label": "then",
+      "route": "straight",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "k-reload",
+      "from": "rules",
+      "to": "reload",
+      "label": "flipped",
+      "variant": "security",
+      "route": "straight",
+      "fromSide": "right",
+      "toSide": "left"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Visibility",
+      "items": [
+        "Knowledge chunks have no repo, so every viewer can read them in Q&A",
+        "Pages link to mentioned services, repos and endpoints (documented_in / runbook_for)"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Known issues from upstream",
+      "items": [
+        "Docs with the known-issue label become disabled draft rules (match proposed by the suggest route)",
+        "The upstream check runs on every synced page: a Jira issue moving to Done flips a suppressing rule to label-only"
+      ]
+    },
+    {
+      "dot": "slate",
+      "title": "Housekeeping",
+      "items": [
+        "Daily reconcile removes pages deleted upstream",
+        "POST /known-issues/from-link fetches a URL through the owning connector",
+        "Spend-blocked embedding keeps docs keyword-searchable"
+      ]
+    }
+  ]
+}

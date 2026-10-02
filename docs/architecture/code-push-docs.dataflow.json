@@ -1,0 +1,416 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Flow A — Code push → docs → index",
+    "output": "code-push-docs.html",
+    "quality_profile": "showcase",
+    "locale": "en",
+    "repository": {
+      "url": "https://github.com/GokulMV/DocTheRepo",
+      "provider": "github",
+      "link_mode": "web",
+      "revision": "d2b1330899ee4d336f8a43e4f0a3c19ce7a7b988"
+    },
+    "viewBox": [
+      1080,
+      560
+    ]
+  },
+  "stages": [
+    {
+      "label": "Trigger"
+    },
+    {
+      "label": "Queue"
+    },
+    {
+      "label": "Analyze (worker)"
+    },
+    {
+      "label": "Generate + land"
+    },
+    {
+      "label": "Persist + index"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "githost",
+      "type": "external",
+      "label": "Git host",
+      "sublabel": "/hooks/github|gitlab",
+      "tag": "signed webhook",
+      "stage": 0,
+      "row": 0,
+      "sources": [
+        {
+          "path": "internal/api/server.go",
+          "line": 63,
+          "end_line": 63
+        },
+        {
+          "path": "internal/ingest/ingest.go",
+          "line": 89,
+          "end_line": 89,
+          "label": "GitWebhook"
+        }
+      ],
+      "width": 146
+    },
+    {
+      "id": "poller",
+      "type": "backend",
+      "label": "Git polling",
+      "sublabel": "scheduler, 30 s",
+      "tag": "poll_git_repos",
+      "stage": 0,
+      "row": 2,
+      "sources": [
+        {
+          "path": "cmd/hub/wire.go",
+          "line": 263,
+          "end_line": 269
+        },
+        {
+          "path": "internal/ingest/ingest.go",
+          "line": 233,
+          "end_line": 233
+        }
+      ],
+      "width": 146
+    },
+    {
+      "id": "queue",
+      "type": "messagebus",
+      "label": "code_push job",
+      "sublabel": "Postgres queue",
+      "tag": "SKIP LOCKED",
+      "stage": 1,
+      "row": 1,
+      "sources": [
+        {
+          "path": "internal/ingest/ingest.go",
+          "line": 199,
+          "end_line": 201
+        },
+        {
+          "path": "cmd/hub/wire.go",
+          "line": 237,
+          "end_line": 237,
+          "label": "handler binding"
+        }
+      ],
+      "width": 146
+    },
+    {
+      "id": "diff",
+      "type": "backend",
+      "label": "Load diff",
+      "sublabel": "Compare base..head",
+      "stage": 2,
+      "row": 0,
+      "sources": [
+        {
+          "path": "internal/core/pipeline/codepush.go",
+          "line": 103,
+          "end_line": 130
+        }
+      ],
+      "width": 146
+    },
+    {
+      "id": "triage",
+      "type": "backend",
+      "label": "AST triage",
+      "sublabel": "cosmetic → abort",
+      "tag": "LLM only if ambiguous",
+      "stage": 2,
+      "row": 1,
+      "sources": [
+        {
+          "path": "internal/core/pipeline/codepush.go",
+          "line": 132,
+          "end_line": 170
+        },
+        {
+          "path": "internal/core/pipeline/codepush.go",
+          "line": 303,
+          "end_line": 326,
+          "label": "llmTriage"
+        }
+      ],
+      "width": 146
+    },
+    {
+      "id": "chunk",
+      "type": "backend",
+      "label": "Chunker",
+      "sublabel": "Tree-sitter chunks",
+      "stage": 2,
+      "row": 2,
+      "sources": [
+        {
+          "path": "internal/core/pipeline/codepush.go",
+          "line": 172,
+          "end_line": 176
+        },
+        {
+          "path": "internal/core/pipeline/codepush.go",
+          "line": 330,
+          "end_line": 340
+        }
+      ],
+      "width": 146
+    },
+    {
+      "id": "docgen",
+      "type": "security",
+      "label": "Docgen",
+      "sublabel": "LLM route docgen",
+      "tag": "spend-guarded",
+      "stage": 3,
+      "row": 2,
+      "sources": [
+        {
+          "path": "internal/core/pipeline/codepush.go",
+          "line": 400,
+          "end_line": 470
+        }
+      ],
+      "width": 146
+    },
+    {
+      "id": "assemble",
+      "type": "backend",
+      "label": "Assemble docs",
+      "sublabel": "doc files + index",
+      "stage": 3,
+      "row": 1,
+      "sources": [
+        {
+          "path": "internal/core/pipeline/codepush.go",
+          "line": 494,
+          "end_line": 500
+        }
+      ],
+      "width": 146
+    },
+    {
+      "id": "land",
+      "type": "external",
+      "label": "Land docs",
+      "sublabel": "direct · PR · approver",
+      "tag": "push mode",
+      "stage": 3,
+      "row": 0,
+      "sources": [
+        {
+          "path": "internal/core/pipeline/codepush.go",
+          "line": 192,
+          "end_line": 213
+        },
+        {
+          "path": "internal/adapters/push/push.go",
+          "line": 1,
+          "end_line": 4
+        }
+      ],
+      "width": 146
+    },
+    {
+      "id": "manifest",
+      "type": "database",
+      "label": "Chunk manifest",
+      "sublabel": "chunks + tsvector",
+      "stage": 4,
+      "row": 0,
+      "sources": [
+        {
+          "path": "internal/core/pipeline/codepush.go",
+          "line": 724,
+          "end_line": 786
+        }
+      ],
+      "width": 146
+    },
+    {
+      "id": "vectors",
+      "type": "database",
+      "label": "Vector index",
+      "sublabel": "pgvector | Qdrant",
+      "tag": "route embedding",
+      "stage": 4,
+      "row": 1,
+      "sources": [
+        {
+          "path": "internal/core/pipeline/codepush.go",
+          "line": 788,
+          "end_line": 798
+        },
+        {
+          "path": "internal/core/pipeline/indexer.go",
+          "line": 44,
+          "end_line": 47
+        }
+      ],
+      "width": 146
+    },
+    {
+      "id": "graph",
+      "type": "database",
+      "label": "Palace · Tree",
+      "sublabel": "graph, docs tree, Library",
+      "stage": 4,
+      "row": 2,
+      "sources": [
+        {
+          "path": "internal/core/pipeline/codepush.go",
+          "line": 800,
+          "end_line": 836
+        }
+      ],
+      "width": 146
+    }
+  ],
+  "flows": [
+    {
+      "id": "webhook-enqueue",
+      "to": "queue",
+      "label": "push event",
+      "variant": "emphasis",
+      "from": "githost"
+    },
+    {
+      "id": "poll-enqueue",
+      "to": "queue",
+      "label": "new head",
+      "variant": "dashed",
+      "from": "poller"
+    },
+    {
+      "id": "claim",
+      "to": "diff",
+      "label": "claim",
+      "variant": "emphasis",
+      "from": "queue"
+    },
+    {
+      "id": "files",
+      "to": "triage",
+      "label": "changed files",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "straight",
+      "labelAt": [
+        530,
+        214
+      ],
+      "from": "diff"
+    },
+    {
+      "id": "proceed",
+      "to": "chunk",
+      "label": "to document",
+      "variant": "emphasis",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "straight",
+      "labelAt": [
+        530,
+        328
+      ],
+      "from": "triage"
+    },
+    {
+      "id": "chunks",
+      "to": "docgen",
+      "label": "chunks",
+      "variant": "emphasis",
+      "from": "chunk"
+    },
+    {
+      "id": "sections",
+      "to": "assemble",
+      "label": "sections",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "route": "straight",
+      "labelAt": [
+        745,
+        328
+      ],
+      "from": "docgen"
+    },
+    {
+      "id": "docfiles",
+      "to": "land",
+      "label": "doc files",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "route": "straight",
+      "labelAt": [
+        745,
+        214
+      ],
+      "from": "assemble"
+    },
+    {
+      "id": "persist",
+      "to": "manifest",
+      "label": "persist",
+      "variant": "emphasis",
+      "from": "land",
+      "route": "straight",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "embed",
+      "to": "vectors",
+      "label": "embeddings",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "route": "straight",
+      "labelAt": [
+        960,
+        214
+      ],
+      "from": "manifest"
+    },
+    {
+      "id": "graph-write",
+      "to": "graph",
+      "label": "graph + tree",
+      "variant": "dashed",
+      "from": "land"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Cost control",
+      "items": [
+        "Triage aborts cosmetic pushes before any paid call (savings recorded)",
+        "Docgen, triage and embedding all go through the LLM gateway and spend guard",
+        "A spend-blocked embedding leaves chunks text-searchable until reindex"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Landing",
+      "items": [
+        "Docs land per repo push mode: direct commit, PR with auto-merge, or PR with approver",
+        "Open docs PRs are tracked by the PR lifecycle sweeper"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Index",
+      "items": [
+        "Generated docs are chunks too, so Q&A retrieves them beside the code",
+        "last_processed_sha is advanced only after persist succeeds"
+      ]
+    }
+  ]
+}
