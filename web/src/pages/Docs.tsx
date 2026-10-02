@@ -2,7 +2,7 @@ import { BookOpen, ChevronRight, FileText, Folder, FolderGit2, FolderOpen, Hash,
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '@/api/client';
-import { useDocNode, useMe, useRepos, useRoutes, useTree } from '@/api/hooks';
+import { useDocNode, useJobs, useMe, useRepos, useRoutes, useTree } from '@/api/hooks';
 import { atLeast, type TreeNode } from '@/api/types';
 import { Markdown } from '@/components/Markdown';
 import { Badge, Button, Card, ErrorNote, PageHeader, Spinner, cx } from '@/components/ui';
@@ -74,6 +74,8 @@ function NoDocs() {
   const [queued, setQueued] = useState<string[]>([]);
   const [err, setErr] = useState<unknown>();
   const tracked = repos.data ?? [];
+  const failed = useJobs({ status: 'failed', type: 'code_push' });
+  const lastFailure = failed.data?.items[0];
   const docgenRouted = routes.data?.items.some((r) => r.feature === 'docgen');
   if (tracked.length > 0) {
     const generate = async () => {
@@ -108,6 +110,13 @@ function NoDocs() {
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                 You track {tracked.map((r) => r.full_name).join(', ')}. Docs are written on each push; code synced before a model was set up has no docs yet.
               </p>
+              {lastFailure?.error && (
+                <div className="mx-auto mt-4 max-w-xl rounded-lg border border-red-200 bg-red-50 p-3 text-left text-xs text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
+                  <p className="font-medium">The last attempt failed {relTime(lastFailure.updated_at)}{tracked.find((r) => r.id === lastFailure.repo_id) ? ` (${tracked.find((r) => r.id === lastFailure.repo_id)!.full_name})` : ''}:</p>
+                  <p className="mt-1 line-clamp-3 break-all" title={lastFailure.error}>{lastFailure.error}</p>
+                  <p className="mt-1">Details are under <Link className="underline" to="/activity">Activity</Link>. Fix the cause (often the model or key under Providers &amp; routing), then generate again.</p>
+                </div>
+              )}
               {atLeast(me.data?.role, 'admin') && <Button className="mt-4" onClick={() => void generate()}>Generate docs now</Button>}
               <ErrorNote error={err} />
             </>
