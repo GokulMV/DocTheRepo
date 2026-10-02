@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import { api, qs, setCSRF } from './client';
 import type {
+  AuthConfig,
   Activity,
   Connector,
   DocNode,
@@ -124,6 +125,8 @@ export const useRoutes = () =>
 
 export const useLimits = () =>
   useQuery({ queryKey: keys.limits, queryFn: () => api.get<{ items: SpendLimit[] }>('/spend/limits').then((r) => r.items) });
+
+export const useAuthConfig = () => useQuery({ queryKey: ['auth-config'], queryFn: () => api.get<AuthConfig>('/auth/config') });
 
 export const useUsers = () => useQuery({ queryKey: keys.users, queryFn: () => api.get<Page<User>>('/users?limit=200') });
 

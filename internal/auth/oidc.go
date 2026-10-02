@@ -43,6 +43,9 @@ type LoginState struct {
 	Nonce    string `json:"n"`
 	Verifier string `json:"v"`
 	Return   string `json:"r,omitempty"`
+	// Redirect is the callback URL used for this login when the client has none configured (single
+	// sign-on set up in the UI); the token exchange must send the same one.
+	Redirect string `json:"d,omitempty"`
 }
 
 // NewLoginState creates fresh state, nonce, and PKCE verifier.
@@ -50,15 +53,26 @@ func NewLoginState(returnTo string) LoginState {
 	return LoginState{State: randomString(24), Nonce: randomString(24), Verifier: oauth2.GenerateVerifier(), Return: returnTo}
 }
 
+// HasRedirect reports whether the client has a configured callback URL.
+func (o *OIDC) HasRedirect() bool { return o.oauth.RedirectURL != "" }
+
+func (o *OIDC) config(ls LoginState) *oauth2.Config {
+	c := o.oauth
+	if ls.Redirect != "" {
+		c.RedirectURL = ls.Redirect
+	}
+	return &c
+}
+
 // AuthURL is the IdP authorization URL for ls.
 func (o *OIDC) AuthURL(ls LoginState) string {
-	return o.oauth.AuthCodeURL(ls.State, oidc.Nonce(ls.Nonce), oauth2.S256ChallengeOption(ls.Verifier))
+	return o.config(ls).AuthCodeURL(ls.State, oidc.Nonce(ls.Nonce), oauth2.S256ChallengeOption(ls.Verifier))
 }
 
 // Exchange redeems the code, verifies the ID token (signature, issuer, audience, expiry, nonce), and
 // returns its claims.
 func (o *OIDC) Exchange(ctx context.Context, code string, ls LoginState) (Claims, error) {
-	tok, err := o.oauth.Exchange(ctx, code, oauth2.VerifierOption(ls.Verifier))
+	tok, err := o.config(ls).Exchange(ctx, code, oauth2.VerifierOption(ls.Verifier))
 	if err != nil {
 		return Claims{}, fmt.Errorf("oidc code exchange: %w", err)
 	}

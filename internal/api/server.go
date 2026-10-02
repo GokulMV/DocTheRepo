@@ -17,6 +17,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/auth"
 	"github.com/GokulMV/DocTheRepo/internal/observability"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
+	"github.com/GokulMV/DocTheRepo/internal/store"
 )
 
 // ReadinessCheck probes one dependency; a non-nil error marks the Hub not ready.
@@ -36,8 +37,13 @@ type Deps struct {
 	WebhookPerMinute int
 	// Auth enables /api/v1 (nil serves only health and ingress).
 	Auth *auth.Service
-	// OIDC enables single sign-on (nil: local login only).
+	// OIDC is single sign-on from the deployment's config (nil: none; owners can still set it up in the UI).
 	OIDC *auth.OIDC
+	// PublicURL is the Hub's external URL, for the single sign-on callback (empty: from each request).
+	PublicURL string
+	// SealKeys open secrets the browser sealed to the Hub; RequireSealed refuses plain ones.
+	SealKeys      *store.SealKeys
+	RequireSealed bool
 	// SecureCookies marks cookies Secure (true whenever the public URL is https).
 	SecureCookies bool
 	// V1 mounts additional authenticated /api/v1 route groups.
@@ -72,7 +78,10 @@ func NewRouter(d Deps) http.Handler {
 		r.Post("/hooks/{source}/{connector_id}", signalHook(d.Signals, lim))
 	}
 	if d.Auth != nil {
-		ah := &authHandlers{svc: d.Auth, oidc: d.OIDC, secure: d.SecureCookies}
+		if d.OIDC != nil && d.Auth.OIDC() == nil {
+			d.Auth.UseConfigOIDC(d.OIDC) // the caller did not run LoadSignIn (tests)
+		}
+		ah := &authHandlers{svc: d.Auth, secure: d.SecureCookies, publicURL: d.PublicURL, sealKeys: d.SealKeys, requireSealed: d.RequireSealed}
 		r.Route("/api/v1", func(r chi.Router) {
 			r.Get("/openapi.json", openapiHandler)
 			r.Group(func(r chi.Router) {

@@ -1,9 +1,128 @@
-import { useEffect, useState } from 'react';
+import { KeyRound, Link2, LogIn, Pencil, Trash2, UserPlus } from 'lucide-react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '@/api/client';
-import { keys, useInvalidating, useMe, useRepos, useUsers } from '@/api/hooks';
-import type { Role, User } from '@/api/types';
-import { Badge, Button, Card, Dialog, ErrorNote, PageHeader, Select, Spinner, Table, Td } from '@/components/ui';
+import { keys, useAuthConfig, useInvalidating, useMe, useRepos, useUsers } from '@/api/hooks';
+import { atLeast, type Role, type User } from '@/api/types';
+import { CopyField } from '@/components/CopyField';
+import { Badge, Button, Card, Dialog, DialogFooter, ErrorNote, Field, Input, PageHeader, Select, Spinner, Table, Td, cx } from '@/components/ui';
 import { relTime } from '@/lib/format';
+
+const ROLES: { role: Role; text: string }[] = [
+  { role: 'viewer', text: 'Reads docs and asks questions in the repositories they can see.' },
+  { role: 'editor', text: 'Also edits docs, triages issues and runs syncs.' },
+  { role: 'admin', text: 'Also manages connectors, models, spend and users. Sees every repository.' },
+  { role: 'owner', text: 'Everything, including other owners and sign-in settings.' },
+];
+
+interface InviteLink { path: string; expires_at: string }
+
+/** LinkResult shows a one-time password link to pass on. */
+function LinkResult({ who, link }: { who: string; link: InviteLink }) {
+  return (
+    <div className="space-y-2 rounded-xl border border-emerald-300 bg-emerald-50/70 p-4 text-sm dark:border-emerald-500/30 dark:bg-emerald-500/10">
+      <p className="font-medium">Send this link to {who}.</p>
+      <CopyField value={window.location.origin + link.path} label="password link" />
+      <p className="text-xs text-slate-600 dark:text-slate-400">
+        They open it, choose a password, and are signed in. It works once and expires {new Date(link.expires_at).toLocaleDateString()}.
+        The Hub does not send email, so share it the way you normally would (chat, email). Anyone with the link can set the password, so send it only to them.
+      </p>
+    </div>
+  );
+}
+
+function AddUser({ onClose, canOwner, password, sso }: { onClose: () => void; canOwner: boolean; password: boolean; sso: boolean }) {
+  const [email, setEmail] = useState('');
+  const [name, setName] = useState('');
+  const [role, setRole] = useState<Role>('viewer');
+  const [invite, setInvite] = useState(password);
+  const [done, setDone] = useState<{ user: User; invite?: InviteLink }>();
+  const add = useInvalidating((b: object) => api.post<{ user: User; invite?: InviteLink }>('/users', b), keys.users);
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setDone(await add.mutateAsync({ email, name, role, invite: password && invite }));
+  };
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()} title="Add a user" description="Choose what they can do. You can change it any time.">
+      {done ? (
+        <div className="space-y-3">
+          <p className="text-sm"><b className="font-medium">{done.user.email}</b> is added as {done.user.role}.</p>
+          {done.invite && <LinkResult who={done.user.name || done.user.email} link={done.invite} />}
+          {sso && <p className="text-sm text-slate-600 dark:text-slate-400">They can also use “Sign in with single sign-on” with this email address; they get the role you chose.</p>}
+          {!done.invite && !sso && <p className="text-sm text-amber-700 dark:text-amber-300">No sign-in method is on, so they cannot sign in yet. Turn on passwords or single sign-on under Sign-in &amp; SSO.</p>}
+          <DialogFooter><Button onClick={onClose}>Done</Button></DialogFooter>
+        </div>
+      ) : (
+        <form onSubmit={submit} className="space-y-3">
+          <Field label="Email" htmlFor="new-email"><Input id="new-email" type="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ann@example.com" autoFocus /></Field>
+          <Field label="Name (optional)" htmlFor="new-name"><Input id="new-name" value={name} onChange={(e) => setName(e.target.value)} /></Field>
+          <fieldset>
+            <legend className="mb-1.5 text-sm font-medium">Role</legend>
+            <div className="space-y-1.5">
+              {ROLES.filter((r) => r.role !== 'owner' || canOwner).map((r) => (
+                <label key={r.role} className={cx('flex cursor-pointer gap-2.5 rounded-lg border p-2.5 text-sm', role === r.role ? 'border-brand-400 bg-brand-50/50 dark:border-brand-400/50 dark:bg-brand-500/10' : 'border-slate-200 dark:border-white/10')}>
+                  <input type="radio" name="role" className="mt-0.5 accent-brand-600" checked={role === r.role} onChange={() => setRole(r.role)} />
+                  <span><span className="font-medium capitalize">{r.role}</span><span className="block text-xs text-slate-500">{r.text}</span></span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          {password ? (
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" className="accent-brand-600" checked={invite} onChange={(e) => setInvite(e.target.checked)} />
+              Create a link for them to set a password
+            </label>
+          ) : sso ? (
+            <p className="text-xs text-slate-500">They sign in with single sign-on using this email; the role applies on their first sign-in.</p>
+          ) : null}
+          <ErrorNote error={add.error} />
+          <DialogFooter>
+            <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+            <Button type="submit" disabled={add.isPending}>{add.isPending ? 'Adding…' : 'Add user'}</Button>
+          </DialogFooter>
+        </form>
+      )}
+    </Dialog>
+  );
+}
+
+function EditName({ user, onClose }: { user: User; onClose: () => void }) {
+  const [name, setName] = useState(user.name);
+  const save = useInvalidating(() => api.patch(`/users/${user.id}`, { name }), keys.users);
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()} title={`Edit ${user.email}`}>
+      <form onSubmit={async (e) => { e.preventDefault(); await save.mutateAsync(undefined); onClose(); }}>
+        <Field label="Name" htmlFor="edit-name"><Input id="edit-name" value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
+        <p className="mt-2 text-xs text-slate-500">The email is how they sign in, so it cannot change; add a new user instead. People who use single sign-on get their name from it on each sign-in.</p>
+        <ErrorNote error={save.error} />
+        <DialogFooter>
+          <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
+          <Button type="submit" disabled={save.isPending}>Save</Button>
+        </DialogFooter>
+      </form>
+    </Dialog>
+  );
+}
+
+function ResetLink({ user, onClose }: { user: User; onClose: () => void }) {
+  const make = useInvalidating(() => api.post<InviteLink>(`/users/${user.id}/invite`, {}), keys.users);
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()} title={user.has_password ? `New password for ${user.email}` : `Password link for ${user.email}`}>
+      {make.data ? <LinkResult who={user.name || user.email} link={make.data} /> : (
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          {user.has_password
+            ? 'This makes a one-time link to choose a new password. When they use it, the old password stops working and they are signed out everywhere.'
+            : 'This makes a one-time link for them to choose a password.'}
+        </p>
+      )}
+      <ErrorNote error={make.error} />
+      <DialogFooter>
+        <Button variant="secondary" onClick={onClose}>{make.data ? 'Done' : 'Cancel'}</Button>
+        {!make.data && <Button onClick={() => make.mutate(undefined)} disabled={make.isPending}>Create link</Button>}
+      </DialogFooter>
+    </Dialog>
+  );
+}
 
 function RepoAccess({ user, onClose }: { user: User; onClose: () => void }) {
   const repos = useRepos();
@@ -17,8 +136,10 @@ function RepoAccess({ user, onClose }: { user: User; onClose: () => void }) {
     );
   }, [user.id]);
   const save = useInvalidating(() => api.put(`/users/${user.id}/repo-access`, { repo_ids: ids, level: 'read' }));
+  const seesAll = atLeast(user.role, 'admin');
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()} title={`Repository access: ${user.email}`} description="Direct grants replace the user's previous ones. Access through identity-provider groups is kept.">
+      {seesAll && <p className="mb-2 rounded-lg bg-slate-100 p-2 text-xs text-slate-600 dark:bg-white/[0.05] dark:text-slate-400">As {user.role}, they already see every repository.</p>}
       <div className="max-h-80 space-y-1 overflow-y-auto">
         {repos.data?.map((r) => (
           <label key={r.id} className="flex items-center gap-2 text-sm">
@@ -28,44 +149,112 @@ function RepoAccess({ user, onClose }: { user: User; onClose: () => void }) {
         ))}
       </div>
       <ErrorNote error={loadError ?? save.error} />
-      <Button className="mt-3" disabled={!loaded || save.isPending} onClick={async () => { await save.mutateAsync(undefined); onClose(); }}>Save</Button>
+      <DialogFooter>
+        <Button variant="secondary" onClick={onClose}>Cancel</Button>
+        <Button disabled={!loaded || save.isPending} onClick={async () => { await save.mutateAsync(undefined); onClose(); }}>Save</Button>
+      </DialogFooter>
     </Dialog>
   );
+}
+
+/** SignInSummary says how people get in, with the way to change it. */
+function SignInSummary({ sso, password, owner }: { sso: boolean; password: boolean; owner: boolean }) {
+  const methods = [sso && 'single sign-on', password && 'email and password'].filter(Boolean).join(' or ');
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200/80 bg-white/70 p-4 text-sm shadow-card dark:border-white/[0.06] dark:bg-slate-900/40">
+      <LogIn className="h-5 w-5 shrink-0 text-brand-500" aria-hidden />
+      <div className="min-w-0 flex-1">
+        <p className="font-medium">{methods ? `People sign in with ${methods}.` : 'No sign-in method is on.'}</p>
+        <p className="text-xs text-slate-500">
+          {password && 'Add someone and send them their password link. '}
+          {sso && 'Anyone from an allowed domain can sign in with SSO and starts as a viewer; add them first to give another role. '}
+          {!sso && 'Single sign-on (Google, Microsoft, Okta, Keycloak) is not set up.'}
+        </p>
+      </div>
+      {owner && <Link to="/sign-in" className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-500/10"><KeyRound className="h-4 w-4" aria-hidden />Sign-in &amp; SSO</Link>}
+    </div>
+  );
+}
+
+function signInStatus(u: User): { text: string; tone: 'gray' | 'amber' | 'green' | 'blue' } {
+  if (u.sso && u.has_password) return { text: 'SSO and password', tone: 'green' };
+  if (u.sso) return { text: 'SSO', tone: 'green' };
+  if (u.has_password) return { text: 'Password', tone: 'green' };
+  if (u.invite_pending) return { text: 'Link sent, not used yet', tone: 'amber' };
+  return { text: 'Not signed in yet', tone: 'gray' };
 }
 
 export default function Users() {
   const me = useMe();
   const users = useUsers();
-  const [access, setAccess] = useState<User>();
+  const cfg = useAuthConfig();
+  const [dialog, setDialog] = useState<{ kind: 'add' } | { kind: 'access' | 'edit' | 'reset'; user: User }>();
   const update = useInvalidating((v: { id: string; role?: Role; disabled?: boolean }) => api.patch(`/users/${v.id}`, { role: v.role, disabled: v.disabled }), keys.users);
+  const remove = useInvalidating((id: string) => api.del(`/users/${id}`), keys.users);
+  const isOwner = me.data?.role === 'owner';
+  const password = !!cfg.data?.password;
+  const sso = !!cfg.data?.sso;
+  const close = () => setDialog(undefined);
   return (
     <>
-      <PageHeader title="Users & access" description="People sign in with your identity provider; new users start as viewers. Admins and owners can read every repository." />
+      <PageHeader
+        title="Users & access"
+        description="Who can use the Hub, what they can do, and which repositories they see."
+        actions={<Button onClick={() => setDialog({ kind: 'add' })}><UserPlus className="h-4 w-4" aria-hidden />Add user</Button>}
+      />
+      {cfg.data && <SignInSummary sso={sso} password={password} owner={isOwner} />}
       {users.isLoading && <Spinner />}
-      <ErrorNote error={users.error ?? update.error} />
+      <ErrorNote error={users.error ?? update.error ?? remove.error} />
       <Card>
-        <Table head={['User', 'Role', 'Sign-in', 'Last login', '']}>
-          {users.data?.items.map((u) => (
-            <tr key={u.id}>
-              <Td><span className="font-medium">{u.name || u.email}</span><p className="text-xs text-slate-500">{u.email}</p>{u.disabled && <Badge tone="red">disabled</Badge>}</Td>
-              <Td>
-                <Select aria-label={`Role for ${u.email}`} value={u.role} disabled={u.id === me.data?.id} onChange={(e) => update.mutate({ id: u.id, role: e.target.value as Role })} className="w-28">
-                  {['viewer', 'editor', 'admin', 'owner'].map((r) => <option key={r}>{r}</option>)}
-                </Select>
-              </Td>
-              <Td>{u.sso ? 'SSO' : 'password'}</Td>
-              <Td>{relTime(u.last_login_at)}</Td>
-              <Td>
-                <div className="flex gap-1">
-                  <Button size="sm" variant="secondary" onClick={() => setAccess(u)}>Repositories</Button>
-                  {u.id !== me.data?.id && <Button size="sm" variant="ghost" onClick={() => update.mutate({ id: u.id, disabled: !u.disabled })}>{u.disabled ? 'Enable' : 'Disable'}</Button>}
-                </div>
-              </Td>
-            </tr>
-          ))}
+        <Table head={['User', 'Role', 'Sign-in', 'Last sign-in', '']}>
+          {users.data?.items.map((u) => {
+            const self = u.id === me.data?.id;
+            const ownerOnly = u.role === 'owner' && !isOwner; // admins cannot change owners
+            const st = signInStatus(u);
+            return (
+              <tr key={u.id} className={cx(u.disabled && 'opacity-60')}>
+                <Td>
+                  <span className="font-medium">{u.name || u.email}</span>
+                  {self && <span className="ml-1.5 text-xs text-slate-400">(you)</span>}
+                  <p className="text-xs text-slate-500">{u.email}</p>
+                  {u.disabled && <Badge tone="red">disabled</Badge>}
+                </Td>
+                <Td>
+                  <Select aria-label={`Role for ${u.email}`} value={u.role} disabled={self || ownerOnly} onChange={(e) => update.mutate({ id: u.id, role: e.target.value as Role })} className="w-28">
+                    {ROLES.filter((r) => r.role !== 'owner' || isOwner || u.role === 'owner').map((r) => <option key={r.role}>{r.role}</option>)}
+                  </Select>
+                </Td>
+                <Td><Badge tone={st.tone}>{st.text}</Badge></Td>
+                <Td>{u.last_login_at ? relTime(u.last_login_at) : <span className="text-slate-400">never</span>}</Td>
+                <Td>
+                  <div className="flex flex-wrap justify-end gap-1">
+                    <Button size="sm" variant="secondary" onClick={() => setDialog({ kind: 'access', user: u })}>Repositories</Button>
+                    <Button size="sm" variant="ghost" aria-label={`Edit ${u.email}`} title="Edit name" disabled={ownerOnly} onClick={() => setDialog({ kind: 'edit', user: u })}><Pencil className="h-3.5 w-3.5" aria-hidden /></Button>
+                    {password && !u.disabled && (
+                      <Button size="sm" variant="ghost" aria-label={`Password link for ${u.email}`} title={u.has_password ? 'Reset password' : 'Password link'} disabled={ownerOnly} onClick={() => setDialog({ kind: 'reset', user: u })}>
+                        <Link2 className="h-3.5 w-3.5" aria-hidden />
+                      </Button>
+                    )}
+                    {!self && (
+                      <>
+                        <Button size="sm" variant="ghost" disabled={ownerOnly} onClick={() => update.mutate({ id: u.id, disabled: !u.disabled })}>{u.disabled ? 'Enable' : 'Disable'}</Button>
+                        <Button size="sm" variant="ghost" aria-label={`Remove ${u.email}`} title="Remove" disabled={ownerOnly}
+                          onClick={() => confirm(`Remove ${u.email}? Their questions, tokens and grants are deleted. To keep them, disable the user instead.`) && remove.mutate(u.id)}>
+                          <Trash2 className="h-3.5 w-3.5 text-red-500" aria-hidden />
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </Td>
+              </tr>
+            );
+          })}
         </Table>
       </Card>
-      {access && <RepoAccess user={access} onClose={() => setAccess(undefined)} />}
+      {dialog?.kind === 'add' && <AddUser onClose={close} canOwner={isOwner} password={password} sso={sso} />}
+      {dialog?.kind === 'access' && <RepoAccess user={dialog.user} onClose={close} />}
+      {dialog?.kind === 'edit' && <EditName user={dialog.user} onClose={close} />}
+      {dialog?.kind === 'reset' && <ResetLink user={dialog.user} onClose={close} />}
     </>
   );
 }

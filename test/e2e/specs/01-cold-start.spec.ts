@@ -130,5 +130,5 @@ func HandleChargeback(paymentID string, amountMinor int64) error {
   await page.goto('/setup');
   await expect(page.getByText('Everything is set up. This page stays as a health check.')).toBeVisible();
   await page.goto('/activity');
-  await expect(page.getByText('code_push').first()).toBeVisible();
+  await expect(page.getByRole('cell', { name: /code_push/ }).first()).toBeVisible();
 });

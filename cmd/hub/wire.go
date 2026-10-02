@@ -185,6 +185,12 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 			return nil, err
 		}
 	}
+	a.auth.Box = box
+	if err := a.auth.LoadSignIn(ctx, a.oidc); err != nil {
+		// Sign-in settings saved in the UI could not be applied (e.g. the identity provider is unreachable):
+		// keep the config's single sign-on and passwords working rather than refusing to start.
+		log.Warn("single sign-on settings not applied", "err", err)
+	}
 	if err := bootstrapOwner(ctx, cfg, st, a.auth, log); err != nil {
 		return nil, err
 	}

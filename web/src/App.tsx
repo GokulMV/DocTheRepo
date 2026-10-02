@@ -4,6 +4,7 @@ import { RequireRole, Shell } from '@/layouts/Shell';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Spinner } from '@/components/ui';
 import Login from '@/pages/Login';
+import Invite from '@/pages/Invite';
 
 // Pages ship with the app, so switching pages never waits on the network (and never meets a stale chunk
 // after an upgrade). Only the two heavy ones — the graph and the charts — load separately, prefetched once
@@ -18,6 +19,7 @@ import Providers from '@/pages/Providers';
 import Spend from '@/pages/Spend';
 import Activity from '@/pages/Activity';
 import Users from '@/pages/Users';
+import SignIn from '@/pages/SignIn';
 import Account from '@/pages/Account';
 import Setup from '@/pages/Setup';
 import SettingsFile from '@/pages/SettingsFile';
@@ -47,6 +49,7 @@ export default function App() {
     <Suspense fallback={<Spinner />}>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/invite/:token" element={<Invite />} />
         <Route element={<Shell />}>
           <Route index element={<Navigate to="/ask" replace />} />
           <Route path="/ask" element={<Ask />} />
@@ -70,6 +73,7 @@ export default function App() {
           <Route path="/providers" element={admin(<Providers />)} />
           <Route path="/spend" element={admin(<Spend />)} />
           <Route path="/users" element={admin(<Users />)} />
+          <Route path="/sign-in" element={<RequireRole min="owner"><SignIn /></RequireRole>} />
           <Route path="/setup" element={admin(<Setup />)} />
           <Route path="/settings-file" element={admin(<SettingsFile />)} />
           <Route path="*" element={<p className="text-sm text-slate-500">Page not found.</p>} />

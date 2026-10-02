@@ -25,8 +25,17 @@ export interface User {
   role: Role;
   disabled: boolean;
   sso: boolean;
+  has_password: boolean;
+  invite_pending: boolean;
   created_at: string;
   last_login_at?: string;
+}
+
+/** What the sign-in page offers (GET /auth/config). */
+export interface AuthConfig {
+  mode: 'local' | 'oidc';
+  sso: boolean;
+  password: boolean;
 }
 
 export interface Token {

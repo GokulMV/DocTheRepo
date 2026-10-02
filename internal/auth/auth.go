@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -22,7 +23,8 @@ var (
 	ErrForbidden        = errors.New("insufficient role")
 	ErrBadCredentials   = errors.New("invalid email or password")
 	ErrDomainNotAllowed = errors.New("this account's email domain is not allowed")
-	ErrLastOwner        = errors.New("the last active owner cannot be demoted or disabled")
+	ErrLastOwner        = errors.New("the last active owner cannot be demoted, disabled or removed")
+	ErrInviteInvalid    = errors.New("this link is invalid, expired or already used; ask an admin for a new one")
 )
 
 // Service owns users, sessions, tokens, and authorization lookups.
@@ -30,6 +32,11 @@ type Service struct {
 	st  *store.Store
 	cfg config.AuthConfig
 	Now func() time.Time
+	// Box encrypts the single sign-on client secret saved in the UI.
+	Box Sealer
+	// oidc is the single sign-on client in use (nil: off); configOIDC is the one from the config file.
+	oidc       atomic.Pointer[liveOIDC]
+	configOIDC *OIDC
 }
 
 // New returns the auth service.
@@ -42,19 +49,22 @@ func (s *Service) Config() config.AuthConfig { return s.cfg }
 
 // User is a user as the API shows it.
 type User struct {
-	ID          string     `json:"id"`
-	Email       string     `json:"email"`
-	Name        string     `json:"name"`
-	Role        Role       `json:"role"`
-	Disabled    bool       `json:"disabled"`
-	SSO         bool       `json:"sso"`
-	CreatedAt   time.Time  `json:"created_at"`
-	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
+	ID          string `json:"id"`
+	Email       string `json:"email"`
+	Name        string `json:"name"`
+	Role        Role   `json:"role"`
+	Disabled    bool   `json:"disabled"`
+	SSO         bool   `json:"sso"`
+	HasPassword bool   `json:"has_password"`
+	// InvitePending: an unused, unexpired invite or reset link exists (set by ListUsers).
+	InvitePending bool       `json:"invite_pending"`
+	CreatedAt     time.Time  `json:"created_at"`
+	LastLoginAt   *time.Time `json:"last_login_at,omitempty"`
 }
 
 func toUser(u gen.User) User {
 	return User{ID: u.ID, Email: u.Email, Name: u.Name, Role: Role(u.Role), Disabled: u.Disabled, SSO: u.OidcSubject != nil,
-		CreatedAt: u.CreatedAt, LastLoginAt: u.LastLoginAt}
+		HasPassword: u.PasswordHash != nil, CreatedAt: u.CreatedAt, LastLoginAt: u.LastLoginAt}
 }
 
 // --- sessions ---
@@ -246,10 +256,10 @@ func (s *Service) UpsertOIDCUser(ctx context.Context, c Claims) (User, error) {
 	if c.EmailVerified != nil && !*c.EmailVerified {
 		return User{}, &ports.ValidationError{Code: "EMAIL_NOT_VERIFIED", Message: "verify your email with the identity provider first"}
 	}
-	if len(s.cfg.OIDC.AllowedDomains) > 0 {
+	if allowed := s.allowedDomains(); len(allowed) > 0 {
 		domain := email[strings.LastIndex(email, "@")+1:]
 		ok := false
-		for _, d := range s.cfg.OIDC.AllowedDomains {
+		for _, d := range allowed {
 			ok = ok || strings.EqualFold(d, domain)
 		}
 		if !ok {
@@ -335,16 +345,25 @@ func (s *Service) ListUsers(ctx context.Context, after string, limit int) ([]Use
 	if err != nil {
 		return nil, err
 	}
+	pending, err := s.st.Q.PendingInviteUsers(ctx)
+	if err != nil {
+		return nil, err
+	}
+	open := map[string]bool{}
+	for _, id := range pending {
+		open[id] = true
+	}
 	out := make([]User, len(rows))
 	for i, r := range rows {
 		out[i] = toUser(r)
+		out[i].InvitePending = open[r.ID]
 	}
 	return out, nil
 }
 
-// UpdateUser changes a user's role or disabled flag. Only an owner may grant or revoke owner, and the
+// UpdateUser changes a user's name, role or disabled flag. Only an owner may grant or revoke owner, and the
 // last active owner cannot be demoted or disabled. Disabling ends the user's sessions.
-func (s *Service) UpdateUser(ctx context.Context, actor *Principal, id string, role *Role, disabled *bool) (User, error) {
+func (s *Service) UpdateUser(ctx context.Context, actor *Principal, id string, name *string, role *Role, disabled *bool) (User, error) {
 	target, err := s.st.Q.GetUser(ctx, id)
 	if store.IsNoRows(err) {
 		return User{}, ports.ErrNotFound
@@ -368,6 +387,13 @@ func (s *Service) UpdateUser(ctx context.Context, actor *Principal, id string, r
 		}
 	}
 	p := gen.UpdateUserParams{ID: id}
+	if name != nil {
+		n := strings.TrimSpace(*name)
+		if len(n) > 200 {
+			return User{}, &ports.ValidationError{Code: "VALIDATION_FAILED", Message: "name is longer than 200 characters"}
+		}
+		p.Name = &n
+	}
 	if role != nil {
 		r := gen.UserRole(*role)
 		p.Role = &r

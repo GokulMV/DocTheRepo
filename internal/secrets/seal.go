@@ -207,4 +207,5 @@ const (
 	PurposeProviderKey      = "provider.api_key"
 	PurposeConnectorCreds   = "connector.credentials"
 	PurposeConnectorWebhook = "connector.webhook_secret"
+	PurposeOIDCClientSecret = "auth.oidc_client_secret"
 )
