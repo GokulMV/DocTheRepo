@@ -488,8 +488,15 @@ func (s *Service) Audit(ctx context.Context, actor *Principal, action, targetTyp
 		b = []byte("{}")
 	}
 	var aid *string
-	if actor != nil {
+	if actor != nil && actor.UserID != "" {
 		aid = &actor.UserID
+	}
+	if actor != nil && actor.Via == "system" {
+		var m map[string]any
+		if json.Unmarshal(b, &m) == nil && m != nil {
+			m["via"] = actor.Name
+			b, _ = json.Marshal(m)
+		}
 	}
 	return s.st.Q.InsertAudit(ctx, gen.InsertAuditParams{ID: ports.NewID(), ActorUserID: aid, Action: action, TargetType: targetType,
 		TargetID: targetID, Details: b, Ip: ip})

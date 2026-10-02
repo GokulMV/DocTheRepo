@@ -31,8 +31,18 @@ services:
       DTH_OWNER_EMAIL: ${DTH_OWNER_EMAIL:-}
       DTH_OWNER_PASSWORD: ${DTH_OWNER_PASSWORD:-}
       DTH_LOG_FORMAT: text
+      # Settings applied at start (sign-in, users, models, repositories): put files made by `dth init`
+      # in ./settings next to this file. Secret references like ${env:…} read the variables below.
+      DTH_SETTINGS_FILE: /settings
+      DTH_SECRET_OIDC_CLIENT_SECRET: ${DTH_SECRET_OIDC_CLIENT_SECRET:-}
+      DTH_SECRET_ANTHROPIC_API_KEY: ${DTH_SECRET_ANTHROPIC_API_KEY:-}
+      DTH_SECRET_OPENAI_API_KEY: ${DTH_SECRET_OPENAI_API_KEY:-}
+      DTH_SECRET_AZURE_OPENAI_API_KEY: ${DTH_SECRET_AZURE_OPENAI_API_KEY:-}
+      DTH_SECRET_GITHUB_TOKEN: ${DTH_SECRET_GITHUB_TOKEN:-}
+      DTH_SECRET_GITLAB_TOKEN: ${DTH_SECRET_GITLAB_TOKEN:-}
     volumes:
       - hubdata:/data
+      - ./settings:/settings:ro
     ports:
       - "${DTH_BIND:-127.0.0.1}:${DTH_PORT:-8080}:8080"
     healthcheck:

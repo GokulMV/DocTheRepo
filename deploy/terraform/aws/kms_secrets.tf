@@ -58,3 +58,17 @@ resource "aws_secretsmanager_secret_version" "owner_password" {
   secret_id     = aws_secretsmanager_secret.owner_password[0].id
   secret_string = random_password.owner[0].result
 }
+
+# Settings applied when the Hub starts (sign-in, users, models, connectors, repositories): see
+# docs/settings-file.md. Stored here because it may contain secrets.
+resource "aws_secretsmanager_secret" "hub_settings" {
+  count       = nonsensitive(var.hub_settings != "") ? 1 : 0
+  name_prefix = "${var.name}/hub-settings-"
+  kms_key_id  = aws_kms_key.hub.arn
+}
+
+resource "aws_secretsmanager_secret_version" "hub_settings" {
+  count         = nonsensitive(var.hub_settings != "") ? 1 : 0
+  secret_id     = aws_secretsmanager_secret.hub_settings[0].id
+  secret_string = var.hub_settings
+}

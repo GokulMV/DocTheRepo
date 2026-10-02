@@ -16,6 +16,7 @@ func Export(ctx context.Context, api API) (Document, error) {
 		return Document{}, err
 	}
 	doc := Document{Version: Version}
+	exportAuth(ctx, api, &doc)
 	names := map[string]string{}
 	for _, p := range st.providers {
 		names[p.ID] = p.Name

@@ -37,3 +37,15 @@ spec:
     matchLabels:
       {{- include "dth.selector" (dict "root" . "role" "api") | nindent 6 }}
 {{- end }}
+{{- if and .Values.settings.inline (not .Values.settings.existingSecret) }}
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "dth.fullname" . }}-settings
+  labels:
+    {{- include "dth.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  {{ .Values.settings.key }}: {{ .Values.settings.inline | quote }}
+{{- end }}

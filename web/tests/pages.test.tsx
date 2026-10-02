@@ -88,10 +88,28 @@ describe('Setup', () => {
     });
     renderAt('/setup', <Route path="/setup" element={<Setup />} />);
     // GitHub is connected; a model is added but not yet used for docs; no repositories yet.
-    expect(await screen.findByText('Three steps to docs and answers. 1 of 4 done.')).toBeInTheDocument();
+    expect(await screen.findByText('A few steps to docs and answers. 1 of 4 done.')).toBeInTheDocument();
     expect(screen.getByText('Connected: GitHub')).toBeInTheDocument();
     expect(screen.getByText('Used for: qa')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Add a model/ })).toHaveAttribute('href', '/providers');
+  });
+
+  it('starts an owner with sign-in, which can be done before anything else', async () => {
+    mockApi({
+      'GET /me': me('owner'),
+      'GET /auth/config': { mode: 'local', sso: false, password: true },
+      'GET /connectors': { items: [] },
+      'GET /providers': { items: [], kinds: [] },
+      'GET /routes': { items: [], features: [] },
+      'GET /repos': { items: [] },
+      'GET /spend/limits': { items: [] },
+      'GET /docs/tree': { nodes: [] },
+    });
+    renderAt('/setup', <Route path="/setup" element={<Setup />} />);
+    expect(await screen.findByText('A few steps to docs and answers. 0 of 5 done.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Set up sign-in/ })).toHaveAttribute('href', '/sign-in');
+    await userEvent.click(screen.getByRole('button', { name: 'Passwords are enough' }));
+    expect(await screen.findByText('A few steps to docs and answers. 1 of 5 done.')).toBeInTheDocument();
   });
 });
 

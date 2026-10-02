@@ -16,6 +16,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/GokulMV/DocTheRepo/internal/settings"
 	"github.com/GokulMV/DocTheRepo/internal/store/storetest"
 )
 
@@ -195,4 +196,37 @@ func TestShellQuote(t *testing.T) {
 	assert.Equal(t, "plain", shellQuote("plain"))
 	assert.Equal(t, `"has space"`, shellQuote("has space"))
 	assert.Equal(t, `"say \"hi\""`, shellQuote(`say "hi"`))
+}
+
+// dth init turns answers into a settings file the Hub applies at start, and a checklist; secrets are only
+// referenced, never asked for.
+func TestInitWizard(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "hub.yaml")
+	var buf bytes.Buffer
+	root := newRoot(&buf, &buf)
+	root.SetIn(strings.NewReader("2\nhttps://docs.acme.com/\n3\n2\nhttps://login.microsoftonline.com/<tenant-id>/v2.0\nhttps://login.microsoftonline.com/t1/v2.0\napp-1\nacme.com\nann@acme.com\n\n7\n4\n"))
+	root.SetArgs([]string{"init", "-o", out})
+	require.NoError(t, root.Execute(), buf.String())
+	text := buf.String()
+	assert.Contains(t, text, "Callback URL: https://docs.acme.com/api/v1/auth/callback")
+	assert.Contains(t, text, "It must be an https URL without <placeholders>.")
+	assert.Contains(t, text, "DTH_SECRET_OIDC_CLIENT_SECRET")
+	assert.Contains(t, text, "docker compose up -d")
+
+	b, err := os.ReadFile(out)
+	require.NoError(t, err)
+	doc, err := settings.Load(context.Background(), []settings.Source{{Name: "hub.yaml", Data: b}}, nil)
+	require.NoError(t, err, "the file is valid for the Hub")
+	require.NotNil(t, doc.Auth.SSO)
+	assert.Equal(t, "microsoft", doc.Auth.SSO.Provider)
+	assert.Equal(t, "${env:DTH_SECRET_OIDC_CLIENT_SECRET}", doc.Auth.SSO.ClientSecret.Value)
+	assert.True(t, *doc.Auth.Password, "both methods")
+	assert.Equal(t, []settings.User{{Email: "ann@acme.com", Role: "owner"}}, doc.Users)
+	assert.Empty(t, doc.Providers, "model chosen later")
+
+	root = newRoot(&buf, &buf)
+	root.SetIn(strings.NewReader(""))
+	root.SetArgs([]string{"init", "-o", out})
+	assert.ErrorContains(t, root.Execute(), "exists")
 }

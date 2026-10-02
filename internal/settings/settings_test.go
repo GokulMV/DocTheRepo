@@ -404,3 +404,21 @@ func TestExampleFileIsValid(t *testing.T) {
 	assert.Len(t, doc.Routes, 4)
 	assert.NotEmpty(t, doc.Spend.Limits)
 }
+
+func TestAuthAndUsersSections(t *testing.T) {
+	ctx := context.Background()
+	_, err := Load(ctx, []Source{{Name: "a.yaml", Data: []byte("auth:\n  sso:\n    issuer: https://x\nusers:\n  - email: a@b.c\n    role: boss\n")}}, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "auth.sso: issuer and client_id are required")
+	assert.Contains(t, err.Error(), "users[0]: role must be")
+
+	doc, err := Load(ctx, []Source{
+		{Name: "1.yaml", Data: []byte("auth:\n  password: true\nusers:\n  - email: Ann@acme.com\n    role: viewer\n")},
+		{Name: "2.yaml", Data: []byte("auth:\n  sso: {issuer: https://acme.okta.com, client_id: x, client_secret: s}\nusers:\n  - email: ann@acme.com\n    role: owner\n")},
+	}, nil)
+	require.NoError(t, err)
+	require.NotNil(t, doc.Auth.Password, "later files add to auth, they do not drop earlier fields")
+	assert.Equal(t, "https://acme.okta.com", doc.Auth.SSO.Issuer)
+	require.Len(t, doc.Users, 1, "users merge by email, case-insensitively")
+	assert.Equal(t, "owner", doc.Users[0].Role)
+}

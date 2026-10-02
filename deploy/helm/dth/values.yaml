@@ -45,6 +45,15 @@ auth:
     existingSecret: ""
     key: owner-password
 
+# Settings applied when the Hub starts: sign-in and SSO, users and owners, models, connectors,
+# repositories (docs/settings-file.md). Generate one with `dth init`. Point at an existing Secret holding
+# the YAML under `key` (recommended: it may contain secrets), or pass it inline with
+# `--set-file settings.inline=hub.yaml` and the chart stores it in a Secret.
+settings:
+  existingSecret: ""
+  key: hub.yaml
+  inline: ""
+
 logLevel: info
 # Extra environment for every role (e.g. DTH_VECTOR_BACKEND, DTH_QDRANT_URL, DTH_OTLP_ENDPOINT).
 extraEnv: []

@@ -19,6 +19,9 @@
 #   --container                           run the hub as a container image built by Docker (no host Go/Node)
 #   --image REF       DTH_IMAGE           with --container: use a published image instead of building one
 #   --no-browser      DTH_NO_BROWSER=1    do not open a browser
+#   --settings PATH   DTH_SETTINGS_FILE   settings file or directory applied when the hub starts (sign-in, SSO,
+#                                         users, models, repositories); export the secrets it references first
+#   --init                                ask the setup questions first (dth init) and use the file it writes
 #   --down [--wipe]                       stop the stack (and delete its volumes)
 # Model keys (optional, configured through the API so the setup wizard has nothing left to ask):
 #   ANTHROPIC_API_KEY   chat features (docgen, qa, decode, triage, suggest)
@@ -39,6 +42,8 @@ MODE="${DTH_QUICKSTART_MODE:-native}"
 GO_VERSION=1.25.13
 NODE_VERSION=22.12.0
 PG_PORT="${DTH_PG_PORT:-54329}"
+SETTINGS="${DTH_SETTINGS_FILE:-}"
+INIT=
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -47,9 +52,11 @@ while [ $# -gt 0 ]; do
     --image) IMAGE="$2"; MODE=container; shift 2 ;;
     --container) MODE=container; shift ;;
     --no-browser) NO_BROWSER=1; shift ;;
+    --settings) SETTINGS="$2"; shift 2 ;;
+    --init) INIT=1; shift ;;
     --down) ACTION=down; shift ;;
     --wipe) WIPE=1; shift ;;
-    -h|--help) sed -n '2,28p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,31p' "$0"; exit 0 ;;
     *) echo "unknown option: $1 (see --help)" >&2; exit 2 ;;
   esac
 done
@@ -314,6 +321,17 @@ get_env() { if [ -f "$ENV_FILE" ]; then sed -n "s/^$1=//p" "$ENV_FILE" | tail -1
 DB_PW="$(get_env DTH_DB_PASSWORD)"; [ -n "$DB_PW" ] || DB_PW="$(openssl rand -hex 24)"
 OWNER_PW="$(get_env DTH_OWNER_PASSWORD)"; [ -n "$OWNER_PW" ] || OWNER_PW="$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-20)"
 PREV_EMAIL="$(get_env DTH_OWNER_EMAIL)"; if [ -n "$PREV_EMAIL" ]; then EMAIL="$PREV_EMAIL"; fi
+# Settings applied at start live in $STATE_DIR/settings (Compose mounts it in container mode); a re-run
+# without --settings keeps the ones copied there before.
+mkdir -p "$STATE_DIR/settings"
+if [ -n "$SETTINGS" ]; then
+  [ -e "$SETTINGS" ] || die "settings file not found: $SETTINGS"
+  rm -f "$STATE_DIR/settings/"*.yaml "$STATE_DIR/settings/"*.yml "$STATE_DIR/settings/"*.json
+  if [ -d "$SETTINGS" ]; then cp "$SETTINGS"/*.y*ml "$SETTINGS"/*.json "$STATE_DIR/settings/" 2>/dev/null || true
+  else cp "$SETTINGS" "$STATE_DIR/settings/"
+  fi
+  say "Settings from $SETTINGS are applied when the hub starts"
+fi
 URL="http://localhost:$PORT"
 
 port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
@@ -322,6 +340,11 @@ if [ "$MODE" = native ]; then
   stop_native_hub
   say "Building the web UI and the hub from $REPO_ROOT (make release)"
   make -C "$REPO_ROOT" release GO=go
+  if [ -n "$INIT" ]; then
+    "$REPO_ROOT/bin/dth" init -o "$STATE_DIR/settings/hub.yaml" --force </dev/tty
+    say "Export the secrets listed above, then this run continues in 5 seconds (Ctrl-C to stop and export them first)"
+    sleep 5
+  fi
   cat > "$STATE_DIR/compose.yaml" <<'EOF'
 # PostgreSQL (pgvector) for the quickstart hub, which runs natively from this checkout.
 name: dth-quickstart
@@ -357,8 +380,15 @@ else
     "${DOCKER[@]}" pull "$IMAGE"
   fi
   cp "$REPO_ROOT/internal/bootstrap/compose.yaml" "$STATE_DIR/compose.yaml"
+  if [ -n "$INIT" ]; then
+    "${DOCKER[@]}" run --rm -it --entrypoint /dth -v "$STATE_DIR/settings:/out" -w /out "$IMAGE" init -o /out/hub.yaml --force
+    say "Export the secrets listed above, then this run continues in 5 seconds (Ctrl-C to stop and export them first)"
+    sleep 5
+  fi
 fi
 
+# The hub container runs as a non-root user: let it read the settings (they hold references, not secrets).
+chmod a+rx "$STATE_DIR/settings"; chmod a+r "$STATE_DIR/settings/"* 2>/dev/null || true
 umask 077
 cat > "$ENV_FILE" <<EOF
 DTH_DB_PASSWORD=$DB_PW
@@ -387,6 +417,7 @@ if [ "$MODE" = native ]; then
     export DTH_LISTEN="127.0.0.1:$PORT" DTH_PUBLIC_URL="$URL" DTH_AUTH_MODE=local
     export DTH_OWNER_EMAIL="$EMAIL" DTH_OWNER_PASSWORD="$OWNER_PW"
     export DTH_LOCAL_KEY_FILE="$STATE_DIR/master.key" DTH_GRAMMARS_DIR="$STATE_DIR/grammars" DTH_LOG_FORMAT=text
+    export DTH_SETTINGS_FILE="$STATE_DIR/settings"
     mkdir -p "$STATE_DIR/grammars"
     nohup "$REPO_ROOT/bin/dth-hub" >>"$LOG_FILE" 2>&1 &
     echo $! > "$PID_FILE"
