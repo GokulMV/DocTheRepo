@@ -131,3 +131,12 @@ SELECT count(*) FROM chunks WHERE deleted_at IS NULL;
 
 -- name: LiveChunkTokens :one
 SELECT coalesce(sum(length(content)), 0)::bigint / 4 AS tokens FROM chunks WHERE deleted_at IS NULL;
+
+-- name: DocAncestors :many
+-- The ids from the repo node down to the node's parent, root first.
+WITH RECURSIVE up(id, parent_id, depth) AS (
+  SELECT n.id, n.parent_id, 0 FROM doc_nodes n WHERE n.id = sqlc.arg(id)
+  UNION ALL
+  SELECT p.id, p.parent_id, up.depth + 1 FROM doc_nodes p JOIN up ON p.id = up.parent_id WHERE up.depth < 64
+)
+SELECT up.id::text AS id FROM up WHERE up.depth > 0 ORDER BY up.depth DESC;

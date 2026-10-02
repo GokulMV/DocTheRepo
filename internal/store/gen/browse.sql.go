@@ -74,6 +74,36 @@ func (q *Queries) DeleteShelf(ctx context.Context, id string) (int64, error) {
 	return result.RowsAffected(), nil
 }
 
+const docAncestors = `-- name: DocAncestors :many
+WITH RECURSIVE up(id, parent_id, depth) AS (
+  SELECT n.id, n.parent_id, 0 FROM doc_nodes n WHERE n.id = $1
+  UNION ALL
+  SELECT p.id, p.parent_id, up.depth + 1 FROM doc_nodes p JOIN up ON p.id = up.parent_id WHERE up.depth < 64
+)
+SELECT up.id::text AS id FROM up WHERE up.depth > 0 ORDER BY up.depth DESC
+`
+
+// The ids from the repo node down to the node's parent, root first.
+func (q *Queries) DocAncestors(ctx context.Context, id string) ([]string, error) {
+	rows, err := q.db.Query(ctx, docAncestors, id)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const docChildrenWithCounts = `-- name: DocChildrenWithCounts :many
 SELECT n.id, n.kind, n.title, n.path, n.summary, n.chunk_id, n.updated_at,
        EXISTS (SELECT 1 FROM doc_nodes c WHERE c.parent_id = n.id) AS has_children

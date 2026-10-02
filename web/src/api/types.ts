@@ -102,6 +102,8 @@ export interface DocNode {
   commit_sha?: string;
   updated_at: string;
   parent_id?: string;
+  /** Ids from the repo node down to the parent, root first. */
+  ancestors?: string[];
   chunks: { chunk_id: string; path: string; symbol: string; language: string; signature: string }[];
 }
 
