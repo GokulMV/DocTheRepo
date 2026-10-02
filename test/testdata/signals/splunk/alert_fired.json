@@ -1,0 +1,18 @@
+{
+  "description": "a saved-search alert firing with its first result row (Splunk webhook alert action)",
+  "headers": {},
+  "config": {},
+  "body": {
+    "result": {"_time": "2026-09-30T10:15:00.000+00:00", "service": "checkout", "env": "prod", "level": "ERROR", "count": "152",
+      "message": "upstream request timeout calling payments-gw", "_raw": "2026-09-30 10:15:00 ERROR upstream request timeout calling payments-gw"},
+    "sid": "scheduler__admin__search__RMD5e1f2a3b4c5d6e7f8_at_1759227300_42",
+    "results_link": "https://splunk.acme.com:8000/app/search/@go?sid=scheduler__admin__search__RMD5e1f2a3b4c5d6e7f8_at_1759227300_42",
+    "search_name": "Checkout upstream timeouts",
+    "owner": "admin",
+    "app": "search"
+  },
+  "expect": [{"source": "splunk", "kind": "alert", "severity": "error", "service": "checkout", "environment": "prod",
+    "title": "Checkout upstream timeouts: upstream request timeout calling payments-gw", "rule_id": "search/Checkout upstream timeouts",
+    "external_id": "scheduler__admin__search__RMD5e1f2a3b4c5d6e7f8_at_1759227300_42",
+    "attrs": {"splunk.search": "Checkout upstream timeouts", "splunk.count": "152", "url": "https://splunk.acme.com:8000/app/search/@go?sid=scheduler__admin__search__RMD5e1f2a3b4c5d6e7f8_at_1759227300_42"}}]
+}

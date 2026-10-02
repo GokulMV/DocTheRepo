@@ -1,0 +1,12 @@
+{
+  "description": "a resolved issue is not a new problem",
+  "headers": {},
+  "config": {},
+  "body": {
+    "trigger": {"source": "CONTROL", "type": "Resolved", "ruleId": "wc-id-1077", "ruleName": "Publicly exposed bucket with sensitive data"},
+    "issue": {"id": "f4a1b2c3-0000-4d5e-9f00-112233445566", "status": "RESOLVED", "severity": "HIGH"},
+    "resource": {"id": "res-77", "name": "acme-payments-exports"},
+    "control": {"id": "wc-id-1077", "name": "Publicly exposed bucket with sensitive data"}
+  },
+  "expect": []
+}

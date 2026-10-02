@@ -114,8 +114,9 @@ function AddSignal({ onCreated }: { onCreated: (c: { id: string; type: string; s
   const [mode, setMode] = useState<string>('');
   const [config, setConfig] = useState<Record<string, string>>({});
   const [creds, setCreds] = useState('');
+  const [noLLM, setNoLLM] = useState(false);
   const create = useInvalidating((b: object) => api.post<{ id: string; webhook_path: string }>('/connectors', b), keys.connectors);
-  const pick = (t: string) => { setType(t); setConfig({}); setMode(''); };
+  const pick = (t: string) => { setType(t); setConfig({}); setMode(''); setNoLLM(t === 'wiz'); };
   return (
     <>
       <Button variant="secondary" onClick={() => setOpen(true)}>Add signal source</Button>
@@ -126,7 +127,8 @@ function AddSignal({ onCreated }: { onCreated: (c: { id: string; type: string; s
             e.preventDefault();
             const secret = spec.secret ? randomSecret() : '';
             const m = mode || spec.modes[0];
-            const cfg = Object.fromEntries(Object.entries(config).filter(([, v]) => v.trim() !== ''));
+            const cfg: Record<string, string> = Object.fromEntries(Object.entries(config).filter(([, v]) => v.trim() !== ''));
+            if (noLLM) cfg.never_send_to_llm = 'true';
             const r = await create.mutateAsync({ type, name: name || spec.label, mode: m, config: cfg, credentials: creds || undefined, webhook_secret: secret || undefined });
             onCreated({ id: r.id, type, secret, path: r.webhook_path });
             setOpen(false);
@@ -134,7 +136,7 @@ function AddSignal({ onCreated }: { onCreated: (c: { id: string; type: string; s
         >
           <Field label="Source" hint={spec.help}>
             <Select value={type} onChange={(e) => pick(e.target.value)}>
-              {(['Errors & alerts', 'Cloud logs & alarms', 'Event platforms'] as const).map((g) => (
+              {(['Errors & alerts', 'Security & log platforms', 'Cloud logs & alarms', 'Event platforms'] as const).map((g) => (
                 <optgroup key={g} label={g}>{SOURCES.filter((s) => s.group === g).map((s) => <option key={s.type} value={s.type}>{s.label}</option>)}</optgroup>
               ))}
             </Select>
@@ -155,6 +157,10 @@ function AddSignal({ onCreated }: { onCreated: (c: { id: string; type: string; s
               <Textarea rows={3} className="font-mono text-xs" value={creds} onChange={(e) => setCreds(e.target.value)} />
             </Field>
           )}
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-1" checked={noLLM} onChange={(e) => setNoLLM(e.target.checked)} />
+            <span>Never send this source’s data to a model<span className="block text-xs text-slate-500">Issues are grouped and shown but not explained, and are left out of rule proposals.</span></span>
+          </label>
           <ErrorNote error={create.error} />
           <Button type="submit" disabled={create.isPending}>Add</Button>
         </form>

@@ -36,7 +36,12 @@ type Issue struct {
 	ID, Fingerprint, Kind, Title, Service, Environment, Status, RepoID, DecodeID string
 	Occurrences                                                                  int64
 	Sources                                                                      []string
+	// NoLLM is set when the issue's events come from a connector that must never be sent to a model.
+	NoLLM bool
 }
+
+// NoLLMReason explains a decode skipped by connector policy.
+const NoLLMReason = "not sent to a model: the connector is set to never send its data to an LLM"
 
 // Affected is one code chunk a decode blames, with the content hash it had (staleness check).
 type Affected struct {
@@ -144,6 +149,9 @@ func (d *Decoder) Decode(ctx context.Context, issueID string, force bool, jobID 
 	is, err := d.Store.Issue(ctx, issueID)
 	if err != nil {
 		return Outcome{}, err
+	}
+	if is.NoLLM { // policy, not cost: even a forced decode stays local
+		return Outcome{Status: "skipped", Reason: NoLLMReason}, nil
 	}
 	if is.Status == "suppressed" && !force {
 		return Outcome{Status: "skipped", Reason: "suppressed by a known-issue rule"}, nil

@@ -26,6 +26,8 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/pubsubbus"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/rabbitmq"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/registry"
+	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/splunk"
+	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/wiz"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/vector/pgvector"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/vector/qdrant"
 	"github.com/GokulMV/DocTheRepo/internal/api"
@@ -151,7 +153,7 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 		OnEvent:  func(source, outcome string) { m.SignalEvents.WithLabelValues(source, outcome).Inc() },
 		Webhooks: registry.Webhooks(), Accepts: registry.Accepts, LoadConnector: conns.Get}
 	a.polls = &ingest.SignalPolls{Sink: a.signals, Store: conns, Queue: q,
-		Pollers: map[string]ports.SignalPoller{"cloudwatch": cloudwatch.New(), "gcp": gcplogging.New()}}
+		Pollers: map[string]ports.SignalPoller{"cloudwatch": cloudwatch.New(), "gcp": gcplogging.New(), "wiz": wiz.NewPoller(), "splunk": splunk.NewPoller()}}
 	resolve := func(ctx context.Context, fps []string) error {
 		n, err := a.signalStore.Resolve(ctx, fps)
 		if n > 0 {

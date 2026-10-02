@@ -11,6 +11,8 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/opsgenie"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/pagerduty"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/sentry"
+	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/splunk"
+	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/wiz"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
 )
 
@@ -18,7 +20,7 @@ import (
 func Webhooks() map[string]ports.SignalWebhook {
 	out := map[string]ports.SignalWebhook{}
 	for _, a := range []ports.SignalWebhook{sentry.New(), pagerduty.New(), opsgenie.New(), datadog.New(), alertmanager.New(),
-		alertmanager.NewGrafana(), aws.New(), gcp.New(), generic.New()} {
+		alertmanager.NewGrafana(), aws.New(), gcp.New(), generic.New(), wiz.New(), splunk.New()} {
 		out[a.Source()] = a
 	}
 	return out

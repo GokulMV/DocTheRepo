@@ -104,6 +104,11 @@ Under construction, milestone by milestone (plan § 14). Implemented so far:
   rules with a proposed match; a Jira issue moving to Done flips its rule to label only ("fixed upstream —
   verify"). Known Issues explains a pasted Jira or Confluence URL (`POST /known-issues/from-link`). See
   [`docs/confluence-jira.md`](docs/confluence-jira.md).
+- **Phase 14 — Wiz & Splunk**: Wiz issues as security findings (webhook integration or GraphQL polling,
+  one issue per rule and resource) and Splunk (webhook alert actions, or polling saved searches/SPL into
+  log events with stacks), with severity mapping, fixtures in the adapter parity suite, Inbox source and
+  kind filters, and a per-connector **never send to a model** policy (on by default for Wiz). See
+  [`docs/wiz-splunk.md`](docs/wiz-splunk.md).
 - **opencode & MCP**: opencode as a documentation engine (`dth engine opencode`) and the Hub as an MCP
   server for opencode, Claude Code, and Cursor (`dth mcp`). See [`docs/opencode.md`](docs/opencode.md).
 

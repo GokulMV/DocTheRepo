@@ -31,8 +31,8 @@ func (d *Decodes) Issue(ctx context.Context, id string) (decode.Issue, error) {
 	var is decode.Issue
 	var repo, dec *string
 	err := d.s.Pool.QueryRow(ctx, `SELECT id, fingerprint, kind::text, title, service, environment, status::text, repo_id, decode_id,
-		occurrences, sources FROM issues WHERE id = $1`, id).Scan(&is.ID, &is.Fingerprint, &is.Kind, &is.Title, &is.Service,
-		&is.Environment, &is.Status, &repo, &dec, &is.Occurrences, &is.Sources)
+		occurrences, sources, `+noLLMExists+` FROM issues i WHERE id = $1`, id).Scan(&is.ID, &is.Fingerprint, &is.Kind, &is.Title, &is.Service,
+		&is.Environment, &is.Status, &repo, &dec, &is.Occurrences, &is.Sources, &is.NoLLM)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return is, ports.ErrNotFound
 	}
@@ -47,6 +47,9 @@ func (d *Decodes) Issue(ctx context.Context, id string) (decode.Issue, error) {
 	}
 	return is, nil
 }
+
+// noLLMExists is true for an issue with events from a never-send-to-LLM connector (see ingest.NoLLMAttr).
+const noLLMExists = `EXISTS (SELECT 1 FROM event_samples s WHERE s.issue_id = i.id AND s.attrs->>'dth.no_llm' = 'true')`
 
 // Samples implements decode.Store.
 func (d *Decodes) Samples(ctx context.Context, issueID string, n int) ([]ports.SignalEvent, error) {
