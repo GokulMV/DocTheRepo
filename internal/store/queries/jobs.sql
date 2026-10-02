@@ -84,3 +84,7 @@ SELECT type, count(*)::bigint AS depth FROM jobs WHERE status = 'queued' GROUP B
 
 -- name: NotifyJobs :exec
 SELECT pg_notify('dth_jobs', sqlc.arg(job_type)::text);
+
+-- name: SetJobProgress :execrows
+UPDATE jobs SET progress = sqlc.arg(progress), updated_at = now()
+WHERE id = sqlc.arg(id) AND status = 'processing';

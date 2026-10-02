@@ -35,7 +35,7 @@ SET status = 'processing',
     updated_at = now()
 FROM cand
 WHERE jobs.id = cand.id
-RETURNING jobs.id, jobs.seq, jobs.type, jobs.repo_id, jobs.serial_key, jobs.dedupe_key, jobs.payload, jobs.status, jobs.priority, jobs.attempts, jobs.max_attempts, jobs.run_after, jobs.locked_by, jobs.locked_until, jobs.correlation_id, jobs.error, jobs.result, jobs.replayed_from, jobs.created_at, jobs.updated_at
+RETURNING jobs.id, jobs.seq, jobs.type, jobs.repo_id, jobs.serial_key, jobs.dedupe_key, jobs.payload, jobs.status, jobs.priority, jobs.attempts, jobs.max_attempts, jobs.run_after, jobs.locked_by, jobs.locked_until, jobs.correlation_id, jobs.error, jobs.result, jobs.replayed_from, jobs.created_at, jobs.updated_at, jobs.progress
 `
 
 type ClaimJobParams struct {
@@ -71,6 +71,7 @@ func (q *Queries) ClaimJob(ctx context.Context, arg ClaimJobParams) (Job, error)
 		&i.ReplayedFrom,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Progress,
 	)
 	return i, err
 }
@@ -82,7 +83,7 @@ VALUES ($1, $2, $3, $4, $5,
         $6, $7, $8, $9,
         $10, $11)
 ON CONFLICT (dedupe_key) WHERE dedupe_key IS NOT NULL AND status IN ('queued', 'processing') DO NOTHING
-RETURNING id, seq, type, repo_id, serial_key, dedupe_key, payload, status, priority, attempts, max_attempts, run_after, locked_by, locked_until, correlation_id, error, result, replayed_from, created_at, updated_at
+RETURNING id, seq, type, repo_id, serial_key, dedupe_key, payload, status, priority, attempts, max_attempts, run_after, locked_by, locked_until, correlation_id, error, result, replayed_from, created_at, updated_at, progress
 `
 
 type EnqueueJobParams struct {
@@ -135,6 +136,7 @@ func (q *Queries) EnqueueJob(ctx context.Context, arg EnqueueJobParams) (Job, er
 		&i.ReplayedFrom,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Progress,
 	)
 	return i, err
 }
@@ -170,7 +172,7 @@ func (q *Queries) FinishJob(ctx context.Context, arg FinishJobParams) (int64, er
 }
 
 const getJob = `-- name: GetJob :one
-SELECT id, seq, type, repo_id, serial_key, dedupe_key, payload, status, priority, attempts, max_attempts, run_after, locked_by, locked_until, correlation_id, error, result, replayed_from, created_at, updated_at FROM jobs WHERE id = $1
+SELECT id, seq, type, repo_id, serial_key, dedupe_key, payload, status, priority, attempts, max_attempts, run_after, locked_by, locked_until, correlation_id, error, result, replayed_from, created_at, updated_at, progress FROM jobs WHERE id = $1
 `
 
 func (q *Queries) GetJob(ctx context.Context, id string) (Job, error) {
@@ -197,12 +199,13 @@ func (q *Queries) GetJob(ctx context.Context, id string) (Job, error) {
 		&i.ReplayedFrom,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Progress,
 	)
 	return i, err
 }
 
 const getLiveJobByDedupeKey = `-- name: GetLiveJobByDedupeKey :one
-SELECT id, seq, type, repo_id, serial_key, dedupe_key, payload, status, priority, attempts, max_attempts, run_after, locked_by, locked_until, correlation_id, error, result, replayed_from, created_at, updated_at FROM jobs
+SELECT id, seq, type, repo_id, serial_key, dedupe_key, payload, status, priority, attempts, max_attempts, run_after, locked_by, locked_until, correlation_id, error, result, replayed_from, created_at, updated_at, progress FROM jobs
 WHERE dedupe_key = $1 AND status IN ('queued', 'processing')
 `
 
@@ -230,6 +233,7 @@ func (q *Queries) GetLiveJobByDedupeKey(ctx context.Context, dedupeKey *string) 
 		&i.ReplayedFrom,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Progress,
 	)
 	return i, err
 }
@@ -255,7 +259,7 @@ func (q *Queries) HeartbeatJob(ctx context.Context, arg HeartbeatJobParams) (int
 }
 
 const listJobs = `-- name: ListJobs :many
-SELECT id, seq, type, repo_id, serial_key, dedupe_key, payload, status, priority, attempts, max_attempts, run_after, locked_by, locked_until, correlation_id, error, result, replayed_from, created_at, updated_at FROM jobs
+SELECT id, seq, type, repo_id, serial_key, dedupe_key, payload, status, priority, attempts, max_attempts, run_after, locked_by, locked_until, correlation_id, error, result, replayed_from, created_at, updated_at, progress FROM jobs
 WHERE ($1::job_status IS NULL OR status = $1)
   AND ($2::text IS NULL OR type = $2)
   AND ($3::uuid IS NULL OR repo_id = $3)
@@ -308,6 +312,7 @@ func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, erro
 			&i.ReplayedFrom,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Progress,
 		); err != nil {
 			return nil, err
 		}
@@ -416,6 +421,24 @@ func (q *Queries) RescheduleJob(ctx context.Context, arg RescheduleJobParams) (i
 		arg.ID,
 		arg.Worker,
 	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const setJobProgress = `-- name: SetJobProgress :execrows
+UPDATE jobs SET progress = $1, updated_at = now()
+WHERE id = $2 AND status = 'processing'
+`
+
+type SetJobProgressParams struct {
+	Progress json.RawMessage `json:"progress"`
+	ID       string          `json:"id"`
+}
+
+func (q *Queries) SetJobProgress(ctx context.Context, arg SetJobProgressParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setJobProgress, arg.Progress, arg.ID)
 	if err != nil {
 		return 0, err
 	}

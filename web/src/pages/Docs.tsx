@@ -7,6 +7,7 @@ import { atLeast, type TreeNode } from '@/api/types';
 import { Markdown } from '@/components/Markdown';
 import { Badge, Button, Card, ErrorNote, PageHeader, Spinner, cx } from '@/components/ui';
 import { relTime, shortSha } from '@/lib/format';
+import { JobProgressBar } from '@/components/JobProgressBar';
 
 const rowCls = 'group flex w-full items-center gap-1.5 rounded-md py-1 pr-2 text-left text-[13px] transition-colors';
 
@@ -75,6 +76,10 @@ function NoDocs() {
   const [err, setErr] = useState<unknown>();
   const tracked = repos.data ?? [];
   const failed = useJobs({ status: 'failed', type: 'code_push' });
+  const running = useJobs({ status: 'processing', type: 'code_push' });
+  const queuedJobs = useJobs({ status: 'queued', type: 'code_push' });
+  const active = running.data?.items ?? [];
+  const waiting = queuedJobs.data?.items.length ?? 0;
   const lastFailure = failed.data?.items[0];
   const docgenRouted = routes.data?.items.some((r) => r.feature === 'docgen');
   if (tracked.length > 0) {
@@ -93,8 +98,20 @@ function NoDocs() {
           <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-300">
             <BookOpen className="h-6 w-6" aria-hidden />
           </span>
-          <h2 className="mt-4 text-lg font-semibold">{queued.length ? 'Writing docs…' : 'No docs yet'}</h2>
-          {queued.length > 0 ? (
+          <h2 className="mt-4 text-lg font-semibold">{queued.length || active.length ? 'Writing docs…' : 'No docs yet'}</h2>
+          {active.length > 0 && (
+            <div className="mx-auto mt-4 max-w-md space-y-3 text-left">
+              {active.map((j) => (
+                <div key={j.job_id} className="rounded-lg border border-slate-200 p-3 dark:border-white/10">
+                  <p className="text-sm font-medium">{tracked.find((r) => r.id === j.repo_id)?.full_name ?? 'Repository'}</p>
+                  {j.progress ? <JobProgressBar job={j} /> : <p className="mt-1 text-xs text-slate-500">Reading the code…</p>}
+                </div>
+              ))}
+              {waiting > 0 && <p className="text-xs text-slate-500">{waiting} more job{waiting === 1 ? '' : 's'} waiting. Each repository runs one job at a time.</p>}
+              <p className="text-xs text-slate-500">Files appear here when a repository finishes.</p>
+            </div>
+          )}
+          {active.length > 0 ? null : queued.length > 0 ? (
             <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
               Docs are being written for {queued.join(', ')}. Files appear here as they finish (a large repository takes a while); progress is under <Link className="underline" to="/activity">Activity</Link>.
             </p>

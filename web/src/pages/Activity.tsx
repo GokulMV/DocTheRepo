@@ -4,6 +4,7 @@ import { useActivity, useConnectors, useInvalidating, useJobs, useMe, useProvide
 import { atLeast, type Job } from '@/api/types';
 import { Badge, Button, Card, Dialog, ErrorNote, PageHeader, Select, Spinner, Table, Td, statusTone } from '@/components/ui';
 import { relTime } from '@/lib/format';
+import { JobProgressBar } from '@/components/JobProgressBar';
 
 const STATUSES = ['', 'queued', 'processing', 'done', 'failed', 'aborted', 'spend_blocked', 'pending_approval', 'needs_human', 'dead'];
 const TYPES = ['', 'code_push', 'import_docs', 'reindex', 'pr_review'];
@@ -69,6 +70,8 @@ export default function Activity() {
   const feed = useActivity(types);
   const jobs = useJobs({ status, type });
   const name = useNames();
+  const repos = useRepos();
+  const repoName = (id?: string) => repos.data?.find((r) => r.id === id)?.full_name;
   return (
     <>
       <PageHeader title="Activity" description="Pushes processed, docs landed, PR lifecycle, and admin actions." />
@@ -114,11 +117,14 @@ export default function Activity() {
         >
           {jobs.isLoading && <Spinner />}
           <ErrorNote error={jobs.error} />
-          <Table head={['Type', 'Status', 'Attempts', 'Updated']}>
+          <Table head={['Job', 'Status', 'Attempts', 'Updated']}>
             {jobs.data?.items.map((j) => (
               <tr key={j.job_id} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800" onClick={() => setOpen(j)}>
-                <Td>{j.type}</Td>
-                <Td><Badge tone={statusTone(j.status)}>{j.status}</Badge></Td>
+                <Td>
+                  <span className="block">{repoName(j.repo_id) ?? j.type}</span>
+                  <span className="block text-[11px] text-slate-500">{j.type}</span>
+                </Td>
+                <Td><Badge tone={statusTone(j.status)}>{j.status}</Badge><JobProgressBar job={j} /></Td>
                 <Td>{j.attempts}/{j.max_attempts}</Td>
                 <Td>{relTime(j.updated_at)}</Td>
               </tr>

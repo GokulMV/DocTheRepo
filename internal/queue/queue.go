@@ -265,8 +265,18 @@ func toJob(r gen.Job) ports.Job {
 		DedupeKey: deref(r.DedupeKey), Payload: r.Payload, Status: ports.JobStatus(r.Status), Priority: r.Priority,
 		Attempts: int(r.Attempts), MaxAttempts: int(r.MaxAttempts), RunAfter: r.RunAfter, LockedBy: deref(r.LockedBy),
 		LockedUntil: r.LockedUntil, CorrelationID: r.CorrelationID, Error: r.Error, Result: r.Result,
-		ReplayedFrom: deref(r.ReplayedFrom), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		ReplayedFrom: deref(r.ReplayedFrom), CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt, Progress: r.Progress,
 	}
+}
+
+// SetProgress records a running job's progress; it is a no-op once the job has finished.
+func (q *Queue) SetProgress(ctx context.Context, jobID string, p ports.JobProgress) error {
+	b, err := json.Marshal(p)
+	if err != nil {
+		return err
+	}
+	_, err = q.st.Q.SetJobProgress(ctx, gen.SetJobProgressParams{ID: jobID, Progress: b})
+	return err
 }
 
 func strPtr(s string) *string {

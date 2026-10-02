@@ -273,8 +273,17 @@ export interface Job {
   result?: unknown;
   payload: unknown;
   replayed_from?: string;
+  /** A running job's latest progress, e.g. files documented so far. */
+  progress?: JobProgress;
   created_at: string;
   updated_at: string;
+}
+
+export interface JobProgress {
+  stage: string;
+  done: number;
+  total: number;
+  item?: string;
 }
 
 export interface Activity {

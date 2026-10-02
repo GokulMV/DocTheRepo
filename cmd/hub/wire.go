@@ -229,7 +229,8 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 			m, _ := json.Marshal(res.ProposedMatch)
 			return ingest.Proposal{Explanation: res.Explanation, Reason: res.Reason, Match: m}, nil
 		}}
-	a.pipe = &pipeline.Pipeline{Repos: repos, Chunks: a.chunks, Graph: store.NewGraph(st), Docs: a.docs, Savings: store.NewSavings(st),
+	a.pipe = &pipeline.Pipeline{
+		Progress: func(ctx context.Context, jobID string, pr ports.JobProgress) { _ = q.SetProgress(ctx, jobID, pr) }, Repos: repos, Chunks: a.chunks, Graph: store.NewGraph(st), Docs: a.docs, Savings: store.NewSavings(st),
 		Hosts: a.hosts.Host, Lander: &push.Dispatcher{PRs: prs, Lifecycle: a.sweeper}, GW: gw, DocGen: &docgen.Generator{GW: gw},
 		Indexer: indexer, Grammars: reg, Log: log.With("component", "pipeline")}
 	a.arch = store.NewArchitecture(st)
