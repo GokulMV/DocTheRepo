@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '@/api/client';
 import { keys, useInvalidating, useMe, useShelf, useShelves } from '@/api/hooks';
 import { atLeast } from '@/api/types';
-import { Badge, Button, Card, Dialog, Empty, ErrorNote, Field, Input, PageHeader, Spinner, Textarea, Toggle } from '@/components/ui';
+import { Badge, Button, Card, Dialog, DialogFooter, Empty, ErrorNote, Field, Input, PageHeader, Spinner, Textarea, Toggle } from '@/components/ui';
 
 function NewShelf() {
   const [open, setOpen] = useState(false);
@@ -34,7 +34,10 @@ function NewShelf() {
             <Textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} />
           </Field>
           <ErrorNote error={create.error} />
-          <Button type="submit" disabled={create.isPending}>Create</Button>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={create.isPending}>Create</Button>
+          </DialogFooter>
         </form>
       </Dialog>
     </>

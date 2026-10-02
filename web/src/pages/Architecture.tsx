@@ -5,7 +5,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '@/api/client';
 import { useMe } from '@/api/hooks';
 import { atLeast } from '@/api/types';
-import { ArchitectureDiagram, ArchitectureLegend, LAYERS, type ArchLink, type ArchNode } from '@/components/ArchitectureDiagram';
+import { ArchitectureDiagram, ArchitectureLegend, LAYERS, nodeSubtitle, type ArchLink, type ArchNode } from '@/components/ArchitectureDiagram';
 import { kindMeta } from '@/components/palaceKinds';
 import { Badge, Button, Card, Empty, ErrorNote, Input, PageHeader, Spinner, cx } from '@/components/ui';
 
@@ -35,12 +35,38 @@ interface Architecture {
   nodes: ArchNode[];
   links: ArchLink[];
   hidden: Record<string, number>;
+  counts?: Record<string, number>;
   restricted: number;
   env: string[];
   docs: { entity_id: string; kind: string; name: string; key: string; relation: string }[];
   owners: string[];
   diagrams: Diagram[];
   updated_at?: string;
+}
+
+/** ArchSummary says in one sentence what the diagram shows. */
+function ArchSummary({ a }: { a: Architecture }) {
+  const of = (kind: string) => a.nodes.filter((n) => n.kind === kind);
+  const groups = of('endpoint_group');
+  const endpoints = a.counts?.endpoints ?? groups.reduce((s, n) => s + (n.count ?? 0), 0);
+  const groupCount = a.counts?.endpoint_groups ?? groups.length;
+  const libs = of('dependency_group');
+  const topics = a.nodes.filter((n) => n.layer === 'messaging');
+  const data = a.nodes.filter((n) => n.layer === 'data');
+  const repos = a.nodes.filter((n) => n.kind === 'repo' && n.repo_id && n.repo_id !== a.repo.id);
+  const parts: string[] = [];
+  if (endpoints) parts.push(`exposes ${endpoints} HTTP endpoint${endpoints === 1 ? '' : 's'} in ${groupCount} group${groupCount === 1 ? '' : 's'}`);
+  if (topics.length) parts.push(`sends or receives messages on ${topics.map((t) => t.name).join(', ')}`);
+  if (data.length) parts.push(`stores data in ${data.length} datastore${data.length === 1 ? '' : 's'}`);
+  if (repos.length) parts.push(`talks to ${repos.map((r) => r.name).join(', ')}`);
+  if (libs.length) parts.push(`uses ${libs.map((l) => `${l.count} ${l.name}`).join(' and ')}`);
+  if (!parts.length) return null;
+  const last = parts.pop();
+  return (
+    <p className="rounded-xl border border-slate-200/80 bg-white/70 px-4 py-3 text-sm text-slate-700 dark:border-white/[0.06] dark:bg-slate-900/40 dark:text-slate-300">
+      <b className="font-medium">{a.repo.full_name}</b> {parts.length ? `${parts.join('; ')}; and ${last}` : last}. Read left to right: who calls it, what it exposes, its parts, then what it depends on.
+    </p>
+  );
 }
 
 export default function ArchitecturePage() {
@@ -157,6 +183,7 @@ function RepoArchitecture({ repoId }: { repoId: string }) {
                   </Empty>
                 ) : (
                   <>
+                    <ArchSummary a={a} />
                     <ArchitectureDiagram nodes={a.nodes} links={a.links} hidden={a.hidden} selected={selected} onSelect={setSelected} />
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <ArchitectureLegend />
@@ -169,8 +196,14 @@ function RepoArchitecture({ repoId }: { repoId: string }) {
               <div className="grid content-start gap-4 md:grid-cols-2 xl:grid-cols-3 min-[1800px]:grid-cols-1">
                 {sel ? (
                   <Card title={sel.name}>
-                    <p className="text-xs text-slate-500">{kindMeta(sel.kind).label} · {LAYERS.find((l) => l.id === sel.layer)?.label}</p>
+                    <p className="text-xs text-slate-500">{nodeSubtitle(sel, kindMeta(sel.kind).label)} · {LAYERS.find((l) => l.id === sel.layer)?.label}</p>
                     {sel.key && sel.key !== sel.name && <p className="mt-1 break-all font-mono text-[12px] text-slate-500">{sel.key}</p>}
+                    {!!sel.items?.length && (
+                      <ul className="mt-3 max-h-64 space-y-0.5 overflow-y-auto rounded-lg bg-slate-50 p-2 font-mono text-[12px] dark:bg-white/[0.04]">
+                        {sel.items.map((it) => <li key={it} className="truncate" title={it}>{it}</li>)}
+                        {(sel.count ?? 0) > sel.items.length && <li className="font-sans text-slate-400">+{(sel.count ?? 0) - sel.items.length} more</li>}
+                      </ul>
+                    )}
                     <ul className="mt-3 space-y-1 text-sm">
                       {a.links.filter((l) => l.src === sel.id || l.dst === sel.id).map((l) => (
                         <li key={l.src + l.kind + l.dst} className="text-slate-600 dark:text-slate-300">

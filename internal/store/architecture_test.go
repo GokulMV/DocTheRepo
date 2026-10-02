@@ -57,7 +57,7 @@ func TestBuildArchitectureLayers(t *testing.T) {
 		layer[n.ID] = n.Layer
 	}
 	assert.Equal(t, map[string]string{
-		"svc": LayerCore, "mod": LayerCore, "ep1": LayerInterface,
+		"svc": LayerCore, "mod": LayerCore, "api:/charges": LayerInterface,
 		"t1": LayerMessaging, "t2": LayerMessaging, "db": LayerData,
 		"repo:" + ord: LayerUpstream, "stripe": LayerDownstream, "repo:44444444-4444-4444-4444-444444444444": LayerDownstream,
 	}, layer, "symbols lift to the service; other repositories become one box each")
@@ -74,12 +74,12 @@ func TestBuildArchitectureLayers(t *testing.T) {
 		t.Fatalf("missing link %s -%s-> %s in %+v", src, kind, dst, a.Links)
 		return ArchLink{}
 	}
-	has("svc", "exposes", "ep1")
+	has("svc", "exposes", "api:/charges")
 	has("svc", "contains", "mod")
 	has("svc", "publishes", "t1")
 	has("t2", "subscribes", "svc")
 	has("svc", "uses_datastore", "db")
-	has("repo:"+ord, "calls", "ep1")
+	has("repo:"+ord, "calls", "api:/charges")
 	assert.Equal(t, 2, has("svc", "calls", "stripe").Weight)
 	has("t1", "consumed by", "repo:44444444-4444-4444-4444-444444444444")
 	has("repo:"+ord, "publishes", "t2")
@@ -116,4 +116,64 @@ func TestBuildArchitectureWithoutServiceUsesRepoAndCaps(t *testing.T) {
 	assert.Equal(t, 1, core)
 	assert.Equal(t, 6, a.Hidden[LayerInterface], "20 endpoints, 14 shown")
 	assert.Len(t, a.Links, 14, "links to hidden endpoints are dropped")
+}
+
+func TestArchitectureGroups(t *testing.T) {
+	for in, want := range map[string]string{
+		"GET /api/v1/connectors/{id}": "/connectors", "POST /v2/charges": "/charges", "GET /": "/", "GET /{id}": "/",
+		"GET /api/health": "/health", "PUT /routes/${feature}": "/routes", "ANY /readyz": "/readyz",
+	} {
+		assert.Equal(t, want, endpointGroup(in), in)
+	}
+	mods := architectureModules([]archEntity{
+		{ID: "1", Kind: "module", Key: "r:internal", Name: "internal"},
+		{ID: "2", Kind: "module", Key: "r:internal/core", Name: "internal/core"},
+		{ID: "3", Kind: "module", Key: "r:test/e2e", Name: "test/e2e"},
+		{ID: "4", Kind: "module", Key: "r:web/src", Name: "web/src"},
+		{ID: "5", Kind: "module", Key: "r:internal/store/storetest", Name: "internal/store/storetest"},
+	})
+	var names []string
+	for _, m := range mods {
+		names = append(names, m.Name)
+	}
+	assert.Equal(t, []string{"internal/core", "web/src"}, names, "containers and test folders are not boxes")
+
+	// Endpoints and libraries are grouped, each counted once.
+	repo := "11111111-1111-1111-1111-111111111111"
+	ep := func(id, name string) archEntity {
+		return archEntity{ID: id, Kind: "endpoint", Key: "r:" + name, Name: name, RepoID: &repo}
+	}
+	dep := func(id, key string) archEntity {
+		return archEntity{ID: id, Kind: "dependency", Key: key, Name: key[4:]}
+	}
+	self := archEntity{ID: "re", Kind: "repo", Key: "r", Name: "r", RepoID: &repo}
+	a := buildArchitecture(archInput{RepoID: repo, FullName: "acme/r", RepoEntity: "re",
+		Endpoints: []archEntity{ep("e1", "GET /api/v1/repos"), ep("e2", "POST /api/v1/repos"), ep("e3", "GET /api/v1/users")},
+		Edges: []archEdge{
+			{Kind: "depends_on", Src: self, Dst: dep("d1", "npm:react"), EdgeRepo: &repo},
+			{Kind: "depends_on", Src: self, Dst: dep("d2", "npm:vite"), EdgeRepo: &repo},
+			{Kind: "depends_on", Src: self, Dst: dep("d3", "go:github.com/go-chi/chi/v5"), EdgeRepo: &repo},
+		}})
+	byID := map[string]ArchNode{}
+	for _, n := range a.Nodes {
+		byID[n.ID] = n
+	}
+	assert.Equal(t, 2, byID["api:/repos"].Count)
+	assert.Equal(t, []string{"GET /api/v1/repos", "POST /api/v1/repos"}, byID["api:/repos"].Items)
+	assert.Equal(t, KindEndpointGroup, byID["api:/users"].Kind)
+	assert.Equal(t, "npm packages", byID["deps:npm"].Name)
+	assert.Equal(t, 2, byID["deps:npm"].Count)
+	assert.Equal(t, "Go modules", byID["deps:go"].Name)
+	assert.Equal(t, LayerDownstream, byID["deps:go"].Layer)
+}
+
+func TestSortDiagrams(t *testing.T) {
+	ds := []DiagramMeta{{Title: "Flow A — Code push"}, {Title: "Flow D — Knowledge sync"}, {Title: "Flow C — Q&A"}, {Title: "Flow B — Signals"},
+		{Title: "DocTheRepo Hub — System Architecture"}, {Title: "Flow 10"}, {Title: "Flow 2"}}
+	sortDiagrams(ds)
+	var got []string
+	for _, d := range ds {
+		got = append(got, d.Title)
+	}
+	assert.Equal(t, []string{"DocTheRepo Hub — System Architecture", "Flow 2", "Flow 10", "Flow A — Code push", "Flow B — Signals", "Flow C — Q&A", "Flow D — Knowledge sync"}, got)
 }

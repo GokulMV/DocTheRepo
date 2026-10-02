@@ -5,7 +5,7 @@ import { api } from '@/api/client';
 import { useInvalidating, useIssues, useMe, type IssueFilters } from '@/api/hooks';
 import { atLeast, KNOWN_REASONS, type Issue, type KnownIssue } from '@/api/types';
 import { IssueStatusBadge, RuleTester, SeverityBadge, Sparkline, reasonLabel } from '@/components/signals';
-import { Button, Card, Dialog, Empty, ErrorNote, Field, Input, PageHeader, Select, Spinner, Table, Td } from '@/components/ui';
+import { Button, Card, Dialog, DialogFooter, Empty, ErrorNote, Field, Input, PageHeader, Select, Spinner, Table, Td } from '@/components/ui';
 import { num, relTime } from '@/lib/format';
 import { SOURCES } from './signalSources';
 
@@ -41,7 +41,10 @@ function MarkKnown({ issues, onDone }: { issues: Issue[]; onDone: () => void }) 
         <p className="text-xs text-slate-500">Covers {fps.length} fingerprint{fps.length === 1 ? '' : 's'}{match.services ? ` in ${match.services[0]}` : ''}.</p>
         <RuleTester match={match} />
         <ErrorNote error={create.error} />
-        <Button type="submit" disabled={create.isPending}>Save rule</Button>
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={() => onDone()}>Cancel</Button>
+          <Button type="submit" disabled={create.isPending}>Save rule</Button>
+        </DialogFooter>
       </form>
     </Dialog>
   );
@@ -93,7 +96,11 @@ export default function Inbox() {
         </div>
         {issues.isLoading && <Spinner />}
         <ErrorNote error={issues.error} />
-        {issues.data?.items.length === 0 && <Empty icon={InboxIcon} title="Nothing here">No issues match. New errors and alerts appear within seconds of arriving.</Empty>}
+        {issues.data?.items.length === 0 && (
+          <Empty icon={InboxIcon} title="Nothing here" action={atLeast(me.data?.role, 'admin') && <Link to="/connectors" className="text-sm font-medium text-brand-600 dark:text-brand-300">Add a signal source (Sentry, Datadog, PagerDuty…) →</Link>}>
+            No issues match. Errors and alerts from your connected tools appear here within seconds, grouped and explained with the code behind them.
+          </Empty>
+        )}
         {!!issues.data?.items.length && (
           <Table head={[canEdit ? '' : null, 'Issue', 'Service', 'Status', 'Events', 'Last 24h', 'Last seen'].filter((h) => h !== null)}>
             {issues.data.items.map((i) => (

@@ -8,6 +8,9 @@ versions follow [Semantic Versioning](https://semver.org/) from the first releas
 The first public version. Everything below is new.
 
 ### Documentation and knowledge
+- Docs are written as soon as a repository is tracked, then on every commit; `.dthignore` (gitignore syntax)
+  leaves files out. Routing a model to docgen documents code synced before one existed; **Generate docs**
+  re-documents a repository on request.
 - Living docs on every push: syntax-tree triage, surgical regeneration, three landing modes (direct,
   auto-merged PR, PR with approver), hand-written blocks preserved.
 - Ask: hybrid retrieval over code, docs, Confluence and Jira, with citations, per-user history and access

@@ -84,6 +84,8 @@ type Server struct {
 	ManifestCode string
 	// AppTokenRequests counts installation-token exchanges (GitHub App auth).
 	AppTokenRequests int
+	// InstalledOn lists the accounts GET /app/installations reports ("acme" is installation 4242).
+	InstalledOn []string
 	// Installations records App installation state by id: "suspended" or "deleted" (absent = active).
 	Installations map[string]string
 	// deliveries feeds the webhook worker (in order); deliveryLog records outcomes.
@@ -295,6 +297,27 @@ func (s *Server) routes(r chi.Router) {
 			w.WriteHeader(http.StatusNoContent)
 		}
 	}
+	r.Get("/app/installations", func(w http.ResponseWriter, r *http.Request) {
+		tok, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if !ok || strings.Count(tok, ".") != 2 {
+			writeJSON(w, 401, map[string]any{"message": "A JSON web token could not be decoded"})
+			return
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		list := []map[string]any{}
+		for _, acct := range s.InstalledOn {
+			id := "4242"
+			if acct != "acme" {
+				id = fmt.Sprint(5000 + len(list))
+			}
+			if s.Installations[id] == "deleted" {
+				continue
+			}
+			list = append(list, map[string]any{"id": json.Number(id), "account": map[string]any{"login": acct, "type": "Organization"}})
+		}
+		writeJSON(w, 200, list)
+	})
 	r.Put("/app/installations/{id}/suspended", installation("suspended"))
 	r.Delete("/app/installations/{id}/suspended", installation(""))
 	r.Delete("/app/installations/{id}", installation("deleted"))

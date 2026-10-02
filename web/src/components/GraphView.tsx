@@ -20,20 +20,24 @@ export interface GEdge {
 
 export type LayoutName = 'force' | 'concentric' | 'hierarchy' | 'circle' | 'grid';
 
+// Layouts are computed in one go (no animation): an animated layout keeps ticking after the graph is torn
+// down (leaving the page mid-layout), which crashed Cytoscape ("reading 'notify'"). Spacing counts labels,
+// so names do not overlap.
 function layoutOptions(name: LayoutName, n: number, focus?: string): cytoscape.LayoutOptions {
+  const common = { animate: false, fit: true, padding: 40, nodeDimensionsIncludeLabels: true };
   switch (name) {
     case 'concentric':
-      return { name: 'concentric', concentric: (node: cytoscape.NodeSingular) => node.degree(false), levelWidth: () => 2, minNodeSpacing: 24, animate: true, animationDuration: 400 } as cytoscape.LayoutOptions;
+      return { ...common, name: 'concentric', concentric: (node: cytoscape.NodeSingular) => node.degree(false), levelWidth: () => 2, minNodeSpacing: 40, avoidOverlap: true } as cytoscape.LayoutOptions;
     case 'hierarchy':
-      return { name: 'breadthfirst', directed: true, spacingFactor: 1.15, roots: focus ? `#${CSS.escape(focus)}` : undefined, animate: true, animationDuration: 400 } as cytoscape.LayoutOptions;
+      return { ...common, name: 'breadthfirst', directed: true, spacingFactor: 1.3, avoidOverlap: true, roots: focus ? `#${CSS.escape(focus)}` : undefined } as cytoscape.LayoutOptions;
     case 'circle':
-      return { name: 'circle', animate: true, animationDuration: 400 } as cytoscape.LayoutOptions;
+      return { ...common, name: 'circle', avoidOverlap: true, spacingFactor: 1.2 } as cytoscape.LayoutOptions;
     case 'grid':
-      return { name: 'grid', avoidOverlap: true, animate: true, animationDuration: 400 } as cytoscape.LayoutOptions;
+      return { ...common, name: 'grid', avoidOverlap: true, avoidOverlapPadding: 24 } as cytoscape.LayoutOptions;
   }
   return {
-    name: 'cose', animate: n < 250, animationDuration: 600, nodeRepulsion: () => 9000, idealEdgeLength: () => 90, gravity: 0.25,
-    numIter: n > 400 ? 400 : 1000, padding: 30, randomize: true,
+    ...common, name: 'cose', nodeRepulsion: () => 7000, idealEdgeLength: () => 70, nodeOverlap: 30, componentSpacing: 60, gravity: 0.6,
+    numIter: n > 400 ? 400 : 1500, randomize: true,
   } as cytoscape.LayoutOptions;
 }
 
@@ -91,7 +95,7 @@ export function GraphView({ nodes, edges, focus, selected, layout = 'force', que
             shape: 'data(shape)' as never,
             width: 'data(size)',
             height: 'data(size)',
-            'font-size': 10,
+            'font-size': 12,
             'font-weight': 500,
             color: ink,
             'text-valign': 'bottom',
@@ -135,6 +139,13 @@ export function GraphView({ nodes, edges, focus, selected, layout = 'force', que
     // Run the layout ourselves so it can be stopped on unmount.
     const running = c.layout(layoutOptions(layout, nodes.length, focus));
     (c as unknown as { layoutRunning?: { stop: () => void } }).layoutRunning = running;
+    // A small map is fitted, but not shrunk below a readable size.
+    running.one('layoutstop', () => {
+      if (!c.destroyed() && nodes.length <= 60 && c.zoom() < 0.9) {
+        c.zoom(0.9);
+        c.center();
+      }
+    });
     running.run();
     if (focus) c.getElementById(focus).addClass('focus');
     c.on('tap', 'node', (e) => select.current(e.target.id()));

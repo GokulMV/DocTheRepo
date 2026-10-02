@@ -131,7 +131,7 @@ export async function ensureConfigured(api: Api, repos: string[]): Promise<Hub> 
   }
   for (const f of ['docgen', 'qa', 'triage', 'embedding']) {
     const r = await api.put(`/routes/${f}`, { provider_id: prov.id, model: f === 'embedding' ? 'stub-embed' : 'stub' });
-    expect(r.status).toBe(204);
+    expect(r.status).toBe(200);
   }
   const tracked = (await api.get('/repos')).data.items as any[];
   const repoIds: Record<string, string> = {};

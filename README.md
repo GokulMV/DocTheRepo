@@ -79,6 +79,7 @@ More ways to run it, from Docker Compose with `dth up` to Kubernetes (Helm) and 
 | Topic | |
 |---|---|
 | Install & deploy | [docs/install.md](docs/install.md) |
+| How docs are generated, and `.dthignore` | [docs/docs-generation.md](docs/docs-generation.md) |
 | Architecture | [docs/architecture.md](docs/architecture.md) · [diagrams](docs/architecture/) |
 | Connecting GitHub | [docs/github.md](docs/github.md) |
 | Settings file (YAML/JSON, secret references) | [docs/settings-file.md](docs/settings-file.md) |

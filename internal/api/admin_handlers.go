@@ -52,6 +52,10 @@ type AdminDeps struct {
 	// RegisterWebhook points the git host's push webhook for repo at this Hub; it reports "registered", or
 	// "skipped: …" when the connector polls. Best effort: a failure never blocks tracking the repository.
 	RegisterWebhook func(ctx context.Context, connectorID, repo string) (string, error)
+	// GenerateDocs queues documentation of every file in a repository (a full code_push).
+	GenerateDocs func(ctx context.Context, repoID, reason string) (jobID string, err error)
+	// ReposWithoutDocs lists synced repositories that have no docs yet (synced before docgen was routed).
+	ReposWithoutDocs func(ctx context.Context) ([]string, error)
 	// DryRun runs code_push in dry-run mode synchronously.
 	DryRun func(ctx context.Context, job ports.Job) (ports.Outcome, error)
 	// ReloadSpend applies edited ceilings immediately on this replica.
@@ -64,19 +68,24 @@ type AdminDeps struct {
 
 // openSecret replaces a sealed secret with its value, in place; plain values pass unless sealing is required.
 func (h *adminHandlers) openSecret(r *http.Request, v *string, purpose string) error {
+	return openSealed(r.Context(), h.d.SealKeys, h.d.RequireSealed, v, purpose)
+}
+
+// openSealed replaces a sealed value with its plaintext (plain values pass unless requireSealed).
+func openSealed(ctx context.Context, keys *store.SealKeys, requireSealed bool, v *string, purpose string) error {
 	if v == nil || *v == "" {
 		return nil
 	}
 	if !secrets.IsSealed(*v) {
-		if h.d.RequireSealed {
+		if requireSealed {
 			return &ports.ValidationError{Code: "SEAL_REQUIRED", Message: "this Hub accepts secrets only sealed to its key (the UI and dth do this)"}
 		}
 		return nil
 	}
-	if h.d.SealKeys == nil {
+	if keys == nil {
 		return &ports.ValidationError{Code: "SEAL_UNAVAILABLE", Message: "sealing is not configured on this Hub"}
 	}
-	out, err := h.d.SealKeys.Unseal(r.Context(), *v, purpose)
+	out, err := keys.Unseal(ctx, *v, purpose)
 	if err != nil {
 		return &ports.ValidationError{Code: "SEAL_INVALID", Message: "the sealed value could not be opened (reload the page and enter it again)"}
 	}
@@ -101,6 +110,7 @@ func AdminRoutes(d AdminDeps) func(chi.Router) {
 			r.Post("/repos", h.createRepo)
 			r.Patch("/repos/{id}", h.patchRepo)
 			r.Post("/repos/{id}/import", h.importDocs)
+			r.Post("/repos/{id}/generate-docs", h.generateDocs) // paid calls: admins
 			r.Get("/connectors", h.listConnectors)
 			r.Post("/connectors", h.createConnector)
 			r.Patch("/connectors/{id}", h.patchConnector)
@@ -190,6 +200,13 @@ func (h *adminHandlers) createRepo(w http.ResponseWriter, r *http.Request) {
 	}
 	h.audit(r, "repo.create", "repo", id, in)
 	out := map[string]string{"id": id}
+	// Start right away: index the code and write its docs (docs need a docgen route; without one, routing
+	// docgen later catches up). Later commits arrive by webhook or polling.
+	if h.d.GenerateDocs != nil {
+		if job, err := h.d.GenerateDocs(r.Context(), id, "repository added"); err == nil {
+			out["job_id"] = job
+		}
+	}
 	if h.d.RegisterWebhook != nil {
 		status, err := h.d.RegisterWebhook(r.Context(), in.ConnectorID, in.FullName)
 		if err != nil {
@@ -251,6 +268,32 @@ func (h *adminHandlers) dryRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]any{"status": out.Status, "message": out.Message, "result": out.Result})
+}
+
+// generateDocs documents every file in the repository now, e.g. code synced before docgen had a route.
+func (h *adminHandlers) generateDocs(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if h.d.GenerateDocs == nil {
+		WriteErr(w, r, ports.ErrNotFound)
+		return
+	}
+	if _, err := h.d.Repos.Get(r.Context(), id); err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	if h.d.Routes != nil {
+		if _, err := h.d.Routes.Route(r.Context(), llmgateway.FeatureDocGen); errors.Is(err, llmgateway.ErrNoRoute) {
+			fail(w, r, &ports.ValidationError{Code: "NO_DOCGEN_ROUTE", Message: "choose a provider and model for docgen under Providers & routing first"})
+			return
+		}
+	}
+	job, err := h.d.GenerateDocs(r.Context(), id, "requested")
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	h.audit(r, "repo.generate_docs", "repo", id, nil)
+	WriteJSON(w, http.StatusAccepted, map[string]string{"job_id": job})
 }
 
 func (h *adminHandlers) importDocs(w http.ResponseWriter, r *http.Request) {
@@ -829,7 +872,18 @@ func (h *adminHandlers) putRoute(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.audit(r, "route.set", "model_route", feature, in)
-	w.WriteHeader(http.StatusNoContent)
+	// Repositories synced before docgen had a route were indexed without docs: document them now.
+	queued := 0
+	if feature == llmgateway.FeatureDocGen && h.d.ReposWithoutDocs != nil && h.d.GenerateDocs != nil {
+		if ids, err := h.d.ReposWithoutDocs(r.Context()); err == nil {
+			for _, id := range ids {
+				if _, err := h.d.GenerateDocs(r.Context(), id, "docgen route set"); err == nil {
+					queued++
+				}
+			}
+		}
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"feature": feature, "docs_queued": queued})
 }
 
 // --- spend ---

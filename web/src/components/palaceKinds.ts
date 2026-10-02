@@ -25,6 +25,8 @@ export const KINDS: Record<string, KindMeta> = {
   symbol: { label: 'Symbol', plural: 'Symbols', color: '#10b981', shape: 'ellipse', icon: Braces },
   confluence_page: { label: 'Confluence page', plural: 'Confluence pages', color: '#0ea5e9', shape: 'round-rectangle', icon: BookOpen },
   jira_issue: { label: 'Jira issue', plural: 'Jira issues', color: '#2563eb', shape: 'round-rectangle', icon: Ticket },
+  endpoint_group: { label: 'Endpoints', plural: 'Endpoint groups', color: '#f97316', shape: 'round-tag', icon: Globe },
+  dependency_group: { label: 'Libraries', plural: 'Libraries', color: '#a855f7', shape: 'hexagon', icon: Package },
   team: { label: 'Team', plural: 'Teams', color: '#22c55e', shape: 'octagon', icon: Users },
   person: { label: 'Person', plural: 'People', color: '#22c55e', shape: 'ellipse', icon: UserRound },
 };
@@ -34,4 +36,7 @@ const fallback: KindMeta = { label: 'Entity', plural: 'Other', color: '#94a3b8',
 export const kindMeta = (k: string): KindMeta => KINDS[k] ?? { ...fallback, label: k.replace(/_/g, ' '), plural: k.replace(/_/g, ' ') };
 
 /** Kinds shown on the overview by default (high-level architecture, not every symbol). */
-export const OVERVIEW_KINDS = ['repo', 'service', 'queue_topic', 'datastore', 'endpoint', 'confluence_page'];
+export const OVERVIEW_KINDS = ['repo', 'service', 'queue_topic', 'datastore', 'confluence_page'];
+
+/** Endpoints are many: the overview counts them on their repository or service instead of drawing each. */
+export const COUNTED_KINDS = ['endpoint'];

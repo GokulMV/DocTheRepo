@@ -5,7 +5,7 @@ import { api } from '@/api/client';
 import { useInvalidating, useKnownIssues, useMe, useSuggestions } from '@/api/hooks';
 import { atLeast, KNOWN_REASONS, type KnownIssue, type LinkedDoc, type Match, type Suggestion, type TextSuggestion } from '@/api/types';
 import { MatchEditor, RuleTester, reasonLabel } from '@/components/signals';
-import { Badge, Button, Card, Dialog, Empty, ErrorNote, Field, Input, PageHeader, Select, Spinner, Table, Td, Textarea, cx } from '@/components/ui';
+import { Badge, Button, Card, Dialog, DialogFooter, Empty, ErrorNote, Field, Input, PageHeader, Select, Spinner, Table, Td, Textarea, cx } from '@/components/ui';
 import { num, relTime } from '@/lib/format';
 
 const describe = (m: Match) =>
@@ -53,7 +53,10 @@ function RuleDialog({ initial, origin, onDone }: { initial?: Partial<KnownIssue>
         <Field label="Notes"><Textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} /></Field>
         <RuleTester match={match} />
         <ErrorNote error={save.error} />
-        <Button type="submit" disabled={save.isPending}>Save rule</Button>
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={() => onDone()}>Cancel</Button>
+          <Button type="submit" disabled={save.isPending}>Save rule</Button>
+        </DialogFooter>
       </form>
     </Dialog>
   );

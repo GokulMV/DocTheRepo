@@ -34,6 +34,27 @@ and works only once.
 **Changing repositories later:** use the app's **Configure** page on GitHub. The connector picks up the change
 on its own.
 
+## Use an App you already have
+
+GitHub App names are unique across GitHub, and uninstalling an App doesn't delete it. To reuse an App
+(for example one an earlier **Connect with GitHub** created), choose **Connectors → Add git host →
+Already created a DocTheRepo app on GitHub? Use it instead**:
+
+1. Open **GitHub → Settings → Developer settings → GitHub Apps** (for an organization: the org's
+   **Settings → GitHub Apps**) and click **Edit** next to the App.
+2. Copy the **App ID**.
+3. Under **Private keys**, click **Generate a private key** and choose the downloaded `.pem` file in
+   the Hub. GitHub never shows an older key again, so a new one is needed.
+
+The Hub signs in as the App and finds where it is installed. If it isn't installed, the Hub links to its
+install page, and **I've installed it** finishes the connection. If it's installed on several accounts,
+you choose one. These connectors poll, because GitHub keeps sending the App's webhooks to the URL set on
+the App.
+
+To start fresh instead, delete the old App on its settings page (**Advanced → Delete GitHub App**). New
+Apps get a unique name such as `DocTheRepo-acme-3f9a1c`, which you can change on GitHub before creating
+the App.
+
 ## Disable and remove
 
 For a connector created as a GitHub App (one click, or by hand with an App key):

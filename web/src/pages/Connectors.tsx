@@ -1,10 +1,11 @@
 import { ChevronDown, Plug } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api } from '@/api/client';
+import { useQueryClient } from '@tanstack/react-query';
+import { api, ApiError } from '@/api/client';
 import { keys, useConnectors, useInvalidating } from '@/api/hooks';
 import type { Check, Connector, RemoteResult } from '@/api/types';
-import { Badge, Button, Card, Dialog, Empty, ErrorNote, Field, Input, PageHeader, Select, Spinner, Table, Td, Textarea, statusTone } from '@/components/ui';
+import { Badge, Button, Card, Dialog, DialogFooter, Empty, ErrorNote, Field, Input, PageHeader, Select, Spinner, Table, Td, Textarea, statusTone } from '@/components/ui';
 import { relTime } from '@/lib/format';
 import { seal } from '@/lib/seal';
 import { SealedBadge, SealedHint } from '@/components/Sealed';
@@ -54,6 +55,124 @@ function ConnectGitHub() {
           <Field label="Enterprise Server URL (optional)" hint="Empty for github.com."><Input value={base} onChange={(e) => setBase(e.target.value)} placeholder="https://ghe.example.com" /></Field>
         </div>
       )}
+      <ExistingGitHubApp base={base} />
+    </div>
+  );
+}
+
+type ExistingResult = { connector_id: string; app_slug: string; installed: boolean; install_url?: string; account?: string };
+
+/**
+ * ExistingGitHubApp reuses a GitHub App you already have (for example from an earlier "Connect with GitHub"):
+ * its App ID and a new private key are enough; the Hub finds where it is installed.
+ */
+function ExistingGitHubApp({ base }: { base: string }) {
+  const [open, setOpen] = useState(false);
+  const [appId, setAppId] = useState('');
+  const [key, setKey] = useState('');
+  const [keyFile, setKeyFile] = useState('');
+  const [choices, setChoices] = useState<string[]>();
+  const [account, setAccount] = useState('');
+  const [result, setResult] = useState<ExistingResult>();
+  const [err, setErr] = useState<unknown>();
+  const [busy, setBusy] = useState(false);
+  const [, setParams] = useSearchParams();
+  const qc = useQueryClient();
+  const web = (base.trim().replace(/\/+$/, '') || 'https://github.com');
+  const finish = (id: string) => {
+    void qc.invalidateQueries({ queryKey: keys.connectors });
+    setParams({ github: 'connected', connector: id }, { replace: true });
+  };
+  const submit = async () => {
+    setBusy(true);
+    setErr(undefined);
+    try {
+      const r = await api.post<ExistingResult>('/github/connect/existing', {
+        app_id: appId.trim(), private_key: await seal(key, 'connector.credentials'), base_url: base.trim() || undefined, account: account || undefined,
+      });
+      if (r.installed) finish(r.connector_id);
+      else setResult(r);
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'CHOOSE_INSTALLATION') setChoices((e.details?.choices as string[]) ?? []);
+      else setErr(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const recheck = async () => {
+    if (!result) return;
+    setBusy(true);
+    setErr(undefined);
+    try {
+      const r = await api.post<{ installed: boolean; install_url?: string }>(`/github/connect/existing/${result.connector_id}/refresh`, {});
+      if (r.installed) finish(result.connector_id);
+      else setErr(new Error('GitHub does not show the App as installed yet. Finish the install on GitHub, then check again.'));
+    } catch (e) {
+      setErr(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (!open) {
+    return (
+      <button type="button" onClick={() => setOpen(true)} className="mt-1 block text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">
+        Already created a DocTheRepo app on GitHub? <span className="text-brand-600 underline dark:text-brand-300">Use it instead</span>
+      </button>
+    );
+  }
+  if (result) {
+    return (
+      <div className="mt-3 space-y-2 rounded-lg border border-slate-200 bg-white p-3 text-sm dark:border-white/10 dark:bg-slate-900/60">
+        <p className="font-medium">Saved. Now install “{result.app_slug}” on your account</p>
+        <p className="text-xs text-slate-600 dark:text-slate-400">The App exists but isn't installed anywhere, so it can't read any repositories yet. Install it, pick the repositories, then come back here.</p>
+        <div className="flex flex-wrap gap-2">
+          <a href={result.install_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800 dark:bg-white dark:text-slate-900">
+            <GitHubMark className="h-3.5 w-3.5" /> Install on GitHub
+          </a>
+          <Button size="sm" variant="secondary" disabled={busy} onClick={recheck}>{busy ? 'Checking…' : "I've installed it"}</Button>
+        </div>
+        <ErrorNote error={err} />
+      </div>
+    );
+  }
+  return (
+    <div className="mt-3 space-y-3 rounded-lg border border-slate-200 bg-white p-3 text-sm dark:border-white/10 dark:bg-slate-900/60">
+      <p className="font-medium">Use an existing GitHub App</p>
+      <ol className="list-decimal space-y-1 pl-5 text-xs text-slate-600 dark:text-slate-400">
+        <li>Open <a className="text-brand-600 underline dark:text-brand-300" href={`${web}/settings/apps`} target="_blank" rel="noreferrer">GitHub → Settings → Developer settings → GitHub Apps</a> (for an organization: the org's Settings → GitHub Apps) and click <b>Edit</b> next to your app.</li>
+        <li>Copy the <b>App ID</b> number near the top of the page.</li>
+        <li>Scroll to <b>Private keys</b> and click <b>Generate a private key</b>. GitHub downloads a <code>.pem</code> file: choose it below. (GitHub never shows an old key again, so a new one is needed. You can delete the old keys there.)</li>
+      </ol>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Field label="App ID"><Input inputMode="numeric" value={appId} onChange={(e) => setAppId(e.target.value.replace(/\D/g, ''))} placeholder="1234567" /></Field>
+        <Field label="Private key (.pem)" hint={keyFile ? `Loaded ${keyFile}` : 'Sealed in your browser before it is sent.'}>
+          <input
+            type="file"
+            accept=".pem,application/x-pem-file,text/plain"
+            aria-label="Private key file"
+            className="block w-full text-xs file:mr-2 file:rounded-md file:border-0 file:bg-slate-100 file:px-2 file:py-1.5 file:text-xs dark:file:bg-white/10"
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              if (!f) return;
+              setKey(await f.text());
+              setKeyFile(f.name);
+            }}
+          />
+        </Field>
+      </div>
+      {choices && (
+        <Field label="Installed on several accounts: which one?">
+          <Select value={account} onChange={(e) => setAccount(e.target.value)}>
+            <option value="">Choose…</option>
+            {choices.map((c) => <option key={c} value={c}>{c}</option>)}
+          </Select>
+        </Field>
+      )}
+      <ErrorNote error={err} />
+      <div className="flex gap-2">
+        <Button size="sm" disabled={busy || !appId || !key || (!!choices && !account)} onClick={submit}>{busy ? 'Checking with GitHub…' : 'Connect this app'}</Button>
+        <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+      </div>
     </div>
   );
 }
@@ -107,7 +226,7 @@ function PickRepos({ connectorId, onDone }: { connectorId: string; onDone: () =>
             <Button disabled={!sel.length || busy} onClick={track}>{busy ? `Tracking ${done}/${sel.length}…` : `Track ${sel.length || ''} repositor${sel.length === 1 ? 'y' : 'ies'}`}</Button>
             <Button variant="ghost" onClick={onDone}>Later</Button>
           </div>
-          <p className="mt-2 text-xs text-slate-500">Each tracked repository is documented on its next push; a dry run and doc import are on the Repositories page.</p>
+          <p className="mt-2 text-xs text-slate-500">Docs are written as soon as a repository is tracked (it takes a few minutes for a large one), then kept up to date on every commit. To leave files out, add a .dthignore file (same syntax as .gitignore) to the repository.</p>
         </>
       )}
       {items && open.length === 0 && <Button size="sm" variant="secondary" className="mt-2" onClick={onDone}>Done</Button>}
@@ -185,7 +304,10 @@ function AddGit({ onCreated }: { onCreated: (id: string, type: string, secret: s
             </Select>
           </Field>
           <ErrorNote error={create.error} />
-          <Button type="submit" disabled={create.isPending}>Connect</Button>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={create.isPending}>Connect</Button>
+          </DialogFooter>
         </form>
       </Dialog>
     </>
@@ -267,7 +389,10 @@ function AddSignal({ onCreated }: { onCreated: (c: { id: string; type: string; s
             <span>Never send this source’s data to a model<span className="block text-xs text-slate-500">Issues are grouped and shown but not explained, and are left out of rule proposals.</span></span>
           </label>
           <ErrorNote error={create.error} />
-          <Button type="submit" disabled={create.isPending}>Add</Button>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={create.isPending}>Add</Button>
+          </DialogFooter>
         </form>
       </Dialog>
     </>
@@ -313,7 +438,10 @@ function AddKnowledge({ onCreated }: { onCreated: (type: string) => void }) {
             <Input type="password" required value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" />
           </Field>
           <ErrorNote error={create.error} />
-          <Button type="submit" disabled={create.isPending}>Add</Button>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={create.isPending}>Add</Button>
+          </DialogFooter>
         </form>
       </Dialog>
     </>
@@ -376,7 +504,7 @@ export default function Connectors() {
     `Disable ${c.name}?\n\nThe GitHub App installation is suspended on GitHub until you enable it again.`);
   return (
     <>
-      <PageHeader title="Connectors" description="Git hosts, the error, alert, log, and event-platform sources the Inbox reads, and Confluence and Jira for knowledge. Wiz and Splunk arrive next."
+      <PageHeader title="Connectors" description="Where the Hub reads from: your git host (code), error and alert tools for the Inbox (Sentry, Datadog, PagerDuty, Wiz, Splunk…), and Confluence and Jira for knowledge."
         actions={<div className="flex flex-wrap gap-2"><AddKnowledge onCreated={setKnowledge} /><AddSignal onCreated={setSignal} /><AddGit onCreated={(id, type, secret) => setCreated({ id, type, secret })} /></div>} />
       {ghError && (
         <Card title="GitHub was not connected" className="mb-4">

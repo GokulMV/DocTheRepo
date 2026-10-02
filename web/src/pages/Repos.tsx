@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { api } from '@/api/client';
 import { keys, useConnectors, useInvalidating, useMe, useRepos } from '@/api/hooks';
 import { atLeast, type PushMode, type Repo } from '@/api/types';
-import { Badge, Button, Card, Dialog, Empty, ErrorNote, Field, Input, PageHeader, Select, Spinner, Table, Td, Toggle } from '@/components/ui';
+import { Badge, Button, Card, Dialog, DialogFooter, Empty, ErrorNote, Field, Input, PageHeader, Select, Spinner, Table, Td, Toggle } from '@/components/ui';
 import { shortSha } from '@/lib/format';
 
 const MODES: { id: PushMode; label: string }[] = [
@@ -22,7 +22,7 @@ function AddRepo({ onAdded }: { onAdded: (fullName: string, webhook?: string) =>
   return (
     <>
       <Button onClick={() => setOpen(true)}>Track repository</Button>
-      <Dialog open={open} onOpenChange={setOpen} title="Track a repository" description="Docs are generated for pushes to its tracked branch (default branch unless you change it).">
+      <Dialog open={open} onOpenChange={setOpen} title="Track a repository" description="Its docs are written right away, then updated on every commit to the tracked branch (the default branch unless you change it). Files listed in a .dthignore file are left out.">
         <form
           className="space-y-3"
           onSubmit={async (e) => {
@@ -45,7 +45,10 @@ function AddRepo({ onAdded }: { onAdded: (fullName: string, webhook?: string) =>
             <Input required value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="acme/checkout" />
           </Field>
           <ErrorNote error={add.error} />
-          <Button type="submit" disabled={add.isPending || git.length === 0}>Track</Button>
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button type="submit" disabled={add.isPending || git.length === 0}>Track</Button>
+          </DialogFooter>
         </form>
       </Dialog>
     </>
@@ -100,7 +103,10 @@ function EditRepo({ repo, onClose }: { repo: Repo; onClose: () => void }) {
         </Field>
         <Toggle label="Enabled" checked={enabled} onChange={setEnabled} />
         <ErrorNote error={save.error} />
-        <Button type="submit" disabled={save.isPending}>Save</Button>
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={() => onClose()}>Cancel</Button>
+          <Button type="submit" disabled={save.isPending}>Save</Button>
+        </DialogFooter>
       </form>
     </Dialog>
   );
@@ -141,18 +147,33 @@ export default function Repos() {
   const [editing, setEditing] = useState<Repo>();
   const [dry, setDry] = useState<Repo>();
   const [added, setAdded] = useState<{ name: string; webhook?: string }>();
-  const imp = useInvalidating((id: string) => api.post(`/repos/${id}/import`, {}));
+  const [notice, setNotice] = useState<string>();
+  const imp = useInvalidating(async (r: Repo) => {
+    await api.post(`/repos/${r.id}/import`, {});
+    setNotice(`Importing the existing Markdown docs of ${r.full_name}. They appear under Docs in a minute; progress is under Activity.`);
+  });
+  const gen = useInvalidating(async (r: Repo) => {
+    await api.post(`/repos/${r.id}/generate-docs`, {});
+    setNotice(`Writing docs for all of ${r.full_name}. Files appear under Docs as they finish; progress is under Activity.`);
+  });
   const admin = atLeast(me.data?.role, 'admin');
   return (
     <>
       <PageHeader title="Repositories" description="Repositories whose pushes keep docs and the index up to date." actions={admin && <AddRepo onAdded={(name, webhook) => setAdded({ name, webhook })} />} />
       {added && (
-        <p role="status" className="mb-4 text-sm text-slate-600">
-          Tracking {added.name}.{added.webhook && <> Webhook: {added.webhook}.</>}
-        </p>
+        <div role="status" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+          Tracking {added.name}. Its docs are being written now and appear under Docs as files finish; after that they update on every commit.
+          {added.webhook && <span className="block text-xs opacity-80">Webhook: {added.webhook}</span>}
+        </div>
       )}
       {repos.isLoading && <Spinner />}
-      <ErrorNote error={repos.error ?? imp.error} />
+      {notice && (
+        <div role="status" className="mb-4 flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
+          <span className="flex-1">{notice}</span>
+          <button type="button" className="text-xs underline" onClick={() => setNotice(undefined)}>Dismiss</button>
+        </div>
+      )}
+      <ErrorNote error={repos.error ?? imp.error ?? gen.error} />
       {repos.data?.length === 0 && <Empty icon={FolderGit2} title="No repositories tracked">{admin ? 'Track one to start generating docs.' : 'Ask an admin to track repositories.'}</Empty>}
       {!!repos.data?.length && (
         <Card>
@@ -167,13 +188,14 @@ export default function Repos() {
                 <Td>{r.tracked_branch || r.default_branch}</Td>
                 <Td className="font-mono text-xs">{r.docs_path}</Td>
                 <Td>{r.push.mode.replaceAll('_', ' ')}</Td>
-                <Td className="font-mono text-xs">{shortSha(r.last_processed_sha)}</Td>
+                <Td className="font-mono text-xs">{r.last_processed_sha ? shortSha(r.last_processed_sha) : <span className="font-sans text-slate-400">not yet</span>}</Td>
                 <Td>{atLeast(me.data?.role, 'editor') && <Button size="sm" variant="secondary" onClick={() => setDry(r)}>Dry run</Button>}</Td>
                 <Td>
                   {admin && (
                     <div className="flex gap-1">
+                      <Button size="sm" onClick={() => gen.mutate(r)} disabled={gen.isPending} title="Document every file in the repository now">Generate docs</Button>
                       <Button size="sm" variant="secondary" onClick={() => setEditing(r)}>Settings</Button>
-                      <Button size="sm" variant="ghost" onClick={() => imp.mutate(r.id)} disabled={imp.isPending}>Import docs</Button>
+                      <Button size="sm" variant="ghost" onClick={() => imp.mutate(r)} disabled={imp.isPending} title="Bring in Markdown docs that already exist in the repository">Import docs</Button>
                     </div>
                   )}
                 </Td>

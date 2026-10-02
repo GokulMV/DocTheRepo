@@ -21,6 +21,7 @@ import (
 
 	"github.com/GokulMV/DocTheRepo/internal/auth"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
+	"github.com/GokulMV/DocTheRepo/internal/secrets"
 	"github.com/GokulMV/DocTheRepo/internal/store"
 )
 
@@ -36,6 +37,9 @@ type GitHubConnectDeps struct {
 	// InvalidateHost drops a cached adapter after the installation id arrives.
 	InvalidateHost func(id string)
 	HTTP           *http.Client
+	// SealKeys opens the sealed private key of an existing App; RequireSealed refuses a plain one.
+	SealKeys      *store.SealKeys
+	RequireSealed bool
 }
 
 var ghStateAAD = []byte("dth/github-connect/state")
@@ -173,6 +177,142 @@ func GitHubConnectRoutes(d GitHubConnectDeps) func(chi.Router) {
 				h.Set("Content-Security-Policy", "default-src 'none'; script-src 'nonce-"+n+"'; style-src 'unsafe-inline'; form-action "+u.Scheme+"://"+u.Host+"; base-uri 'none'; frame-ancestors 'none'")
 				w.WriteHeader(http.StatusOK)
 				_ = connectPage.Execute(w, map[string]string{"Action": action, "Manifest": manifest, "Nonce": n})
+			})
+
+			// existing connects a GitHub App the user already has, from its App ID and a private key.
+			r.Post("/github/connect/existing", func(w http.ResponseWriter, r *http.Request) {
+				var in struct {
+					AppID         string `json:"app_id"`
+					PrivateKey    string `json:"private_key"` // sealed (connector.credentials)
+					BaseURL       string `json:"base_url"`
+					Name          string `json:"name"`
+					Account       string `json:"account"` // which installation, when the App has several
+					WebhookSecret string `json:"webhook_secret"`
+				}
+				if err := decodeJSON(w, r, &in); err != nil {
+					WriteErr(w, r, err)
+					return
+				}
+				if !validAppID(in.AppID) {
+					WriteErr(w, r, errBadParam("app_id is the number shown as \"App ID\" on the App's settings page"))
+					return
+				}
+				if err := openSealed(r.Context(), d.SealKeys, d.RequireSealed, &in.PrivateKey, secrets.PurposeConnectorCreds); err != nil {
+					WriteErr(w, r, err)
+					return
+				}
+				if err := openSealed(r.Context(), d.SealKeys, d.RequireSealed, &in.WebhookSecret, secrets.PurposeConnectorWebhook); err != nil {
+					WriteErr(w, r, err)
+					return
+				}
+				if strings.TrimSpace(in.PrivateKey) == "" {
+					WriteErr(w, r, errBadParam("private_key is required: generate one on the App's settings page"))
+					return
+				}
+				web, apiBase, err := githubURLs(in.BaseURL)
+				if err != nil {
+					WriteErr(w, r, errBadParam(err.Error()))
+					return
+				}
+				appID := strings.TrimSpace(in.AppID)
+				app, insts, err := inspectApp(r.Context(), d.HTTP, apiBase, appID, in.PrivateKey)
+				if err != nil {
+					WriteErr(w, r, err)
+					return
+				}
+				inst, choices := pickInstallation(insts, in.Account)
+				if inst == nil && len(choices) > 1 {
+					WriteError(w, r, http.StatusConflict, "CHOOSE_INSTALLATION", "This App is installed on several accounts; choose one.",
+						map[string]any{"choices": choices})
+					return
+				}
+				cfg := map[string]string{"app_id": appID, "app_slug": app.Slug, "owner": app.Owner.Login}
+				if apiBase != "https://api.github.com/" {
+					cfg["base_url"] = apiBase
+				}
+				if inst != nil {
+					cfg["installation_id"] = fmt.Sprint(inst.ID)
+				}
+				mode := "poll" // GitHub keeps sending events to wherever the App's webhook points; poll unless told otherwise
+				if in.WebhookSecret != "" {
+					mode = "both"
+				}
+				name := strings.TrimSpace(in.Name)
+				if name == "" {
+					name = "GitHub (" + app.Owner.Login + ")"
+				}
+				id, err := d.Connectors.Create(r.Context(), store.NewConnector{Type: "github", Name: name, Mode: mode, Config: cfg,
+					Credentials: in.PrivateKey, WebhookSecret: in.WebhookSecret})
+				if err != nil {
+					WriteError(w, r, http.StatusConflict, "CONFLICT", fmt.Sprintf("could not save the connector (is the name %q taken?)", name), nil)
+					return
+				}
+				if d.SealKeys != nil {
+					_ = d.SealKeys.SetConnectorCredsHint(r.Context(), id, in.PrivateKey)
+				}
+				_ = d.Auth.Audit(r.Context(), auth.FromContext(r.Context()), "github.connect.existing", "connector", id,
+					map[string]any{"app_id": appID, "slug": app.Slug, "owner": app.Owner.Login, "installed": inst != nil}, clientIP(r))
+				out := map[string]any{"connector_id": id, "app_slug": app.Slug, "app_name": app.Name, "owner": app.Owner.Login, "installed": inst != nil}
+				if inst == nil {
+					out["install_url"] = installURL(web, app.Slug)
+				} else {
+					out["account"] = inst.Account.Login
+				}
+				WriteJSON(w, http.StatusCreated, out)
+			})
+
+			// refresh looks again for the App's installation (after the user installed it on GitHub).
+			r.Post("/github/connect/existing/{id}/refresh", func(w http.ResponseWriter, r *http.Request) {
+				id := chi.URLParam(r, "id")
+				cc, err := d.Connectors.GetAny(r.Context(), id)
+				if err != nil {
+					WriteErr(w, r, err)
+					return
+				}
+				if cc.Type != "github" || cc.Config["app_id"] == "" {
+					WriteErr(w, r, errBadParam("this connector is not a GitHub App"))
+					return
+				}
+				apiBase := cc.Config["base_url"]
+				if apiBase == "" {
+					apiBase = "https://api.github.com/"
+				}
+				web := strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(apiBase, "/"), "/api/v3"), "/")
+				if apiBase == "https://api.github.com/" {
+					web = "https://github.com"
+				}
+				var in struct {
+					Account string `json:"account"`
+				}
+				_ = json.NewDecoder(io.LimitReader(r.Body, 4096)).Decode(&in)
+				app, insts, err := inspectApp(r.Context(), d.HTTP, apiBase, cc.Config["app_id"], cc.Credentials)
+				if err != nil {
+					WriteErr(w, r, err)
+					return
+				}
+				inst, choices := pickInstallation(insts, in.Account)
+				if inst == nil {
+					if len(choices) > 1 {
+						WriteError(w, r, http.StatusConflict, "CHOOSE_INSTALLATION", "This App is installed on several accounts; choose one.",
+							map[string]any{"choices": choices})
+						return
+					}
+					WriteJSON(w, http.StatusOK, map[string]any{"installed": false, "install_url": installURL(web, app.Slug)})
+					return
+				}
+				cfg := map[string]string{}
+				for k, v := range cc.Config {
+					cfg[k] = v
+				}
+				cfg["installation_id"] = fmt.Sprint(inst.ID)
+				if err := d.Connectors.Update(r.Context(), id, store.ConnectorPatch{Config: &cfg}); err != nil {
+					WriteErr(w, r, err)
+					return
+				}
+				if d.InvalidateHost != nil {
+					d.InvalidateHost(id)
+				}
+				WriteJSON(w, http.StatusOK, map[string]any{"installed": true, "account": inst.Account.Login})
 			})
 
 			// GitHub sends the browser here after "Create GitHub App" with a one-time code.
@@ -313,14 +453,23 @@ func appName(public, org string) string {
 			who = strings.Split(u.Hostname(), ".")[0]
 		}
 	}
-	b := make([]byte, 2)
+	// GitHub App names are unique across all of GitHub (an uninstalled App keeps its name until deleted),
+	// so every connect gets a random suffix. Hyphens, not spaces: GitHub keeps only the part of a manifest
+	// name before the first space, which made every connect ask for the same, taken, "DocTheRepo".
+	who = strings.Trim(nonSlug.ReplaceAllString(who, "-"), "-")
+	b := make([]byte, 3)
 	_, _ = rand.Read(b)
-	n := "DocTheRepo " + who
-	if len(n) > 29 {
-		n = n[:29]
+	n := "DocTheRepo"
+	if who != "" {
+		n += "-" + who
 	}
-	return strings.TrimSpace(n) + " " + hex.EncodeToString(b)
+	if len(n) > 27 { // GitHub's limit is 34; leave room for "-" and six hex digits
+		n = strings.TrimRight(n[:27], "-")
+	}
+	return n + "-" + hex.EncodeToString(b)
 }
+
+var nonSlug = regexp.MustCompile(`[^A-Za-z0-9-]+`)
 
 type ghApp struct {
 	ID            int64  `json:"id"`

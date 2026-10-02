@@ -11,6 +11,9 @@ export interface ArchNode {
   entity_id?: string;
   repo_id?: string;
   degree: number;
+  /** Group boxes ("/connectors", "npm packages"): how many they stand for, and the first few. */
+  count?: number;
+  items?: string[];
 }
 
 export interface ArchLink {
@@ -57,6 +60,13 @@ interface Placed extends ArchNode {
 const truncate = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 
 /** ArchitectureDiagram lays the components out in layers, left to right, with arrows between them. */
+/** nodeSubtitle is the second line of a box: what it is, and how much it stands for. */
+export function nodeSubtitle(n: ArchNode, label: string): string {
+  if (n.kind === 'endpoint_group') return `${n.count ?? 0} endpoint${n.count === 1 ? '' : 's'}`;
+  if (n.kind === 'dependency_group') return `${n.count ?? 0} librar${n.count === 1 ? 'y' : 'ies'}`;
+  return label;
+}
+
 export function ArchitectureDiagram({ nodes, links, selected, onSelect, hidden = {} }: {
   nodes: ArchNode[];
   links: ArchLink[];
@@ -214,7 +224,7 @@ export function ArchitectureDiagram({ nodes, links, selected, onSelect, hidden =
               <rect x={12} y={12} width={28} height={28} rx={7} fill={m.color} opacity={0.14} />
               <Icon x={18} y={18} width={16} height={16} color={m.color} strokeWidth={2} />
               <text x={50} y={23} className="fill-slate-800 text-[12.5px] font-medium dark:fill-slate-100">{truncate(n.name, 21)}</text>
-              <text x={50} y={39} className="fill-slate-500 text-[10.5px] dark:fill-slate-400">{m.label}{n.degree > 0 ? ` · ${n.degree} links` : ''}</text>
+              <text x={50} y={39} className="fill-slate-500 text-[10.5px] dark:fill-slate-400">{nodeSubtitle(n, m.label)}</text>
             </g>
           );
         })}

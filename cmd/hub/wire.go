@@ -346,7 +346,33 @@ func (a *app) v1Routes() []func(chi.Router) {
 			return codehost.Build(cc)
 		}, DryRun: a.pipe.CodePush,
 		RegisterWebhook: a.registerWebhook,
-		SealKeys:        a.sealKeys, RequireSealed: a.cfg.Settings.RequireSealed,
+		GenerateDocs: func(ctx context.Context, repoID, reason string) (string, error) {
+			job, _, err := a.q.Enqueue(ctx, ports.NewJob{Type: ports.JobCodePush, RepoID: repoID, SerialKey: "repo:" + repoID,
+				DedupeKey: "docs-all:" + repoID, Payload: pipeline.CodePushPayload{RepoID: repoID, Full: true, Reason: reason}})
+			return job.ID, err
+		},
+		ReposWithoutDocs: func(ctx context.Context) ([]string, error) {
+			repos, err := a.repos.ListEnabled(ctx)
+			if err != nil {
+				return nil, err
+			}
+			roots, err := a.browse.Roots(ctx, rag.Scope{All: true})
+			if err != nil {
+				return nil, err
+			}
+			has := map[string]bool{}
+			for _, r := range roots {
+				has[r.RepoID] = true
+			}
+			var out []string
+			for _, r := range repos {
+				if r.LastProcessedSHA != "" && !has[r.ID] {
+					out = append(out, r.ID)
+				}
+			}
+			return out, nil
+		},
+		SealKeys: a.sealKeys, RequireSealed: a.cfg.Settings.RequireSealed,
 		ReloadSpend: a.reloadGuard,
 		TestProvider: func(ctx context.Context, id, model string) (time.Duration, error) {
 			cfg, _, err := a.provSrc.ProviderConfig(ctx, id)
@@ -366,7 +392,7 @@ func (a *app) v1Routes() []func(chi.Router) {
 		api.SealRoutes(a.auth, a.sealKeys),
 		api.ArchitectureRoutes(api.ArchitectureDeps{Auth: a.auth, Store: a.arch, Scan: a.archSync.Scan}),
 		api.GitHubConnectRoutes(api.GitHubConnectDeps{Auth: a.auth, Connectors: a.conns, Seal: a.box.Seal, Open: a.box.Open,
-			PublicURL: a.cfg.Server.PublicURL, InvalidateHost: a.hosts.Invalidate}),
+			PublicURL: a.cfg.Server.PublicURL, InvalidateHost: a.hosts.Invalidate, SealKeys: a.sealKeys, RequireSealed: a.cfg.Settings.RequireSealed}),
 	}
 }
 

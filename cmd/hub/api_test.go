@@ -140,7 +140,7 @@ func TestAPIEndToEnd(t *testing.T) {
 	assert.Nil(t, p0["api_key"])
 	for _, f := range []string{"qa", "embedding"} {
 		code, out = c.call("PUT", "/routes/"+f, map[string]any{"provider_id": provID, "model": llmmock.OK, "effort": "medium"})
-		require.Equal(t, http.StatusNoContent, code, out)
+		require.Equal(t, http.StatusOK, code, out)
 	}
 	code, _ = c.call("PUT", "/routes/qa", map[string]any{"provider_id": provID, "model": "m", "effort": "extreme"})
 	assert.Equal(t, http.StatusBadRequest, code)
@@ -161,7 +161,8 @@ func TestAPIEndToEnd(t *testing.T) {
 	code, out = c.call("POST", "/connectors/"+connID+"/sync", nil)
 	require.Equal(t, http.StatusAccepted, code, out)
 	require.Len(t, out["job_ids"].([]any), 1)
-	pushJob := runJob(t, a, q, ports.JobCodePush)
+	pushJob := runJob(t, a, q, ports.JobCodePush) // the first sync, queued when the repository was tracked
+	runJob(t, a, q, ports.JobCodePush)            // the requested sync: already current
 
 	// Browse: Tree, node, Palace, Library.
 	code, out = c.call("GET", "/docs/tree", nil)
@@ -215,7 +216,7 @@ func TestAPIEndToEnd(t *testing.T) {
 	// Jobs, activity, analytics.
 	code, out = c.call("GET", "/jobs?type=code_push", nil)
 	require.Equal(t, http.StatusOK, code)
-	assert.Len(t, out["items"].([]any), 1)
+	assert.Len(t, out["items"].([]any), 2)
 	code, out = c.call("GET", "/jobs/"+pushJob, nil)
 	require.Equal(t, http.StatusOK, code)
 	code, out = c.call("POST", "/jobs/"+pushJob+"/retry", nil)

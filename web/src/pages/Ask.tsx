@@ -1,14 +1,14 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { API, ApiError, api, getCSRF, toApiError } from '@/api/client';
 import { keys, useRepos, useThread, useThreads } from '@/api/hooks';
-import type { AskResponse, Citation, Message, Thread } from '@/api/types';
-import { Bug, Check, ChevronDown, FolderGit2, GitBranch, History, MessageSquarePlus, Network, PanelLeftClose, PanelLeftOpen, Search, Send, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
+import type { AskResponse, Citation, Message } from '@/api/types';
+import { Bug, Check, ChevronDown, FolderGit2, GitBranch, History, Network, Send, ShieldCheck, Sparkles } from 'lucide-react';
 import { Markdown } from '@/components/Markdown';
 import { Badge, Button, ErrorNote, cx } from '@/components/ui';
 import { readSSE } from '@/lib/sse';
-import { relTime, usd } from '@/lib/format';
+import { usd } from '@/lib/format';
 
 const INCLUDES = [
   { id: 'code', label: 'Code' },
@@ -66,119 +66,6 @@ const EXAMPLES = [
   { q: 'What is the runbook for a database failover?', icon: ShieldCheck },
   { q: 'Why is the refund job throwing NullPointerException?', icon: Bug },
 ];
-
-/** groupThreads buckets history by recency. */
-function groupThreads(items: Thread[]): [string, Thread[]][] {
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-  const day = 86_400_000;
-  const buckets: [string, (t: number) => boolean][] = [
-    ['Today', (t) => t >= startOfDay.getTime()],
-    ['Yesterday', (t) => t >= startOfDay.getTime() - day],
-    ['Previous 7 days', (t) => t >= startOfDay.getTime() - 7 * day],
-    ['Earlier', () => true],
-  ];
-  const out = new Map<string, Thread[]>();
-  for (const th of items) {
-    const t = new Date(th.updated_at).getTime();
-    const label = buckets.find(([, f]) => f(t))![0];
-    out.set(label, [...(out.get(label) ?? []), th]);
-  }
-  return [...out.entries()];
-}
-
-function HistoryPanel({ threads, current, onNew, onHide }: { threads: Thread[]; current?: string; onNew: () => void; onHide: () => void }) {
-  const [q, setQ] = useState('');
-  const nav = useNavigate();
-  const qc = useQueryClient();
-  const items = threads.filter((t) => !q || t.title.toLowerCase().includes(q.toLowerCase()));
-  const remove = async (id: string) => {
-    await api.del(`/threads/${id}`).catch(() => undefined);
-    await qc.invalidateQueries({ queryKey: keys.threads });
-    if (id === current) nav('/ask');
-  };
-  return (
-    <aside className="flex min-h-0 flex-1 flex-col border-r border-slate-200/80 pr-3 dark:border-white/[0.06]" aria-label="History">
-      <div className="flex items-center gap-1 pb-2 pt-1">
-        <button type="button" onClick={onNew} title="Start a new question"
-          className="flex flex-1 items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/[0.05]">
-          <MessageSquarePlus className="h-4 w-4 text-brand-600 dark:text-brand-400" aria-hidden />New question
-        </button>
-        <button type="button" onClick={onHide} aria-label="Hide history" title="Hide history"
-          className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/[0.05] dark:hover:text-slate-200">
-          <PanelLeftClose className="h-4 w-4" aria-hidden />
-        </button>
-      </div>
-      {threads.length > 5 && (
-        <div className="relative pb-1">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 -mt-0.5 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" aria-hidden />
-          <input
-            aria-label="Search history"
-            placeholder="Search questions…"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-2 text-sm outline-none focus:border-brand-400 dark:border-white/10 dark:bg-slate-950/60"
-          />
-        </div>
-      )}
-      <div className="min-h-0 flex-1 overflow-y-auto py-1">
-        {items.length === 0 ? (
-          <p className="px-3 py-6 text-center text-sm text-slate-500">No question matches “{q}”.</p>
-        ) : (
-          groupThreads(items).map(([label, ts]) => (
-            <div key={label} className="mb-2">
-              <p className="px-2 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
-              <ul className="space-y-0.5">
-                {ts.map((t) => (
-                  <li key={t.id} className="group relative">
-                    <Link
-                      to={`/ask/${t.id}`}
-                      title={t.title}
-                      className={cx(
-                        'block rounded-lg py-1.5 pl-2.5 pr-8 text-sm transition-colors',
-                        t.id === current ? 'bg-brand-50 font-medium text-brand-800 dark:bg-brand-500/15 dark:text-white' : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/[0.05]',
-                      )}
-                    >
-                      <span className="block truncate">{t.title}</span>
-                      <span className="block text-[11px] font-normal text-slate-400">{relTime(t.updated_at)}</span>
-                    </Link>
-                    <button
-                      type="button"
-                      aria-label={`Delete “${t.title}”`}
-                      onClick={() => remove(t.id)}
-                      className="absolute right-1.5 top-1/2 hidden -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-red-600 group-hover:block dark:hover:bg-white/10"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" aria-hidden />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))
-        )}
-      </div>
-    </aside>
-  );
-}
-
-function useHistoryHidden(): [boolean, (v: boolean) => void] {
-  const [hidden, setHidden] = useState(() => {
-    try {
-      return localStorage.getItem('dth.ask-history-hidden') === '1';
-    } catch {
-      return false;
-    }
-  });
-  const set = (v: boolean) => {
-    setHidden(v);
-    try {
-      localStorage.setItem('dth.ask-history-hidden', v ? '1' : '0');
-    } catch {
-      /* private mode: remember for this visit only */
-    }
-  };
-  return [hidden, set];
-}
 
 /** ScopePicker chooses repositories (none = all you can read) and sources, in a small popover. */
 function ScopePicker({ repos, repoIds, setRepoIds, include, setInclude }: {
@@ -243,14 +130,15 @@ export default function Ask() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const threads = useThreads();
-  const history = threads.data?.items ?? [];
-  const [historyHidden, setHistoryHidden] = useHistoryHidden();
-  // The history rail appears once there is something in it, and can be tucked away.
-  const showHistory = history.length > 0 && !historyHidden;
   const thread = useThread(threadId);
   const repos = useRepos();
   const [params] = useSearchParams();
   const [question, setQuestion] = useState(() => params.get('q') ?? '');
+  // Search (Ctrl/⌘+K) can hand over a question while Ask is already open.
+  const handedOver = params.get('q');
+  useEffect(() => {
+    if (handedOver) setQuestion(handedOver);
+  }, [handedOver]);
   const [repoIds, setRepoIds] = useState<string[]>([]);
   const [include, setInclude] = useState<string[]>([]);
   const [streaming, setStreaming] = useState('');
@@ -334,27 +222,8 @@ export default function Ask() {
     </form>
   );
   return (
-    <div className={cx('-my-4 grid h-[calc(100vh-4rem)] gap-5', showHistory && 'lg:grid-cols-[16rem_minmax(0,1fr)]')}>
-      {showHistory && (
-        <div className="hidden min-h-0 py-3 lg:flex lg:flex-col">
-          <HistoryPanel threads={history} current={threadId} onNew={() => nav('/ask')} onHide={() => setHistoryHidden(true)} />
-        </div>
-      )}
+    <div className="-my-4 grid h-[calc(100vh-4rem)]">
       <div className="relative flex min-h-0 min-w-0 flex-col">
-        {history.length > 0 && (historyHidden || !empty) && (
-          <div className={cx('absolute left-0 top-3 z-10 flex gap-1', !historyHidden && 'lg:hidden')}>
-            <button type="button" onClick={() => setHistoryHidden(false)} aria-label={`Show history (${history.length})`} title="Show history"
-              className="hidden items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-800 lg:flex dark:hover:bg-white/[0.05] dark:hover:text-slate-200">
-              <PanelLeftOpen className="h-4 w-4" aria-hidden />History
-            </button>
-            {!empty && (
-              <button type="button" onClick={() => nav('/ask')} title="Start a new question"
-                className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-white/[0.05] dark:hover:text-slate-200">
-                <MessageSquarePlus className="h-4 w-4" aria-hidden />New
-              </button>
-            )}
-          </div>
-        )}
         <div className="min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto max-w-3xl space-y-4 px-1 pb-4">
             {empty && (
