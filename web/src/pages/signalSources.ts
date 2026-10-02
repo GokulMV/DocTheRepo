@@ -4,7 +4,7 @@
 export interface SourceSpec {
   type: string;
   label: string;
-  group: 'Errors & alerts' | 'Cloud logs & alarms' | 'Event platforms';
+  group: 'Errors & alerts' | 'Security & log platforms' | 'Cloud logs & alarms' | 'Event platforms';
   modes: ('webhook' | 'poll' | 'both')[];
   config?: { key: string; hint: string; required?: boolean }[];
   credentials?: string; // what goes in the encrypted credentials field
@@ -28,6 +28,17 @@ export const SOURCES: SourceSpec[] = [
     config: [{ key: 'field.title', hint: 'Dotted path of the title, e.g. alert.name (default: title, name, summary…)' }, { key: 'field.severity', hint: 'Default: severity, level, priority' },
       { key: 'field.external_id', hint: 'Default: id, event_id, uuid' }, { key: 'field.service', hint: 'Default: service, app, component' }, { key: 'source_name', hint: 'Name shown as the source' }],
     help: 'Any tool that can POST JSON. Common field names are found automatically; map others with dotted paths.' },
+  { type: 'wiz', label: 'Wiz', group: 'Security & log platforms', modes: ['webhook', 'poll', 'both'], secret: true,
+    config: [{ key: 'api_url', hint: 'Polling: tenant GraphQL endpoint, e.g. https://api.us17.app.wiz.io/graphql' }, { key: 'auth_url', hint: 'Default https://auth.app.wiz.io/oauth/token' },
+      { key: 'statuses', hint: 'Default OPEN,IN_PROGRESS' }, { key: 'severities', hint: 'e.g. CRITICAL,HIGH (default all)' }, { key: 'service_tag', hint: 'Resource tag holding the service (default service)' }],
+    credentials: 'Polling: {"client_id","client_secret"} of a service account with read:issues',
+    help: 'Security issues as findings (one per control and resource). Webhook: a Wiz webhook integration with the secret as bearer token; or poll the GraphQL API every 5 minutes.' },
+  { type: 'splunk', label: 'Splunk', group: 'Security & log platforms', modes: ['webhook', 'poll', 'both'], secret: true,
+    config: [{ key: 'base_url', hint: 'Polling: REST API, e.g. https://splunk.example.com:8089' }, { key: 'saved_searches', hint: 'Saved searches to run (comma-separated)' },
+      { key: 'queries', hint: 'SPL queries to run (one per line)' }, { key: 'app', hint: 'Namespace (default search)' }, { key: 'lag_seconds', hint: 'Indexing delay to leave out (default 60)' },
+      { key: 'field.service', hint: 'Result field holding the service (default service, service_name, app_name…)' }],
+    credentials: 'Polling: an authentication token, or {"username","password"}',
+    help: 'Webhook alert action: add ?token=<secret> to the URL (Splunk cannot send headers). Polling runs saved searches or SPL over each window; every result row becomes an event.' },
   { type: 'cloudwatch', label: 'AWS CloudWatch', group: 'Cloud logs & alarms', modes: ['webhook', 'poll', 'both'], secret: true,
     config: [{ key: 'region', hint: 'e.g. eu-west-1', required: true }, { key: 'role_arn', hint: 'Read-only role to assume (cross-account)' }, { key: 'external_id', hint: 'External ID for the role' }, { key: 'log_groups', hint: 'Comma-separated log groups to poll' }, { key: 'filter_pattern', hint: 'Default: ?ERROR ?Exception ?Traceback ?FATAL ?panic' }],
     credentials: 'Optional {"access_key_id","secret_access_key"}; empty uses the Hub’s own AWS identity',

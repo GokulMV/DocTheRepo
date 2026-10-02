@@ -1,0 +1,7 @@
+{
+  "description": "an alert that triggers even with no results sends an empty row: not a problem",
+  "headers": {},
+  "config": {},
+  "body": {"result": {}, "sid": "scheduler__admin__search__RMD5ff_at_1759227500_9", "results_link": "", "search_name": "Checkout upstream timeouts", "owner": "admin", "app": "search"},
+  "expect": []
+}

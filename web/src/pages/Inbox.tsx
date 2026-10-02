@@ -6,8 +6,10 @@ import { atLeast, KNOWN_REASONS, type Issue, type KnownIssue } from '@/api/types
 import { IssueStatusBadge, RuleTester, SeverityBadge, Sparkline, reasonLabel } from '@/components/signals';
 import { Button, Card, Dialog, Empty, ErrorNote, Field, Input, PageHeader, Select, Spinner, Table, Td } from '@/components/ui';
 import { num, relTime } from '@/lib/format';
+import { SOURCES } from './signalSources';
 
 const STATUSES = ['', 'new', 'decoded', 'regressed', 'acknowledged', 'resolved', 'suppressed'];
+const KINDS: [string, string][] = [['', 'any kind'], ['error', 'errors'], ['alert', 'alerts'], ['security_finding', 'security findings'], ['log_match', 'log matches'], ['event_bus', 'event bus']];
 
 /** MarkKnown creates one rule covering the selected issues' fingerprints (applies to new events). */
 function MarkKnown({ issues, onDone }: { issues: Issue[]; onDone: () => void }) {
@@ -71,6 +73,13 @@ export default function Inbox() {
             <option value="warning">warning and up</option>
             <option value="error">error and up</option>
             <option value="critical">critical</option>
+          </Select>
+          <Select aria-label="Source" className="w-44" value={f.source ?? ''} onChange={(e) => set({ source: e.target.value })}>
+            <option value="">any source</option>
+            {SOURCES.map((s) => <option key={s.type} value={s.type}>{s.label}</option>)}
+          </Select>
+          <Select aria-label="Kind" className="w-40" value={f.kind ?? ''} onChange={(e) => set({ kind: e.target.value })}>
+            {KINDS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
           </Select>
           <Input aria-label="Service" placeholder="service" className="w-36" value={f.service ?? ''} onChange={(e) => set({ service: e.target.value })} />
           <Input aria-label="Environment" placeholder="environment" className="w-32" value={f.env ?? ''} onChange={(e) => set({ env: e.target.value })} />

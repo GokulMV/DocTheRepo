@@ -141,7 +141,10 @@ export default function IssueDetail() {
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="space-y-6 xl:col-span-2">
           <Card title="Explanation">
-            {i.decode ? <DecodePanel d={i.decode} /> : <p className="text-sm text-slate-500">Not explained yet. New issues are explained automatically when a decode model is configured.</p>}
+            {i.decode ? <DecodePanel d={i.decode} />
+              : i.events.some((e) => e.attrs?.['dth.no_llm'] === 'true')
+                ? <p className="text-sm text-slate-500">Not explained: this source is set to never send its data to a model.</p>
+                : <p className="text-sm text-slate-500">Not explained yet. New issues are explained automatically when a decode model is configured.</p>}
           </Card>
           <Card title={`Recent events (${i.events.length})`}>
             <ul className="divide-y divide-slate-100 text-sm dark:divide-slate-800">{i.events.map((e) => <EventRow key={e.external_id + e.occurred_at} e={e} />)}</ul>

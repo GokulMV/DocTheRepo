@@ -3,6 +3,7 @@ package ingest
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -86,6 +87,19 @@ func (s *SignalIngest) connector(ctx context.Context, id string) (ports.Connecto
 	s.cache[id] = cachedConnector{cc: cc, at: time.Now()}
 	s.cacheMu.Unlock()
 	return cc, nil
+}
+
+// NoLLMAttr marks events from a connector set to never send its data to a model (plan § 12: e.g. keep Wiz
+// findings out of third-party models). Issues carrying it are not decoded or used in rule proposals.
+const NoLLMAttr = "dth.no_llm"
+
+// neverSendToLLM reads the connector's never_send_to_llm setting (cached with the connector).
+func (s *SignalIngest) neverSendToLLM(ctx context.Context, id string) bool {
+	if s.LoadConnector == nil {
+		return false
+	}
+	cc, err := s.connector(ctx, id)
+	return err == nil && strings.EqualFold(strings.TrimSpace(cc.Config["never_send_to_llm"]), "true")
 }
 
 // Webhook verifies, parses, and ingests one push delivery for /hooks/{source}/{connector_id}. It returns
@@ -204,6 +218,7 @@ func (s *SignalIngest) Ingest(ctx context.Context, events []ports.SignalEvent) e
 		now = s.Now
 	}
 	opts := signals.Options{ServiceRules: svc, Now: now}
+	noLLM := map[string]bool{} // per connector, for this batch
 	for i := range events {
 		ev := events[i]
 		if ev.Attrs != nil { // Prepare scrubs attributes in place: never mutate the caller's map
@@ -212,6 +227,19 @@ func (s *SignalIngest) Ingest(ctx context.Context, events []ports.SignalEvent) e
 				attrs[k] = v
 			}
 			ev.Attrs = attrs
+		}
+		if ev.ConnectorID != "" {
+			off, seen := noLLM[ev.ConnectorID]
+			if !seen {
+				off = s.neverSendToLLM(ctx, ev.ConnectorID)
+				noLLM[ev.ConnectorID] = off
+			}
+			if off {
+				if ev.Attrs == nil {
+					ev.Attrs = map[string]string{}
+				}
+				ev.Attrs[NoLLMAttr] = "true"
+			}
 		}
 		if err := signals.Prepare(&ev, opts); err != nil {
 			s.observe(ev.Source, OutcomeInvalid)

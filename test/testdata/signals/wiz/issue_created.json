@@ -1,0 +1,18 @@
+{
+  "description": "a high-severity control issue on an S3 bucket (default Wiz issue webhook template)",
+  "headers": {},
+  "config": {},
+  "body": {
+    "trigger": {"source": "CONTROL", "type": "Created", "ruleId": "wc-id-1077", "ruleName": "Publicly exposed bucket with sensitive data"},
+    "issue": {"id": "f4a1b2c3-0000-4d5e-9f00-112233445566", "status": "OPEN", "severity": "HIGH", "created": "2026-09-29T08:00:00Z",
+      "projects": [{"id": "p1", "name": "payments"}]},
+    "resource": {"id": "res-77", "providerId": "arn:aws:s3:::acme-payments-exports", "name": "acme-payments-exports", "type": "BUCKET",
+      "nativeType": "s3", "cloudPlatform": "AWS", "subscriptionId": "123456789012", "subscriptionName": "prod", "region": "eu-west-1",
+      "tags": {"service": "payments", "team": "core"}},
+    "control": {"id": "wc-id-1077", "name": "Publicly exposed bucket with sensitive data", "description": "The bucket allows public read and contains PII.", "severity": "HIGH"}
+  },
+  "expect": [{"source": "wiz", "kind": "security_finding", "severity": "error", "service": "payments", "environment": "prod",
+    "title": "Publicly exposed bucket with sensitive data on acme-payments-exports", "rule_id": "wc-id-1077",
+    "resource_id": "arn:aws:s3:::acme-payments-exports", "external_id": "f4a1b2c3-0000-4d5e-9f00-112233445566",
+    "attrs": {"cloud": "AWS", "region": "eu-west-1", "wiz.projects": "payments", "resource_type": "s3"}}]
+}

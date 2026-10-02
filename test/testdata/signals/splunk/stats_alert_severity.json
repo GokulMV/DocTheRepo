@@ -1,0 +1,14 @@
+{
+  "description": "a stats alert with a mapped service field and Splunk severity 5 (severe) maps to critical",
+  "headers": {},
+  "config": {"field.service": "app_id", "field.severity": "alert_severity"},
+  "body": {
+    "result": {"app_id": "ledger", "alert_severity": "5", "errors": "4021"},
+    "sid": "rt_scheduler__ops__ops__RMD5aa_at_1759227400_7",
+    "results_link": "https://splunk.acme.com:8000/app/ops/@go?sid=rt_scheduler__ops__ops__RMD5aa_at_1759227400_7",
+    "search_name": "Ledger error spike",
+    "owner": "ops",
+    "app": "ops"
+  },
+  "expect": [{"source": "splunk", "kind": "alert", "severity": "critical", "service": "ledger", "title": "Ledger error spike", "rule_id": "ops/Ledger error spike"}]
+}

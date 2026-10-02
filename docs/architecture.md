@@ -1,4 +1,4 @@
-# DocTheRepo Hub — architecture (as built, through Phase 13)
+# DocTheRepo Hub — architecture (as built, through Phase 14)
 
 This page describes what is implemented today, not the full plan (`docs/plan-doctherepo-hub.md`). Where
 the code differs from the plan, it says so at the end.
@@ -50,7 +50,7 @@ root that builds every adapter and service once.
 | | `core/signals`, `knownissues`, `aggregate`, `busrules`, `decide`, `decode`, `suggest` | Error intelligence: scrub/fingerprint, rule matcher, 1 s aggregation, bus rules, decision gate, decode, rule suggestions |
 | Adapters | `adapters/codehost/{github,gitlab}`, `push/*` | Git reads, docs landing (direct, PR auto-merge, PR with approver) and PR lifecycle |
 | | `adapters/llm/*`, `embed/*` | Model providers (incl. Jev for decisions) |
-| | `adapters/signal/*` | Webhooks (Sentry, PagerDuty, Opsgenie, Datadog, Alertmanager/Grafana, AWS, GCP, generic), Firehose, Pub/Sub, CloudWatch/GCP pollers, Kafka/SQS/SNS/EventBridge/Kinesis/Pub/Sub/RabbitMQ inspectors |
+| | `adapters/signal/*` | Webhooks (Sentry, PagerDuty, Opsgenie, Datadog, Alertmanager/Grafana, AWS, GCP, Wiz, Splunk, generic), Firehose, Pub/Sub, CloudWatch/GCP/Wiz/Splunk pollers, Kafka/SQS/SNS/EventBridge/Kinesis/Pub/Sub/RabbitMQ inspectors |
 | | `adapters/vector/{pgvector,qdrant}`, `secrets/{localfile,awskms,gcpkms}` | Vector index, envelope-encryption keys |
 | | `adapters/knowledge/{confluence,jira}` | Read-only Confluence (CQL) and Jira (JQL) sync, storage-XHTML/ADF → Markdown |
 | App | `ingest`, `api`, `auth`, `queue`, `scheduler`, `store`, `config`, `observability`, `bootstrap`, `webui` | Job/ingress orchestration, HTTP, identity, Postgres queue, leader tasks, sqlc store, config, logs/metrics, `dth up`, embedded UI |
@@ -64,7 +64,7 @@ persist: chunk manifest, embeddings (route `embedding`), Palace graph, docs Tree
 
 **B. Signals → Inbox**
 Webhooks / Firehose / Pub/Sub / pollers / bus inspectors → `SignalIngest.Ingest`: scrub + PII + normalize
-+ fingerprint → known-issue matcher (suppress / label / accept) → 1 s aggregator → `issues`, samples, counts
++ fingerprint (events from a never-send-to-LLM connector are marked `dth.no_llm`) → known-issue matcher (suppress / label / accept) → 1 s aggregator → `issues`, samples, counts
 → new issue enqueues `decode_issue` → decode: reuse if code unchanged → decision gate (Jev or chat JSON;
 skips only confident "known noise") → full decode (12k-token context: samples, frame→code, commits, similar
 issues, runbooks) → indexed as `issue_decode`. Daily auto-suggestions and paste-text proposals create rules
@@ -113,7 +113,7 @@ or GCP KMS key.
 
 ## 7. Not built yet / differs from the plan
 
-- Wiz and Splunk adapters (rest of Milestone 3) and Milestone 4 hardening.
+- Milestone 4 hardening (security gates, SBOM, operations and backup runbooks).
 - Docgen's scoped context does not yet include linked Confluence sections (the decode context does use
   Confluence runbooks).
 - Beyond the plan's § 4 and built: the decision gate (Jev, Phase 11.5) and event-bus inspectors.

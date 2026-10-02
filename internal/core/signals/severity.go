@@ -16,6 +16,10 @@ var sourceSeverity = map[string]map[string]ports.Severity{
 	"sentry":     {"fatal": ports.SeverityCritical, "error": ports.SeverityError, "warning": ports.SeverityWarning, "info": ports.SeverityInfo, "debug": ports.SeverityInfo},
 	"datadog":    {"alert": ports.SeverityError, "warn": ports.SeverityWarning, "no data": ports.SeverityWarning, "ok": ports.SeverityInfo},
 	"cloudwatch": {"alarm": ports.SeverityError, "insufficient_data": ports.SeverityWarning, "ok": ports.SeverityInfo},
+	// Splunk alert severity 1–6 (debug, info, warn, error, severe, fatal) and Enterprise Security urgency.
+	"splunk": {"1": ports.SeverityInfo, "2": ports.SeverityInfo, "3": ports.SeverityWarning, "4": ports.SeverityError,
+		"5": ports.SeverityCritical, "6": ports.SeverityCritical, "severe": ports.SeverityCritical, "low": ports.SeverityInfo,
+		"medium": ports.SeverityWarning, "high": ports.SeverityError, "critical": ports.SeverityCritical},
 }
 
 // generic maps common severity words (syslog, GCP LogSeverity, log levels, P-levels).

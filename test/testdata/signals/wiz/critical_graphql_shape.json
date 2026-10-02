@@ -1,0 +1,13 @@
+{
+  "description": "a critical issue in the GraphQL shape (custom template forwarding the issue object): CRITICAL maps to critical",
+  "headers": {},
+  "config": {"service_tag": "app"},
+  "body": {
+    "id": "9e8d7c6b-1111-4222-8333-444455556666", "status": "IN_PROGRESS", "severity": "CRITICAL", "updatedAt": "2026-09-30T11:00:00Z",
+    "sourceRule": {"__typename": "CloudConfigurationRule", "id": "ccr-ssh-open", "name": "SSH open to the internet"},
+    "entitySnapshot": {"id": "vm-1", "providerId": "/subscriptions/s1/resourceGroups/rg/providers/Microsoft.Compute/virtualMachines/bastion",
+      "name": "bastion", "nativeType": "virtualMachine", "cloudPlatform": "Azure", "subscriptionName": "staging", "tags": {"app": "edge"}}
+  },
+  "expect": [{"source": "wiz", "kind": "security_finding", "severity": "critical", "service": "edge", "environment": "staging",
+    "title": "SSH open to the internet on bastion", "rule_id": "ccr-ssh-open"}]
+}

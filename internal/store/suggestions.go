@@ -77,7 +77,7 @@ func (x *Suggestions) SearchIssues(ctx context.Context, terms, services []string
 		return nil, nil
 	}
 	rows, err := x.s.Pool.Query(ctx, `SELECT `+candidateCols+` FROM issues i LEFT JOIN decodes d ON d.id = i.decode_id
-		WHERE i.last_seen >= $1 AND (
+		WHERE i.last_seen >= $1 AND NOT `+noLLMExists+` AND (
 		  EXISTS (SELECT 1 FROM unnest($2::text[]) t WHERE strpos(lower(i.title), t) > 0 OR strpos(lower(COALESCE(d.summary, '')), t) > 0)
 		  OR lower(i.service) = ANY($3::text[]))
 		ORDER BY (EXISTS (SELECT 1 FROM unnest($2::text[]) t WHERE strpos(lower(i.title), t) > 0)) DESC, i.occurrences DESC
