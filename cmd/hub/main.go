@@ -39,6 +39,10 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "healthcheck" {
 		os.Exit(healthcheck())
 	}
+	// `dth-hub invite <email>`: a break-glass password link (see invite.go).
+	if len(os.Args) > 1 && os.Args[1] == "invite" {
+		os.Exit(inviteMain())
+	}
 	cfgPath := flag.String("config", envOr("DTH_CONFIG", "dth.yaml"), "path to the bootstrap config file (optional)")
 	roles := flag.String("roles", "", "comma-separated roles to run (api,worker,scheduler); overrides config")
 	flag.Parse()

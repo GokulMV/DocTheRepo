@@ -114,5 +114,19 @@ Under construction, milestone by milestone (plan § 14). Implemented so far:
 - **Sealed secrets**: provider keys and connector credentials are sealed in the browser (or `dth apply`) to the
   Hub's hybrid X25519 + ML-KEM-768 key, stored with per-secret AES-256-GCM under a local or KMS key, and are
   write-only (only a hint is ever shown). See [`docs/security.md`](docs/security.md).
-- **Phase 15 (in progress) — hardening**: govulncheck, npm audit and Trivy gates in CI plus a weekly scan;
-  CycloneDX SBOMs (`make sbom`). Operations, backup/restore and upgrade runbooks are next.
+- **Phase 15 — hardening**: govulncheck, npm audit and Trivy gates in CI plus a weekly scan; CycloneDX
+  SBOMs (`make sbom`); an operations guide with monitoring, backup/restore (database + master-key custody),
+  upgrade and troubleshooting runbooks ([`docs/operations.md`](operations.md)); Prometheus alert rules
+  ([`deploy/monitoring/alerts.yaml`](../deploy/monitoring/alerts.yaml)) with model-call, token and latency
+  metrics; per-connector setup ([`docs/connectors.md`](connectors.md)); load results
+  ([`docs/perf-results.md`](perf-results.md)); and a break-glass `dth-hub invite`.
+- **Ready before the first sign-in**: `dth init` asks the prerequisites (target, address, sign-in and SSO,
+  owners, model, git host) and writes a settings file; the Hub applies settings files at every start
+  (`DTH_SETTINGS_FILE`, `DTH_SETTINGS`, Helm `settings.*`, Terraform `hub_settings`), including sign-in,
+  SSO and users. See [`docs/settings-file.md`](settings-file.md).
+- **Users and sign-in**: add, edit, disable and remove users, password links for invites and resets, and
+  single sign-on set up in the UI for Google Workspace, Microsoft Entra ID, Okta, Keycloak or any OIDC
+  provider ([`docs/users-and-sign-in.md`](users-and-sign-in.md)).
+- **Ask that looks further**: when one round of retrieval finds too little, the model searches again,
+  reads files and lists paths before answering, within the reader's access; answers are cached until
+  their sources change, and Claude calls use prompt caching.
