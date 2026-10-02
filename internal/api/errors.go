@@ -44,7 +44,10 @@ func WriteErr(w http.ResponseWriter, r *http.Request, err error) {
 	var v *ports.ValidationError
 	var s *ports.SpendBlockedError
 	var t *ports.TransientError
+	var pe *paramError
 	switch {
+	case errors.As(err, &pe):
+		WriteError(w, r, http.StatusBadRequest, "VALIDATION_FAILED", pe.msg, nil)
 	case errors.As(err, &v):
 		WriteError(w, r, http.StatusBadRequest, v.Code, v.Message, v.Details)
 	case errors.As(err, &s):

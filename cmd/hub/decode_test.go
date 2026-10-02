@@ -51,7 +51,7 @@ func (e *signalEnv) addProvider(t *testing.T, kind, baseURL, key string) any {
 func (e *signalEnv) setRoute(t *testing.T, feature string, providerID any, model string) {
 	t.Helper()
 	code, out := e.c.call("PUT", "/routes/"+feature, map[string]any{"provider_id": providerID, "model": model})
-	require.Equal(t, http.StatusNoContent, code, out)
+	require.Equal(t, http.StatusOK, code, out)
 }
 
 func newSignalEnv(t *testing.T, routes ...string) *signalEnv {
@@ -87,7 +87,7 @@ func newSignalEnv(t *testing.T, routes ...string) *signalEnv {
 			model = "stub-embed"
 		}
 		code, out = c.call("PUT", "/routes/"+f, map[string]any{"provider_id": provID, "model": model})
-		require.Equal(t, http.StatusNoContent, code, out)
+		require.Equal(t, http.StatusOK, code, out)
 	}
 	return &signalEnv{a: a, st: st, q: q, stub: stub, c: c, stubID: provID}
 }

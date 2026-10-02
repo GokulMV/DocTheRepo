@@ -2,7 +2,11 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"io"
 	"log/slog"
 	"net/http"
@@ -70,6 +74,7 @@ func TestGitHubOneClickConnect(t *testing.T) {
 	hook := manifest["hook_attributes"].(map[string]any)["url"].(string)
 	assert.True(t, strings.HasPrefix(hook, "https://hub.acme.example/hooks/github/"))
 	assert.LessOrEqual(t, len(manifest["name"].(string)), 34)
+	assert.Regexp(t, `^DocTheRepo-acme-[0-9a-f]{6}$`, manifest["name"])
 	connID := strings.TrimPrefix(hook, "https://hub.acme.example/hooks/github/")
 
 	// The browser entry: a page that posts the manifest, allowed to post only to that GitHub host.
@@ -152,4 +157,77 @@ func TestGitHubConnectOnLocalhostPolls(t *testing.T) {
 	assert.False(t, api.Reachable("http://localhost:8080"))
 	assert.False(t, api.Reachable("http://192.168.1.4:8080"))
 	assert.True(t, api.Reachable("https://hub.acme.example"))
+}
+
+// TestGitHubUseExistingApp connects an App the user already has: App ID + a freshly generated private key.
+// Not installed yet → the Hub says where to install it; after installing, "check again" finds it.
+func TestGitHubUseExistingApp(t *testing.T) {
+	ctx := context.Background()
+	st := storetest.New(t)
+	kek, err := localfile.Open(filepath.Join(t.TempDir(), "k"))
+	require.NoError(t, err)
+	cfg := config.Default()
+	cfg.Auth.Mode = "local"
+	cfg.Server.PublicURL = "http://localhost:8080"
+	log := slog.New(slog.DiscardHandler)
+	m := observability.NewMetrics()
+	a, err := wire(ctx, cfg, st, secrets.NewBox(kek), queue.New(st, queue.Options{}), log, m)
+	require.NoError(t, err)
+	_, err = a.auth.BootstrapOwner(ctx, "owner@acme.com", "correct horse battery staple")
+	require.NoError(t, err)
+	gh := githubmock.New()
+	defer gh.Close()
+	gh.CreateRepo("acme/shop", "main", map[string]string{"README.md": "# Shop\n"})
+
+	srv := httptest.NewServer(api.NewRouter(api.Deps{Log: log, Metrics: m, Auth: a.auth, V1: a.v1Routes()}))
+	defer srv.Close()
+	jar, _ := cookiejar.New(nil)
+	c := &apiClient{t: t, base: srv.URL + "/api/v1", c: &http.Client{Jar: jar}}
+	code, out := c.call("POST", "/auth/local/login", map[string]string{"email": "owner@acme.com", "password": "correct horse battery staple"})
+	require.Equal(t, http.StatusOK, code, out)
+	c.csrf = out["csrf_token"].(string)
+
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	pemKey := string(pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)}))
+
+	// Bad input is explained, not stored.
+	code, out = c.call("POST", "/github/connect/existing", map[string]any{"app_id": "777", "private_key": "not a key", "base_url": gh.URL})
+	assert.Equal(t, http.StatusBadRequest, code, out)
+	code, _ = c.call("POST", "/github/connect/existing", map[string]any{"app_id": "abc", "private_key": pemKey, "base_url": gh.URL})
+	assert.Equal(t, http.StatusBadRequest, code)
+
+	// Not installed anywhere yet.
+	code, out = c.call("POST", "/github/connect/existing", map[string]any{"app_id": "777", "private_key": pemKey, "base_url": gh.URL})
+	require.Equal(t, http.StatusCreated, code, out)
+	assert.Equal(t, false, out["installed"])
+	assert.Equal(t, gh.URL+"/github-apps/dth-hub/installations/new", out["install_url"])
+	connID := out["connector_id"].(string)
+
+	code, out = c.call("POST", "/github/connect/existing/"+connID+"/refresh", nil)
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Equal(t, false, out["installed"])
+
+	// Installed on acme: found, and the connector works.
+	gh.InstalledOn = []string{"acme"}
+	code, out = c.call("POST", "/github/connect/existing/"+connID+"/refresh", nil)
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Equal(t, map[string]any{"installed": true, "account": "acme"}, out)
+	cc, err := a.conns.Get(ctx, connID)
+	require.NoError(t, err)
+	assert.Equal(t, "4242", cc.Config["installation_id"])
+	assert.Equal(t, "poll", cc.Mode)
+	code, out = c.call("POST", "/connectors/"+connID+"/test", nil)
+	require.Equal(t, http.StatusOK, code)
+	assert.Equal(t, true, out["ok"], out)
+
+	// Several installations: the user chooses.
+	gh.InstalledOn = []string{"acme", "globex"}
+	code, out = c.call("POST", "/github/connect/existing", map[string]any{"app_id": "777", "private_key": pemKey, "base_url": gh.URL, "name": "second"})
+	require.Equal(t, http.StatusConflict, code, out)
+	assert.ElementsMatch(t, []any{"acme", "globex"}, out["error"].(map[string]any)["details"].(map[string]any)["choices"])
+	code, out = c.call("POST", "/github/connect/existing", map[string]any{"app_id": "777", "private_key": pemKey, "base_url": gh.URL, "name": "second", "account": "acme"})
+	require.Equal(t, http.StatusCreated, code, out)
+	assert.Equal(t, true, out["installed"])
+	assert.Equal(t, "acme", out["account"])
 }

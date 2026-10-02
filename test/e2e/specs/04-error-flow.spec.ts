@@ -9,7 +9,7 @@ test('error flow: Sentry webhook → decoded in the Inbox → mark as known → 
   await signIn(page, 'owner@acme.test');
   const api = await Api.for(page);
   const hub = await ensureConfigured(api, []);
-  expect((await api.put('/routes/decode', { provider_id: hub.providerId, model: 'stub' })).status).toBe(204);
+  expect((await api.put('/routes/decode', { provider_id: hub.providerId, model: 'stub' })).status).toBe(200);
 
   // Add Sentry as a signal source in the UI; the Hub shows the webhook URL and the secret once.
   await page.goto('/connectors');

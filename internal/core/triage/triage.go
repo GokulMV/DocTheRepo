@@ -32,7 +32,7 @@ var DefaultIgnore = []string{
 	"**/poetry.lock", "**/Pipfile.lock", "**/composer.lock", "**/Gemfile.lock",
 	"**/vendor/**", "**/node_modules/**", "**/dist/**", "**/build/**", "**/target/**", "**/.venv/**",
 	"**/*.min.js", "**/*.min.css", "**/*.map", "**/*.pb.go", "**/*_pb2.py", "**/*.generated.*",
-	"**/__snapshots__/**", "**/*.snap", ".github/**", "**/.gitignore", "**/.editorconfig",
+	"**/__snapshots__/**", "**/*.snap", ".github/**", "**/.gitignore", "**/.editorconfig", ".dthignore",
 	"**/LICENSE", "**/LICENSE.*", "**/CHANGELOG*",
 }
 
@@ -48,6 +48,8 @@ type Options struct {
 	DocsPath  string
 	Ignore    []string
 	IndexOnly []string
+	// Keep re-includes paths that Ignore matched ("!pattern" lines in .dthignore).
+	Keep []string
 }
 
 // FileChange is one changed file with its old and new content (nil when absent).
@@ -83,6 +85,7 @@ type Triage struct {
 	reg       *grammars.Registry
 	docsPath  string
 	ignore    []*regexp.Regexp
+	keep      []*regexp.Regexp
 	indexOnly []*regexp.Regexp
 }
 
@@ -102,8 +105,13 @@ func New(reg *grammars.Registry, o Options) (*Triage, error) {
 	if t.indexOnly, err = compileGlobs(o.IndexOnly); err != nil {
 		return nil, err
 	}
+	if t.keep, err = compileGlobs(o.Keep); err != nil {
+		return nil, err
+	}
 	return t, nil
 }
+
+func (t *Triage) ignored(p string) bool { return matchAny(t.ignore, p) && !matchAny(t.keep, p) }
 
 // File classifies one change.
 func (t *Triage) File(fc FileChange) Verdict {
@@ -111,7 +119,7 @@ func (t *Triage) File(fc FileChange) Verdict {
 	switch {
 	case t.inDocsPath(fc.Path) && (fc.PreviousPath == "" || t.inDocsPath(fc.PreviousPath)):
 		return t.abort(v, "generated-docs path (written by the Hub; never re-triggers work)")
-	case matchAny(t.ignore, fc.Path) && (fc.PreviousPath == "" || matchAny(t.ignore, fc.PreviousPath)):
+	case t.ignored(fc.Path) && (fc.PreviousPath == "" || t.ignored(fc.PreviousPath)):
 		return t.abort(v, "ignored path")
 	case chunker.IsMarkdown(fc.Path) && fc.Status != ports.FileRemoved:
 		return t.abort(v, "documentation outside the generated-docs path is not processed (use import)")

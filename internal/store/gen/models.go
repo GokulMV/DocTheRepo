@@ -1247,6 +1247,18 @@ type ApiToken struct {
 	CreatedAt  time.Time  `json:"created_at"`
 }
 
+type ArchitectureDiagram struct {
+	ID        string    `json:"id"`
+	RepoID    string    `json:"repo_id"`
+	Path      string    `json:"path"`
+	Title     string    `json:"title"`
+	Generator string    `json:"generator"`
+	Html      string    `json:"html"`
+	CommitSha string    `json:"commit_sha"`
+	SizeBytes int32     `json:"size_bytes"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type AuditLog struct {
 	ID          string          `json:"id"`
 	At          time.Time       `json:"at"`
@@ -1293,6 +1305,8 @@ type Connector struct {
 	LastSyncAt        *time.Time      `json:"last_sync_at"`
 	CreatedAt         time.Time       `json:"created_at"`
 	UpdatedAt         time.Time       `json:"updated_at"`
+	CredsHint         string          `json:"creds_hint"`
+	CredsSetAt        *time.Time      `json:"creds_set_at"`
 }
 
 type ConnectorCursor struct {
@@ -1569,6 +1583,8 @@ type LlmProvider struct {
 	Enabled       bool            `json:"enabled"`
 	CreatedAt     time.Time       `json:"created_at"`
 	UpdatedAt     time.Time       `json:"updated_at"`
+	KeyHint       string          `json:"key_hint"`
+	KeySetAt      *time.Time      `json:"key_set_at"`
 }
 
 type ManifestRename struct {
@@ -1668,6 +1684,15 @@ type SavingsEvent struct {
 	EstTokensAvoided  int64       `json:"est_tokens_avoided"`
 	EstCostAvoidedUsd float64     `json:"est_cost_avoided_usd"`
 	RefID             string      `json:"ref_id"`
+}
+
+type SealKey struct {
+	ID        string     `json:"id"`
+	X25519Pub []byte     `json:"x25519_pub"`
+	MlkemPub  []byte     `json:"mlkem_pub"`
+	PrivateCt []byte     `json:"private_ct"`
+	CreatedAt time.Time  `json:"created_at"`
+	RetiredAt *time.Time `json:"retired_at"`
 }
 
 type ServiceMap struct {

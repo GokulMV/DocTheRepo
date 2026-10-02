@@ -32,3 +32,8 @@
     scrollbar-color: rgb(148 163 184 / 0.4) transparent;
   }
 }
+
+/* Loading indicators wait before showing: most page data arrives sooner, and a flash reads as a reload. */
+@keyframes dth-appear { to { opacity: 1; } }
+.dth-appear-late { opacity: 0; animation: dth-appear 150ms ease-out 300ms forwards; }
+@media (prefers-reduced-motion: reduce) { .dth-appear-late { animation-duration: 0s; } }

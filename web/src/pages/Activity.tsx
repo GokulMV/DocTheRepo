@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api } from '@/api/client';
-import { useActivity, useInvalidating, useJobs, useMe } from '@/api/hooks';
+import { useActivity, useConnectors, useInvalidating, useJobs, useMe, useProviders, useRepos, useUsers } from '@/api/hooks';
 import { atLeast, type Job } from '@/api/types';
 import { Badge, Button, Card, Dialog, ErrorNote, PageHeader, Select, Spinner, Table, Td, statusTone } from '@/components/ui';
 import { relTime } from '@/lib/format';
@@ -31,6 +31,36 @@ function JobDetail({ job, onClose }: { job: Job; onClose: () => void }) {
   );
 }
 
+// Plain words for the feed; the raw action stays in the tooltip.
+const ACTIONS: Record<string, string> = {
+  'auth.login': 'signed in', 'auth.logout': 'signed out', 'repo.create': 'repository tracked', 'repo.update': 'repository settings changed',
+  'repo.generate_docs': 'docs requested', 'route.set': 'model route saved', 'provider.create': 'provider added', 'provider.update': 'provider changed',
+  'provider.delete': 'provider removed', 'connector.create': 'connector added', 'connector.update': 'connector changed', 'connector.delete': 'connector removed',
+  'github.connect.app': 'GitHub App created', 'github.connect.installed': 'GitHub App installed', 'github.connect.existing': 'existing GitHub App connected',
+  'token.create': 'access token created', 'token.revoke': 'access token revoked', 'spend.set': 'spend limits saved', 'settings.apply': 'settings file applied',
+  'code_push:done': 'docs updated', 'code_push:aborted': 'nothing to document', 'code_push:failed': 'docs update failed', 'code_push:spend_blocked': 'blocked by spend limit',
+  'import_docs:done': 'docs imported', 'docs_pr:opened': 'docs PR opened', 'docs_pr:merged': 'docs PR merged', 'docs_pr:closed': 'docs PR closed',
+};
+
+/** useNames resolves "repo:<id>"-style references in the feed to names. */
+function useNames(): (text: string) => string {
+  const me = useMe();
+  const admin = atLeast(me.data?.role, 'admin');
+  const repos = useRepos();
+  const conns = useConnectors(admin);
+  const provs = useProviders();
+  const users = useUsers();
+  const names = new Map<string, string>();
+  for (const r of repos.data ?? []) names.set(`repo:${r.id}`, r.full_name);
+  for (const c of conns.data ?? []) names.set(`connector:${c.id}`, `connector ${c.name}`);
+  for (const p of provs.data?.items ?? []) names.set(`llm_provider:${p.id}`, `provider ${p.name}`);
+  for (const u of users.data?.items ?? []) names.set(`user:${u.id}`, u.name || u.email);
+  return (text) =>
+    text
+      .replace(/\b(repo|connector|llm_provider|user):[0-9a-f-]{36}\b/g, (m) => names.get(m) ?? m)
+      .replace(/\bmodel_route:([a-z_]+)/g, 'route for $1');
+}
+
 export default function Activity() {
   const [types, setTypes] = useState('');
   const [status, setStatus] = useState('');
@@ -38,6 +68,7 @@ export default function Activity() {
   const [open, setOpen] = useState<Job>();
   const feed = useActivity(types);
   const jobs = useJobs({ status, type });
+  const name = useNames();
   return (
     <>
       <PageHeader title="Activity" description="Pushes processed, docs landed, PR lifecycle, and admin actions." />
@@ -59,8 +90,8 @@ export default function Activity() {
             {feed.data?.items.map((a) => (
               <li key={a.kind + a.ref_id + a.at} className="flex items-baseline justify-between gap-3 py-2">
                 <span>
-                  <Badge tone={a.kind === 'audit' ? 'blue' : statusTone(a.action.split(':')[1] ?? '')}>{a.action}</Badge>
-                  {a.detail && <span className="ml-2 break-all text-slate-500">{a.detail}</span>}
+                  <span title={a.action}><Badge tone={a.kind === 'audit' ? 'blue' : statusTone(a.action.split(':')[1] ?? '')}>{ACTIONS[a.action] ?? a.action}</Badge></span>
+                  {a.detail && <span className="ml-2 break-all text-slate-500">{name(a.detail)}</span>}
                 </span>
                 <span className="shrink-0 text-xs text-slate-400">{relTime(a.at)}</span>
               </li>

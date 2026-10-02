@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -36,6 +38,94 @@ type ArchNode struct {
 	EntityID string `json:"entity_id,omitempty"`
 	RepoID   string `json:"repo_id,omitempty"` // for nodes that stand for a repository
 	Degree   int    `json:"degree"`
+	// Count and Items describe a group box ("/connectors · 5 endpoints", "npm packages · 73"): how many it
+	// stands for, and the first of them by name.
+	Count int      `json:"count,omitempty"`
+	Items []string `json:"items,omitempty"`
+}
+
+// Group kinds: many similar entities shown as one box.
+const (
+	KindEndpointGroup   = "endpoint_group"
+	KindDependencyGroup = "dependency_group"
+	maxGroupItems       = 50
+)
+
+var apiPrefix = regexp.MustCompile(`^/(?:api/)?v\d+(?:/|$)|^/api(?:/|$)`)
+
+// endpointGroup is the resource an endpoint belongs to: "GET /api/v1/connectors/{id}" → "/connectors".
+func endpointGroup(name string) string {
+	route := name
+	if _, r, ok := strings.Cut(name, " "); ok {
+		route = r
+	}
+	route = "/" + strings.TrimPrefix(apiPrefix.ReplaceAllString(route, "/"), "/")
+	seg, _, _ := strings.Cut(strings.TrimPrefix(route, "/"), "/")
+	if seg == "" || strings.HasPrefix(seg, "{") || strings.HasPrefix(seg, ":") || strings.HasPrefix(seg, "$") {
+		return "/"
+	}
+	return "/" + seg
+}
+
+// ecosystemLabel names a dependency ecosystem for its group box.
+func ecosystemLabel(eco string) string {
+	switch eco {
+	case "go":
+		return "Go modules"
+	case "npm":
+		return "npm packages"
+	case "pypi", "python", "pip":
+		return "Python packages"
+	case "maven", "gradle":
+		return "Java libraries"
+	case "cargo", "crates":
+		return "Rust crates"
+	case "rubygems", "gem":
+		return "Ruby gems"
+	case "":
+		return "Libraries"
+	}
+	return eco + " packages"
+}
+
+// isTestModule reports modules that hold tests, mocks or fixtures rather than the system itself.
+func isTestModule(dir string) bool {
+	for _, part := range strings.Split(strings.ToLower(dir), "/") {
+		switch part {
+		case "test", "tests", "e2e", "testdata", "mocks", "mock", "fixtures", "__tests__", "spec", "testutil", "storetest":
+			return true
+		}
+	}
+	return false
+}
+
+// architectureModules keeps the modules worth a box: not tests, and not a folder that only contains other
+// listed modules ("internal" when "internal/core" is listed).
+func architectureModules(ms []archEntity) []archEntity {
+	dirOf := func(m archEntity) string {
+		if _, d, ok := strings.Cut(m.Key, ":"); ok {
+			return d
+		}
+		return m.Name
+	}
+	var out []archEntity
+	for _, m := range ms {
+		d := dirOf(m)
+		if isTestModule(d) {
+			continue
+		}
+		container := false
+		for _, o := range ms {
+			if od := dirOf(o); od != d && strings.HasPrefix(od, d+"/") && !isTestModule(od) {
+				container = true
+				break
+			}
+		}
+		if !container {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 // ArchLink is one arrow; Weight counts the code-level edges it stands for.
@@ -66,7 +156,9 @@ type Architecture struct {
 	Links []ArchLink `json:"links"`
 	// Hidden counts nodes left out per layer (over the cap); Restricted counts links to repositories the
 	// caller cannot see, which are left out entirely.
-	Hidden     map[string]int `json:"hidden"`
+	Hidden map[string]int `json:"hidden"`
+	// Counts totals what group boxes stand for, before the per-layer caps: endpoints, endpoint_groups, libraries.
+	Counts     map[string]int `json:"counts"`
 	Restricted int            `json:"restricted"`
 	Env        []string       `json:"env"`
 	Docs       []ArchDoc      `json:"docs"`
@@ -149,6 +241,28 @@ func buildArchitecture(in archInput) Architecture {
 	entityNode := func(e archEntity, layer string) string {
 		return add(ArchNode{ID: e.ID, Kind: e.Kind, Name: e.Name, Key: e.Key, Layer: layer, EntityID: e.ID, Degree: in.Degree[e.ID]})
 	}
+	// groupNode puts e into a group box (each entity counted once).
+	members := map[string]map[string]bool{}
+	groupNode := func(id, kind, name, layer string, e archEntity) string {
+		if _, ok := nodes[id]; !ok {
+			nodes[id] = &ArchNode{ID: id, Kind: kind, Name: name, Layer: layer}
+			members[id] = map[string]bool{}
+		}
+		if !members[id][e.ID] {
+			members[id][e.ID] = true
+			n := nodes[id]
+			n.Count++
+			n.Degree = n.Count
+			if len(n.Items) < maxGroupItems {
+				n.Items = append(n.Items, e.Name)
+			}
+		}
+		return id
+	}
+	endpointNode := func(e archEntity) string {
+		g := endpointGroup(e.Name)
+		return groupNode("api:"+g, KindEndpointGroup, g, LayerInterface, e)
+	}
 
 	// The core anchor: the repository's service(s), or the repository itself.
 	core := map[string]bool{}
@@ -167,11 +281,11 @@ func buildArchitecture(in archInput) Architecture {
 		}
 		anchor = add(n)
 	}
-	for _, m := range in.Modules {
+	for _, m := range architectureModules(in.Modules) {
 		link(&out, anchor, entityNode(m, LayerCore), "contains")
 	}
 	for _, e := range in.Endpoints {
-		link(&out, anchor, entityNode(e, LayerInterface), "exposes")
+		link(&out, anchor, endpointNode(e), "exposes")
 	}
 
 	isLocal := func(e archEntity, edgeRepo *string) bool {
@@ -188,7 +302,7 @@ func buildArchitecture(in archInput) Architecture {
 	localNode := func(e archEntity) string {
 		switch {
 		case e.Kind == "endpoint":
-			return entityNode(e, LayerInterface)
+			return endpointNode(e)
 		case core[e.ID]:
 			return e.ID
 		}
@@ -197,6 +311,10 @@ func buildArchitecture(in archInput) Architecture {
 	// remoteNode maps an entity owned by another repository to that repository's box ("" if hidden).
 	remoteNode := func(e archEntity, layer string) string {
 		if e.RepoID == nil {
+			if e.Kind == "dependency" { // libraries: one box per ecosystem
+				eco, _, _ := strings.Cut(e.Key, ":")
+				return groupNode("deps:"+eco, KindDependencyGroup, ecosystemLabel(eco), layer, e)
+			}
 			return entityNode(e, layer) // shared or external: an external API, a third-party service
 		}
 		if in.Visible != nil && !in.Visible(*e.RepoID) {
@@ -275,6 +393,17 @@ func buildArchitecture(in archInput) Architecture {
 		}
 	}
 
+	out.Counts = map[string]int{}
+	for _, n := range nodes {
+		switch n.Kind {
+		case KindEndpointGroup:
+			out.Counts["endpoints"] += n.Count
+			out.Counts["endpoint_groups"]++
+		case KindDependencyGroup:
+			out.Counts["libraries"] += n.Count
+		}
+	}
+
 	// Cap each layer by degree (the anchor always stays), and drop links to removed nodes.
 	byLayer := map[string][]*ArchNode{}
 	for _, n := range nodes {
@@ -325,6 +454,9 @@ func buildArchitecture(in archInput) Architecture {
 		a, b := out.Links[i], out.Links[j]
 		return a.Src+a.Kind+a.Dst < b.Src+b.Kind+b.Dst
 	})
+	for i := range out.Nodes {
+		sort.Strings(out.Nodes[i].Items)
+	}
 	sort.Strings(out.Env)
 	sort.Strings(out.Owners)
 	return out
@@ -530,7 +662,55 @@ func (a *ArchitectureStore) Diagrams(ctx context.Context, repoID string) ([]Diag
 		}
 		out = append(out, d)
 	}
+	sortDiagrams(out)
 	return out, rows.Err()
+}
+
+// sortDiagrams orders tabs by title: overviews first, then numbered or lettered flows in order
+// ("Flow A", "Flow B", …; "Flow 2" before "Flow 10").
+func sortDiagrams(ds []DiagramMeta) {
+	isFlow := func(t string) bool {
+		t = strings.ToLower(t)
+		return strings.HasPrefix(t, "flow") || strings.HasPrefix(t, "sequence") || strings.HasPrefix(t, "step")
+	}
+	sort.SliceStable(ds, func(i, j int) bool {
+		a, b := ds[i].Title, ds[j].Title
+		if fa, fb := isFlow(a), isFlow(b); fa != fb {
+			return !fa
+		}
+		return naturalLess(strings.ToLower(a), strings.ToLower(b))
+	})
+}
+
+// naturalLess compares strings with digit runs as numbers.
+func naturalLess(a, b string) bool {
+	for a != "" && b != "" {
+		da, db := leadingDigits(a), leadingDigits(b)
+		if da != "" && db != "" {
+			na, nb := strings.TrimLeft(da, "0"), strings.TrimLeft(db, "0")
+			if len(na) != len(nb) {
+				return len(na) < len(nb)
+			}
+			if na != nb {
+				return na < nb
+			}
+			a, b = a[len(da):], b[len(db):]
+			continue
+		}
+		if a[0] != b[0] {
+			return a[0] < b[0]
+		}
+		a, b = a[1:], b[1:]
+	}
+	return len(a) < len(b)
+}
+
+func leadingDigits(s string) string {
+	i := 0
+	for i < len(s) && s[i] >= '0' && s[i] <= '9' {
+		i++
+	}
+	return s[:i]
 }
 
 // DiagramHTML returns a diagram's HTML and its repository (for the access check).

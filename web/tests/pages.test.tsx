@@ -18,13 +18,16 @@ describe('Shell', () => {
     renderAt('/ask', <Route element={<Shell />}><Route path="/ask" element={<p>ask page</p>} /></Route>);
     expect(await screen.findByText('ask page')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Docs' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'More' }));
+    expect(screen.getByRole('link', { name: 'Palace' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Connectors' })).not.toBeInTheDocument();
   });
 
   it('shows administration to admins', async () => {
     mockApi({ 'GET /me': me('admin') });
     renderAt('/ask', <Route element={<Shell />}><Route path="/ask" element={<p>ask page</p>} /></Route>);
-    expect(await screen.findByRole('link', { name: 'Connectors' })).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'More' }));
+    expect(screen.getByRole('link', { name: 'Connectors' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Spend limits' })).toBeInTheDocument();
   });
 
@@ -81,10 +84,14 @@ describe('Setup', () => {
       'GET /routes': { items: [{ feature: 'qa' }], features: ['qa', 'docgen', 'embedding'] },
       'GET /repos': { items: [] },
       'GET /spend/limits': { items: [{ scope: 'global' }] },
+      'GET /docs/tree': { nodes: [] },
     });
     renderAt('/setup', <Route path="/setup" element={<Setup />} />);
-    expect(await screen.findByText('3 of 6 steps done.')).toBeInTheDocument();
-    expect(screen.getByText('Routed: qa')).toBeInTheDocument();
+    // GitHub is connected; a model is added but not yet used for docs; no repositories yet.
+    expect(await screen.findByText('Three steps to docs and answers. 1 of 4 done.')).toBeInTheDocument();
+    expect(screen.getByText('Connected: GitHub')).toBeInTheDocument();
+    expect(screen.getByText('Used for: qa')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Add a model/ })).toHaveAttribute('href', '/providers');
   });
 });
 

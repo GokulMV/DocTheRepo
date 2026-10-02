@@ -61,7 +61,8 @@ VALUES (sqlc.arg(id), sqlc.arg(thread_id), sqlc.arg(role), sqlc.arg(content), sq
         sqlc.arg(input_tokens), sqlc.arg(output_tokens), sqlc.arg(cost_usd), sqlc.arg(cached));
 
 -- name: ThreadMessages :many
-SELECT * FROM qa_messages WHERE thread_id = sqlc.arg(thread_id) ORDER BY created_at, id;
+-- A question and its answer are saved in one transaction (same created_at): the question comes first.
+SELECT * FROM qa_messages WHERE thread_id = sqlc.arg(thread_id) ORDER BY created_at, (role <> 'user'), id;
 
 -- name: SetFeedback :execrows
 UPDATE qa_messages m SET feedback = sqlc.arg(feedback), feedback_comment = sqlc.arg(comment)

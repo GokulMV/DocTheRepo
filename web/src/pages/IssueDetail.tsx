@@ -5,7 +5,7 @@ import { api } from '@/api/client';
 import { useInvalidating, useIssue, useMe } from '@/api/hooks';
 import { atLeast, KNOWN_REASONS, type Decode, type IssueDetail as Detail, type KnownIssue, type SignalEvent } from '@/api/types';
 import { IssueStatusBadge, SeverityBadge, reasonLabel } from '@/components/signals';
-import { Badge, Button, Card, Dialog, ErrorNote, Field, Input, PageHeader, Select, Spinner } from '@/components/ui';
+import { Badge, Button, Card, Dialog, DialogFooter, ErrorNote, Field, Input, PageHeader, Select, Spinner } from '@/components/ui';
 import { num, relTime, shortSha, usd } from '@/lib/format';
 
 function DecodePanel({ d }: { d: Decode }) {
@@ -104,7 +104,10 @@ function MarkKnownDialog({ issue, onDone }: { issue: Detail; onDone: () => void 
         </Field>
         <Field label="Mute for (days)" hint="Empty: until someone disables the rule."><Input type="number" min={1} value={days} onChange={(e) => setDays(e.target.value)} /></Field>
         <ErrorNote error={mark.error} />
-        <Button type="submit" disabled={mark.isPending}>Save rule</Button>
+        <DialogFooter>
+          <Button type="button" variant="ghost" onClick={() => onDone()}>Cancel</Button>
+          <Button type="submit" disabled={mark.isPending}>Save rule</Button>
+        </DialogFooter>
       </form>
     </Dialog>
   );

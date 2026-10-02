@@ -34,6 +34,9 @@ type CodePushPayload struct {
 	// (a docs PR closed as stale or conflicting).
 	ForcePaths []string `json:"force_paths,omitempty"`
 	Reason     string   `json:"reason,omitempty"`
+	// Full documents every file at head, not only what changed since the last processed commit (for
+	// code that was synced before a docgen route existed).
+	Full bool `json:"full,omitempty"`
 	// DryRun stops before any paid call or write and reports what would be generated.
 	DryRun bool `json:"dry_run,omitempty"`
 	// OverrideCeiling lets an operator's retry of a spend-blocked job exceed the ceiling once (audited).
@@ -59,9 +62,11 @@ type CodePushResult struct {
 
 // fileWork is one changed source file through the pipeline.
 type fileWork struct {
-	fc       triage.FileChange
-	v        triage.Verdict
-	forced   bool
+	fc     triage.FileChange
+	v      triage.Verdict
+	forced bool
+	// full documents every chunk of the file, also ones already indexed (a full run); triage still applies.
+	full     bool
 	fresh    []ports.Chunk
 	analysis *chunker.FileAnalysis
 	delta    manifest.Delta
@@ -110,8 +115,11 @@ func (p *Pipeline) CodePush(ctx context.Context, job ports.Job) (ports.Outcome, 
 	if base == "" {
 		base = pl.Before
 	}
+	if pl.Full {
+		base = ""
+	}
 	res := CodePushResult{Base: base, Head: head}
-	if base == head && len(pl.ForcePaths) == 0 {
+	if base == head && len(pl.ForcePaths) == 0 && !pl.Full {
 		return ports.Outcome{Status: ports.JobAborted, Message: "docs are already current for " + short(head), Result: res}, nil
 	}
 
@@ -132,7 +140,19 @@ func (p *Pipeline) CodePush(ctx context.Context, job ports.Job) (ports.Outcome, 
 	if err != nil {
 		return ports.Outcome{}, err
 	}
-	tr, err := triage.New(p.Grammars, triage.Options{DocsPath: repo.DocsPath})
+	for _, w := range work {
+		w.full = pl.Full
+	}
+	// .dthignore (gitignore syntax) at head lists more paths to skip: not documented, not indexed.
+	opts := triage.Options{DocsPath: repo.DocsPath}
+	if raw, err := host.GetFile(ctx, repo.FullName, triage.IgnoreFile, head); err == nil {
+		extra, keep := triage.ParseIgnoreFile(raw)
+		opts.Ignore = append(append([]string{}, triage.DefaultIgnore...), extra...)
+		opts.Keep = keep
+	} else if !errors.Is(err, ports.ErrNotFound) {
+		return ports.Outcome{}, fmt.Errorf("read %s: %w", triage.IgnoreFile, err)
+	}
+	tr, err := triage.New(p.Grammars, opts)
 	if err != nil {
 		return ports.Outcome{}, ports.Permanent(err)
 	}
@@ -371,7 +391,7 @@ func (p *Pipeline) chunk(ctx context.Context, repo ports.RepoConfig, head string
 	if w.v.IndexOnly || w.removed() {
 		return nil
 	}
-	if w.forced {
+	if w.forced || w.full {
 		for _, c := range w.fresh {
 			w.targets = append(w.targets, docgen.Target{Chunk: c, ChangeType: "changed"})
 		}

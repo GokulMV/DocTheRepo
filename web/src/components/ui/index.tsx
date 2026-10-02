@@ -157,9 +157,10 @@ export function PageHeader({ title, description, actions, icon }: { title: strin
   );
 }
 
+/** Spinner appears only after 300 ms, so a quick load shows the content without a loading flash. */
 export function Spinner({ label = 'Loading' }: { label?: string }) {
   return (
-    <div role="status" className="flex items-center gap-2 py-6 text-sm text-slate-500">
+    <div role="status" className="dth-appear-late flex items-center gap-2 py-6 text-sm text-slate-500">
       <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-brand-600" />
       {label}…
     </div>
@@ -235,6 +236,16 @@ export function Dialog({ open, onOpenChange, title, description, children }: {
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
+  );
+}
+
+/** DialogFooter ends a dialog form: actions on the right, separated from the fields. */
+export function DialogFooter({ children, note }: { children: ReactNode; note?: ReactNode }) {
+  return (
+    <div className="-mx-6 -mb-6 mt-5 flex flex-wrap items-center justify-end gap-2 rounded-b-2xl border-t border-slate-200/80 bg-slate-50/80 px-6 py-3 dark:border-white/[0.06] dark:bg-white/[0.02]">
+      {note && <div className="mr-auto text-xs text-slate-500">{note}</div>}
+      {children}
+    </div>
   );
 }
 

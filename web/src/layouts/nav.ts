@@ -61,3 +61,6 @@ export function navItemFor(pathname: string): NavItem | undefined {
   }
   return undefined;
 }
+
+/** The pages shown at the top of the sidebar; the rest sit under "More". */
+export const PRIMARY = ['/docs', '/architecture', '/inbox'];

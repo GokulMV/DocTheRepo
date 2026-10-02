@@ -24,7 +24,7 @@ func (q *Queries) DeleteProvider(ctx context.Context, id string) (int64, error) 
 }
 
 const getProvider = `-- name: GetProvider :one
-SELECT id, kind, name, base_url, key_ciphertext, extra, redact_pii, enabled, created_at, updated_at FROM llm_providers WHERE id = $1
+SELECT id, kind, name, base_url, key_ciphertext, extra, redact_pii, enabled, created_at, updated_at, key_hint, key_set_at FROM llm_providers WHERE id = $1
 `
 
 func (q *Queries) GetProvider(ctx context.Context, id string) (LlmProvider, error) {
@@ -41,6 +41,8 @@ func (q *Queries) GetProvider(ctx context.Context, id string) (LlmProvider, erro
 		&i.Enabled,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.KeyHint,
+		&i.KeySetAt,
 	)
 	return i, err
 }
@@ -214,7 +216,7 @@ func (q *Queries) ListCostTable(ctx context.Context) ([]CostTable, error) {
 }
 
 const listProviders = `-- name: ListProviders :many
-SELECT id, kind, name, base_url, key_ciphertext, extra, redact_pii, enabled, created_at, updated_at FROM llm_providers ORDER BY name
+SELECT id, kind, name, base_url, key_ciphertext, extra, redact_pii, enabled, created_at, updated_at, key_hint, key_set_at FROM llm_providers ORDER BY name
 `
 
 func (q *Queries) ListProviders(ctx context.Context) ([]LlmProvider, error) {
@@ -237,6 +239,8 @@ func (q *Queries) ListProviders(ctx context.Context) ([]LlmProvider, error) {
 			&i.Enabled,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.KeyHint,
+			&i.KeySetAt,
 		); err != nil {
 			return nil, err
 		}

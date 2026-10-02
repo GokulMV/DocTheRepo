@@ -84,7 +84,7 @@ func TestRetrievalEval(t *testing.T) {
 	provID := out["id"].(string)
 	for f, mdl := range map[string]string{"qa": model, "embedding": embedModel} {
 		code, out = c.call("PUT", "/routes/"+f, map[string]any{"provider_id": provID, "model": mdl})
-		require.Equal(t, http.StatusNoContent, code, out)
+		require.Equal(t, http.StatusOK, code, out)
 	}
 	// Index code (no docgen route: retrieval is what is measured) and import each repo's Markdown.
 	var repoIDs []string

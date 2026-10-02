@@ -359,9 +359,10 @@ func (q *Queries) SymbolNeighbors(ctx context.Context, arg SymbolNeighborsParams
 }
 
 const threadMessages = `-- name: ThreadMessages :many
-SELECT id, thread_id, role, content, citations, provider, model, input_tokens, output_tokens, cost_usd, cached, feedback, feedback_comment, created_at FROM qa_messages WHERE thread_id = $1 ORDER BY created_at, id
+SELECT id, thread_id, role, content, citations, provider, model, input_tokens, output_tokens, cost_usd, cached, feedback, feedback_comment, created_at FROM qa_messages WHERE thread_id = $1 ORDER BY created_at, (role <> 'user'), id
 `
 
+// A question and its answer are saved in one transaction (same created_at): the question comes first.
 func (q *Queries) ThreadMessages(ctx context.Context, threadID string) ([]QaMessage, error) {
 	rows, err := q.db.Query(ctx, threadMessages, threadID)
 	if err != nil {

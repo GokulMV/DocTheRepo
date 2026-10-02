@@ -120,7 +120,7 @@ func TestArchitectureTab(t *testing.T) {
 		n := n.(map[string]any)
 		layers[n["name"].(string)] = n["layer"].(string)
 	}
-	assert.Equal(t, map[string]string{"shop": "core", "POST /orders": "interface", "orders.created": "messaging",
+	assert.Equal(t, map[string]string{"shop": "core", "/orders": "interface", "orders.created": "messaging",
 		"postgres-shop": "data", "acme/billing": "downstream"}, layers)
 	assert.Empty(t, out["diagrams"], "nothing scanned yet")
 
