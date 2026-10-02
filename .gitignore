@@ -19,3 +19,5 @@ terraform.tfvars
 .proxy-ca.crt
 /.perf/
 signal-storm-summary.json
+web/tsconfig.tsbuildinfo
+web/*.tsbuildinfo
