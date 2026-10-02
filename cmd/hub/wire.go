@@ -90,6 +90,7 @@ type app struct {
 	// Knowledge: Confluence and Jira sync (Phase 13).
 	knowledge *ingest.KnowledgeSync
 	arch      *store.ArchitectureStore
+	sealKeys  *store.SealKeys
 	archSync  *ingest.ArchitectureSync
 }
 
@@ -232,6 +233,7 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 		Hosts: a.hosts.Host, Lander: &push.Dispatcher{PRs: prs, Lifecycle: a.sweeper}, GW: gw, DocGen: &docgen.Generator{GW: gw},
 		Indexer: indexer, Grammars: reg, Log: log.With("component", "pipeline")}
 	a.arch = store.NewArchitecture(st)
+	a.sealKeys = store.NewSealKeys(st, box)
 	a.archSync = &ingest.ArchitectureSync{Repos: repos, Hosts: a.hosts.Host, Store: a.arch, Log: log.With("component", "architecture")}
 	a.pipe.OnChanges = a.archSync.OnChanges
 	return a, nil
@@ -337,7 +339,8 @@ func (a *app) v1Routes() []func(chi.Router) {
 		Browse: a.browse, Queue: a.q, Seal: a.box.Seal, ProviderAAD: secrets.ProviderKeyAAD, ProviderKinds: llm.Kinds(),
 		InvalidateProvider: a.llmPool.Invalidate, Host: a.hosts.Host, InvalidateHost: func(id string) { a.hosts.Invalidate(id); a.signals.InvalidateConnector(id) }, DryRun: a.pipe.CodePush,
 		RegisterWebhook: a.registerWebhook,
-		ReloadSpend:     a.reloadGuard,
+		SealKeys:        a.sealKeys, RequireSealed: a.cfg.Settings.RequireSealed,
+		ReloadSpend: a.reloadGuard,
 		TestProvider: func(ctx context.Context, id, model string) (time.Duration, error) {
 			cfg, _, err := a.provSrc.ProviderConfig(ctx, id)
 			if err != nil {
@@ -353,6 +356,7 @@ func (a *app) v1Routes() []func(chi.Router) {
 		api.IssueRoutes(api.IssueDeps{Auth: a.auth, Issues: store.NewIssues(a.st, a.knownIssues), KnownIssues: a.knownIssues,
 			Suggestions: a.suggestions, Suggest: a.suggest, Queue: a.q, ReloadRules: a.signals.Reload,
 			FetchLink: a.knowledge.FetchLink}),
+		api.SealRoutes(a.auth, a.sealKeys),
 		api.ArchitectureRoutes(api.ArchitectureDeps{Auth: a.auth, Store: a.arch, Scan: a.archSync.Scan}),
 		api.GitHubConnectRoutes(api.GitHubConnectDeps{Auth: a.auth, Connectors: a.conns, Seal: a.box.Seal, Open: a.box.Open,
 			PublicURL: a.cfg.Server.PublicURL, InvalidateHost: a.hosts.Invalidate}),

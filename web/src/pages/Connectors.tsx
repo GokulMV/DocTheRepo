@@ -6,6 +6,8 @@ import { keys, useConnectors, useInvalidating } from '@/api/hooks';
 import type { Check, Connector } from '@/api/types';
 import { Badge, Button, Card, Dialog, Empty, ErrorNote, Field, Input, PageHeader, Select, Spinner, Table, Td, Textarea, statusTone } from '@/components/ui';
 import { relTime } from '@/lib/format';
+import { seal } from '@/lib/seal';
+import { SealedBadge, SealedHint } from '@/components/Sealed';
 import { KNOWLEDGE, knowledgeSpec, SOURCES, sourceSpec } from './signalSources';
 
 function randomSecret() {
@@ -132,7 +134,7 @@ function AddGit({ onCreated }: { onCreated: (id: string, type: string, secret: s
     if (type === 'github' && auth === 'app') Object.assign(config, { app_id: appId, installation_id: installationId });
     if (type === 'github' && auth === 'token') config.auth = 'token';
     if (type === 'gitlab' && group) config.group = group;
-    const r = await create.mutateAsync({ type, name: name || (type === 'github' ? 'GitHub' : 'GitLab'), mode, config, credentials: token, webhook_secret: secret });
+    const r = await create.mutateAsync({ type, name: name || (type === 'github' ? 'GitHub' : 'GitLab'), mode, config, credentials: await seal(token, 'connector.credentials'), webhook_secret: await seal(secret, 'connector.webhook_secret') });
     setOpen(false);
     onCreated(r.id, type, secret);
   };
@@ -167,7 +169,7 @@ function AddGit({ onCreated }: { onCreated: (id: string, type: string, secret: s
               <Field label="Installation ID"><Input required value={installationId} onChange={(e) => setInstallationId(e.target.value)} /></Field>
             </div>
           )}
-          <Field label={type === 'github' && auth === 'app' ? 'App private key (PEM)' : 'Access token'} hint="Stored encrypted; never shown again.">
+          <Field label={type === 'github' && auth === 'app' ? 'App private key (PEM)' : 'Access token'} hint={<SealedHint />}>
             {type === 'github' && auth === 'app' ? (
               <Textarea required rows={4} className="font-mono text-xs" value={token} onChange={(e) => setToken(e.target.value)} />
             ) : (
@@ -232,7 +234,7 @@ function AddSignal({ onCreated }: { onCreated: (c: { id: string; type: string; s
             const m = mode || spec.modes[0];
             const cfg: Record<string, string> = Object.fromEntries(Object.entries(config).filter(([, v]) => v.trim() !== ''));
             if (noLLM) cfg.never_send_to_llm = 'true';
-            const r = await create.mutateAsync({ type, name: name || spec.label, mode: m, config: cfg, credentials: creds || undefined, webhook_secret: secret || undefined });
+            const r = await create.mutateAsync({ type, name: name || spec.label, mode: m, config: cfg, credentials: creds ? await seal(creds, 'connector.credentials') : undefined, webhook_secret: secret ? await seal(secret, 'connector.webhook_secret') : undefined });
             onCreated({ id: r.id, type, secret, path: r.webhook_path });
             setOpen(false);
           }}
@@ -289,7 +291,7 @@ function AddKnowledge({ onCreated }: { onCreated: (type: string) => void }) {
           onSubmit={async (e) => {
             e.preventDefault();
             const cfg = Object.fromEntries(Object.entries(config).filter(([, v]) => v.trim() !== ''));
-            await create.mutateAsync({ type, name: name || spec.label, mode: 'poll', config: cfg, credentials: token });
+            await create.mutateAsync({ type, name: name || spec.label, mode: 'poll', config: cfg, credentials: await seal(token, 'connector.credentials') });
             onCreated(type);
             setOpen(false);
             setConfig({});
@@ -387,7 +389,10 @@ export default function Connectors() {
           <Table head={['Name', 'Type', 'Mode', 'Health', 'Last sync', '']}>
             {conns.data.map((c) => (
               <tr key={c.id}>
-                <Td><span className="font-medium">{c.name}</span>{!c.enabled && <Badge tone="amber">disabled</Badge>}</Td>
+                <Td>
+                  <span className="font-medium">{c.name}</span>{!c.enabled && <Badge tone="amber">disabled</Badge>}
+                  {c.has_credentials && <div className="mt-1"><SealedBadge meta={c.credentials_meta} label="Credentials sealed" /></div>}
+                </Td>
                 <Td>{c.type}</Td>
                 <Td>{c.mode}</Td>
                 <Td><Badge tone={statusTone(c.health)}>{c.health}</Badge>{c.last_error && <p className="max-w-xs truncate text-xs text-red-600" title={c.last_error}>{c.last_error}</p>}</Td>

@@ -69,6 +69,8 @@ var Operations = []op{
 	{"PUT", "/api/v1/routes/{feature}", "Providers", "Route a feature to a provider and model", "admin", true, false},
 	{"GET", "/api/v1/spend/limits", "Spend", "Spend ceilings", "admin", false, false},
 	{"PUT", "/api/v1/spend/limits", "Spend", "Replace spend ceilings", "admin", true, false},
+	{"GET", "/api/v1/seal/key", "Security", "The Hub's public sealing key (X25519 + ML-KEM-768); clients seal secrets to it before sending", "viewer", false, false},
+	{"POST", "/api/v1/seal/rotate", "Security", "Retire the sealing key and create a new one (values sealed to the old key open for 24 h)", "owner", true, false},
 	{"POST", "/api/v1/github/connect", "Connectors", "Start one-click GitHub: returns the GitHub App manifest form (org=, base_url= for GitHub Enterprise Server)", "admin", true, false},
 	{"GET", "/api/v1/github/connect/start", "Connectors", "Browser entry for one-click GitHub: a page that posts the app manifest to GitHub (org=, base_url=, name=)", "admin", false, false},
 	{"GET", "/api/v1/github/connect/callback", "Connectors", "GitHub's redirect after the app is created: stores it as a connector, then opens the install page", "admin", false, false},

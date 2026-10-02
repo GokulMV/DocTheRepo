@@ -2,12 +2,15 @@ package settings
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"maps"
 	"net/url"
 	"slices"
 	"sort"
+
+	"github.com/GokulMV/DocTheRepo/internal/secrets"
 )
 
 // API calls the Hub's /api/v1 (path without that prefix). in is sent as JSON; out, if non-nil, receives
@@ -170,6 +173,8 @@ func Apply(ctx context.Context, api API, doc Document, dryRun bool) (Result, err
 
 type applier struct {
 	api          API
+	sealKey      *secrets.PublicSealKey
+	sealTried    bool
 	st           *state
 	dry          bool
 	res          *Result
@@ -179,6 +184,32 @@ type applier struct {
 }
 
 func (a *applier) record(c Change) { a.res.Changes = append(a.res.Changes, c) }
+
+// seal encrypts a secret to the Hub's sealing key before it is sent, when the Hub has one (older Hubs
+// take the value as it is, over TLS).
+func (a *applier) seal(ctx context.Context, v, purpose string) (string, error) {
+	if v == "" || secrets.IsSealed(v) {
+		return v, nil
+	}
+	if !a.sealTried {
+		a.sealTried = true
+		var k struct {
+			KID, Alg         string
+			X25519, MLKEM768 string
+		}
+		if err := a.api.Do(ctx, "GET", "/seal/key", nil, &k); err == nil && k.KID != "" {
+			x, err1 := base64.StdEncoding.DecodeString(k.X25519)
+			m, err2 := base64.StdEncoding.DecodeString(k.MLKEM768)
+			if err1 == nil && err2 == nil {
+				a.sealKey = &secrets.PublicSealKey{ID: k.KID, Alg: k.Alg, X25519: x, MLKEM768: m}
+			}
+		}
+	}
+	if a.sealKey == nil {
+		return v, nil
+	}
+	return secrets.Seal(*a.sealKey, []byte(v), purpose)
+}
 
 func (a *applier) fail(kind, name string, err error) error {
 	a.record(Change{Kind: kind, Name: name, Action: "failed", Detail: err.Error()})
@@ -192,7 +223,11 @@ func (a *applier) providers(ctx context.Context, doc Document) error {
 			body := map[string]any{"kind": p.Kind, "name": p.Name, "base_url": p.BaseURL, "extra": p.Extra}
 			fields := []string{"kind"}
 			if p.APIKey.Set {
-				body["api_key"], fields = p.APIKey.Value, append(fields, "api_key")
+				v, err := a.seal(ctx, p.APIKey.Value, secrets.PurposeProviderKey)
+				if err != nil {
+					return a.fail("provider", p.Name, err)
+				}
+				body["api_key"], fields = v, append(fields, "api_key")
 			}
 			if p.RedactPII != nil {
 				body["redact_pii"] = *p.RedactPII
@@ -230,7 +265,11 @@ func (a *applier) providers(ctx context.Context, doc Document) error {
 			patch["enabled"], fields = *p.Enabled, append(fields, "enabled")
 		}
 		if p.APIKey.Set { // write-only: always re-applied
-			patch["api_key"], fields = p.APIKey.Value, append(fields, "api_key")
+			v, err := a.seal(ctx, p.APIKey.Value, secrets.PurposeProviderKey)
+			if err != nil {
+				return a.fail("provider", p.Name, err)
+			}
+			patch["api_key"], fields = v, append(fields, "api_key")
 		}
 		if err := a.update(ctx, "provider", p.Name, "/providers/"+cur.ID, patch, fields); err != nil {
 			return err
@@ -259,11 +298,8 @@ func (a *applier) connectors(ctx context.Context, doc Document) error {
 		if i < 0 {
 			body := map[string]any{"type": c.Type, "name": c.Name, "mode": c.Mode, "poll_seconds": c.PollSeconds, "config": c.Config}
 			fields := []string{"type"}
-			if c.Credentials.Set {
-				body["credentials"], fields = c.Credentials.Value, append(fields, "credentials")
-			}
-			if c.WebhookSecret.Set {
-				body["webhook_secret"], fields = c.WebhookSecret.Value, append(fields, "webhook_secret")
+			if err := a.sealInto(ctx, body, &fields, c); err != nil {
+				return a.fail("connector", c.Name, err)
 			}
 			id, detail := pendingID, ""
 			if !a.dry {
@@ -305,15 +341,31 @@ func (a *applier) connectors(ctx context.Context, doc Document) error {
 		if c.Enabled != nil && *c.Enabled != cur.Enabled {
 			patch["enabled"], fields = *c.Enabled, append(fields, "enabled")
 		}
-		if c.Credentials.Set {
-			patch["credentials"], fields = c.Credentials.Value, append(fields, "credentials")
-		}
-		if c.WebhookSecret.Set {
-			patch["webhook_secret"], fields = c.WebhookSecret.Value, append(fields, "webhook_secret")
+		if err := a.sealInto(ctx, patch, &fields, c); err != nil {
+			return a.fail("connector", c.Name, err)
 		}
 		if err := a.update(ctx, "connector", c.Name, "/connectors/"+cur.ID, patch, fields); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// sealInto puts a connector's secrets into body, sealed.
+func (a *applier) sealInto(ctx context.Context, body map[string]any, fields *[]string, c Connector) error {
+	if c.Credentials.Set {
+		v, err := a.seal(ctx, c.Credentials.Value, secrets.PurposeConnectorCreds)
+		if err != nil {
+			return err
+		}
+		body["credentials"], *fields = v, append(*fields, "credentials")
+	}
+	if c.WebhookSecret.Set {
+		v, err := a.seal(ctx, c.WebhookSecret.Value, secrets.PurposeConnectorWebhook)
+		if err != nil {
+			return err
+		}
+		body["webhook_secret"], *fields = v, append(*fields, "webhook_secret")
 	}
 	return nil
 }

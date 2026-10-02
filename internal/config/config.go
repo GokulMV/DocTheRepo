@@ -56,6 +56,8 @@ type SettingsConfig struct {
 	EnvPrefix string `yaml:"env_prefix"`
 	// FileRoot is the only directory ${file:…} may read (file stays off without it).
 	FileRoot string `yaml:"file_root"`
+	// RequireSealed refuses provider keys and connector secrets that are not sealed to the Hub's key.
+	RequireSealed bool `yaml:"require_sealed_secrets"`
 }
 
 // DecideConfig controls decisions behind confidence gates (plan Phase 11.5). They only run when a
@@ -276,6 +278,9 @@ func applyEnv(cfg *Config) error {
 		for _, r := range splitList(v) {
 			cfg.Roles = append(cfg.Roles, Role(r))
 		}
+	}
+	if v, ok := os.LookupEnv("DTH_REQUIRE_SEALED_SECRETS"); ok {
+		cfg.Settings.RequireSealed = v == "1" || strings.EqualFold(v, "true")
 	}
 	if v, ok := os.LookupEnv("DTH_SETTINGS_SECRET_SOURCES"); ok {
 		cfg.Settings.SecretSources = splitList(v)

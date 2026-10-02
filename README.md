@@ -119,6 +119,11 @@ Under construction, milestone by milestone (plan § 14). Implemented so far:
   with secret references (`${env:}`, `${file:…#key}`, `${vault:}`, `${gopass:}`, `${awssm:}`, `${gcpsm:}`):
   `dth apply -f`, or paste it under Administration → Settings file. See
   [`docs/settings-file.md`](docs/settings-file.md).
+- **Connect with GitHub**: one click creates a private GitHub App for the Hub (manifest flow), installs it on
+  the repositories you choose, and tracks them, with nothing to copy. See [`docs/github.md`](docs/github.md).
+- **Sealed secrets**: provider keys and connector credentials are sealed in the browser (or `dth apply`) to the
+  Hub's hybrid X25519 + ML-KEM-768 key, stored with per-secret AES-256-GCM under a local or KMS key, and are
+  write-only (only a hint is ever shown). See [`docs/security.md`](docs/security.md).
 - **Phase 15 (in progress) — hardening**: govulncheck, npm audit and Trivy gates in CI plus a weekly scan;
   CycloneDX SBOMs (`make sbom`). Operations, backup/restore and upgrade runbooks are next.
 

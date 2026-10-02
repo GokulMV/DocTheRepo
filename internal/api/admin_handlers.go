@@ -17,6 +17,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/core/pipeline"
 	"github.com/GokulMV/DocTheRepo/internal/ingest"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
+	"github.com/GokulMV/DocTheRepo/internal/secrets"
 	"github.com/GokulMV/DocTheRepo/internal/store"
 )
 
@@ -53,6 +54,32 @@ type AdminDeps struct {
 	DryRun func(ctx context.Context, job ports.Job) (ports.Outcome, error)
 	// ReloadSpend applies edited ceilings immediately on this replica.
 	ReloadSpend func(ctx context.Context) error
+	// SealKeys opens secrets the browser or CLI sealed to the Hub, and keeps their hints (nil: plain only).
+	SealKeys *store.SealKeys
+	// RequireSealed refuses secrets that arrive unsealed (DTH_REQUIRE_SEALED_SECRETS).
+	RequireSealed bool
+}
+
+// openSecret replaces a sealed secret with its value, in place; plain values pass unless sealing is required.
+func (h *adminHandlers) openSecret(r *http.Request, v *string, purpose string) error {
+	if v == nil || *v == "" {
+		return nil
+	}
+	if !secrets.IsSealed(*v) {
+		if h.d.RequireSealed {
+			return &ports.ValidationError{Code: "SEAL_REQUIRED", Message: "this Hub accepts secrets only sealed to its key (the UI and dth do this)"}
+		}
+		return nil
+	}
+	if h.d.SealKeys == nil {
+		return &ports.ValidationError{Code: "SEAL_UNAVAILABLE", Message: "sealing is not configured on this Hub"}
+	}
+	out, err := h.d.SealKeys.Unseal(r.Context(), *v, purpose)
+	if err != nil {
+		return &ports.ValidationError{Code: "SEAL_INVALID", Message: "the sealed value could not be opened (reload the page and enter it again)"}
+	}
+	*v = out
+	return nil
 }
 
 // AdminRoutes mounts § 7.6.
@@ -260,7 +287,22 @@ func (h *adminHandlers) listConnectors(w http.ResponseWriter, r *http.Request) {
 		WriteErr(w, r, err)
 		return
 	}
-	WriteJSON(w, http.StatusOK, map[string]any{"items": cs})
+	type view struct {
+		store.ConnectorView
+		CredentialsMeta *store.SecretMeta `json:"credentials_meta,omitempty"` // hint only; never the value
+	}
+	hints := map[string]store.SecretMeta{}
+	if h.d.SealKeys != nil {
+		hints, _ = h.d.SealKeys.Hints(r.Context(), "connectors")
+	}
+	out := make([]view, len(cs))
+	for i, c := range cs {
+		out[i] = view{ConnectorView: c}
+		if m, ok := hints[c.ID]; ok && c.HasCredentials {
+			out[i].CredentialsMeta = &m
+		}
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"items": out})
 }
 
 func (h *adminHandlers) createConnector(w http.ResponseWriter, r *http.Request) {
@@ -285,11 +327,22 @@ func (h *adminHandlers) createConnector(w http.ResponseWriter, r *http.Request) 
 		fail(w, r, errBadParam("mode must be webhook, poll or both"))
 		return
 	}
+	if err := h.openSecret(r, &in.Credentials, secrets.PurposeConnectorCreds); err != nil {
+		fail(w, r, err)
+		return
+	}
+	if err := h.openSecret(r, &in.WebhookSecret, secrets.PurposeConnectorWebhook); err != nil {
+		fail(w, r, err)
+		return
+	}
 	id, err := h.d.Connectors.Create(r.Context(), store.NewConnector{Type: in.Type, Name: in.Name, Mode: in.Mode, PollSeconds: in.PollSeconds,
 		Config: in.Config, Credentials: in.Credentials, WebhookSecret: in.WebhookSecret})
 	if err != nil {
 		WriteError(w, r, http.StatusConflict, "CONFLICT", "could not create connector (is the name taken?)", nil)
 		return
+	}
+	if h.d.SealKeys != nil && in.Credentials != "" {
+		_ = h.d.SealKeys.SetConnectorCredsHint(r.Context(), id, in.Credentials)
 	}
 	h.audit(r, "connector.create", "connector", id, map[string]any{"type": in.Type, "name": in.Name, "mode": in.Mode})
 	WriteJSON(w, http.StatusCreated, map[string]string{"id": id, "webhook_path": registry.WebhookPath(in.Type, id)})
@@ -302,12 +355,23 @@ func (h *adminHandlers) patchConnector(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := chi.URLParam(r, "id")
+	if err := h.openSecret(r, in.Credentials, secrets.PurposeConnectorCreds); err != nil {
+		fail(w, r, err)
+		return
+	}
+	if err := h.openSecret(r, in.WebhookSecret, secrets.PurposeConnectorWebhook); err != nil {
+		fail(w, r, err)
+		return
+	}
 	if err := h.d.Connectors.Update(r.Context(), id, in); err != nil {
 		WriteErr(w, r, err)
 		return
 	}
 	if h.d.InvalidateHost != nil {
 		h.d.InvalidateHost(id)
+	}
+	if h.d.SealKeys != nil && in.Credentials != nil {
+		_ = h.d.SealKeys.SetConnectorCredsHint(r.Context(), id, *in.Credentials)
 	}
 	h.audit(r, "connector.update", "connector", id, map[string]any{"name": in.Name, "mode": in.Mode, "enabled": in.Enabled,
 		"credentials_changed": in.Credentials != nil, "webhook_secret_changed": in.WebhookSecret != nil})
@@ -469,6 +533,8 @@ type providerView struct {
 	HasKey    bool              `json:"has_key"`
 	RedactPII bool              `json:"redact_pii"`
 	Enabled   bool              `json:"enabled"`
+	// Key is the write-only key's hint and when it was set; the key itself is never returned.
+	KeyMeta *store.SecretMeta `json:"key_meta,omitempty"`
 }
 
 func (h *adminHandlers) listProviders(w http.ResponseWriter, r *http.Request) {
@@ -477,10 +543,17 @@ func (h *adminHandlers) listProviders(w http.ResponseWriter, r *http.Request) {
 		WriteErr(w, r, err)
 		return
 	}
+	hints := map[string]store.SecretMeta{}
+	if h.d.SealKeys != nil {
+		hints, _ = h.d.SealKeys.Hints(r.Context(), "llm_providers")
+	}
 	out := make([]providerView, len(ps))
 	for i, p := range ps {
 		out[i] = providerView{ID: p.ID, Kind: p.Kind, Name: p.Name, BaseURL: p.BaseURL, Extra: p.Extra, HasKey: len(p.KeyCiphertext) > 0,
 			RedactPII: p.RedactPII, Enabled: p.Enabled}
+		if m, ok := hints[p.ID]; ok && out[i].HasKey {
+			out[i].KeyMeta = &m
+		}
 	}
 	WriteJSON(w, http.StatusOK, map[string]any{"items": out, "kinds": h.d.ProviderKinds})
 }
@@ -503,6 +576,10 @@ func (h *adminHandlers) createProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	if !slices.Contains(h.d.ProviderKinds, in.Kind) || in.Name == nil || strings.TrimSpace(*in.Name) == "" {
 		fail(w, r, errBadParam("kind must be one of "+strings.Join(h.d.ProviderKinds, ", ")+" and name is required"))
+		return
+	}
+	if err := h.openSecret(r, in.APIKey, secrets.PurposeProviderKey); err != nil {
+		fail(w, r, err)
 		return
 	}
 	rec := store.ProviderRecord{ID: ports.NewID(), Kind: in.Kind, Name: *in.Name, Extra: in.Extra, Enabled: true}
@@ -528,6 +605,9 @@ func (h *adminHandlers) createProvider(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, http.StatusConflict, "CONFLICT", "could not create provider (is the name taken?)", nil)
 		return
 	}
+	if h.d.SealKeys != nil && in.APIKey != nil && *in.APIKey != "" {
+		_ = h.d.SealKeys.SetProviderKeyHint(r.Context(), id, *in.APIKey)
+	}
 	h.audit(r, "provider.create", "llm_provider", id, map[string]any{"kind": in.Kind, "name": rec.Name})
 	WriteJSON(w, http.StatusCreated, map[string]string{"id": id})
 }
@@ -539,6 +619,10 @@ func (h *adminHandlers) patchProvider(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := chi.URLParam(r, "id")
+	if err := h.openSecret(r, in.APIKey, secrets.PurposeProviderKey); err != nil {
+		fail(w, r, err)
+		return
+	}
 	rec, err := h.d.Providers.Get(r.Context(), id)
 	if err != nil {
 		WriteErr(w, r, err)
@@ -572,6 +656,9 @@ func (h *adminHandlers) patchProvider(w http.ResponseWriter, r *http.Request) {
 	}
 	if h.d.InvalidateProvider != nil {
 		h.d.InvalidateProvider(id)
+	}
+	if h.d.SealKeys != nil && in.APIKey != nil {
+		_ = h.d.SealKeys.SetProviderKeyHint(r.Context(), id, *in.APIKey)
 	}
 	h.audit(r, "provider.update", "llm_provider", id, map[string]any{"name": rec.Name, "key_changed": in.APIKey != nil, "enabled": rec.Enabled})
 	w.WriteHeader(http.StatusNoContent)

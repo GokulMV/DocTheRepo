@@ -191,6 +191,7 @@ export interface Connector {
   has_credentials: boolean;
   has_webhook_secret: boolean;
   created_at: string;
+  credentials_meta?: SecretMeta;
 }
 
 export interface Check {
@@ -208,6 +209,13 @@ export interface Provider {
   has_key: boolean;
   redact_pii: boolean;
   enabled: boolean;
+  /** The write-only key's hint (last 4 characters of a long key) and when it was set. */
+  key_meta?: SecretMeta;
+}
+
+export interface SecretMeta {
+  hint?: string;
+  set_at?: string;
 }
 
 export interface Route {

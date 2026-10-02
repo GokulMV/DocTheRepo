@@ -6,6 +6,7 @@ import Connectors from '@/pages/Connectors';
 import KnownIssues from '@/pages/KnownIssues';
 import Library from '@/pages/Library';
 import { me, mockApi, renderAt } from './helpers';
+import { openSealed } from './helpers';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -31,8 +32,9 @@ describe('Connectors: knowledge sources', () => {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Add' }));
     expect(await screen.findByText(/The first Jira sync starts within a minute/)).toBeInTheDocument();
     const b = body(calls, 'POST', '/connectors');
-    expect(b).toEqual({ type: 'jira', name: 'Jira', mode: 'poll', credentials: 'tok',
+    expect(b).toEqual({ type: 'jira', name: 'Jira', mode: 'poll', credentials: expect.stringMatching(/^dthseal1:/),
       config: { base_url: 'https://acme.atlassian.net', projects: 'ENG, OPS', email: 'bot@acme.com' } });
+    expect(openSealed(b.credentials, 'connector.credentials')).toBe('tok'); // sealed in the browser
   });
 });
 
