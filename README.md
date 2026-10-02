@@ -114,7 +114,8 @@ opens <http://localhost:8080> with the credentials printed (and saved in `~/.dth
 Set `ANTHROPIC_API_KEY` and/or `OPENAI_API_KEY` first to have the model routes configured too. Stop with
 `./scripts/quickstart.sh --down` (`--wipe` deletes the data); `--container` builds and runs the container
 image instead of using a host toolchain; `--help` lists every option. See
-[docs/architecture.md](docs/architecture.md) for how the pieces fit.
+[docs/architecture.md](docs/architecture.md) for how the pieces fit, and [docs/opencode.md](docs/opencode.md) to
+use opencode as the doc engine or to give opencode / Claude Code / Cursor the Hub as an MCP server (`dth mcp`).
 
 ### Local (one command)
 
