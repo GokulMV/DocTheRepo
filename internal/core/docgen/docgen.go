@@ -18,6 +18,9 @@ import (
 // ExternalKind is the provider kind routed through the DocGen contract instead of a chat call.
 const ExternalKind = "external_cli"
 
+// IsExternal reports provider kinds that write docs through the DocGen contract (an agent CLI).
+func IsExternal(kind string) bool { return kind == ExternalKind || kind == "opencode" }
+
 // Target is one chunk to document.
 type Target struct {
 	Chunk      ports.Chunk
@@ -92,7 +95,7 @@ func (g *Generator) Generate(ctx context.Context, meta llmgateway.CallMeta, req 
 	for _, t := range req.Targets {
 		want[t.Chunk.ID] = t.Chunk.Symbol
 	}
-	if kind == ExternalKind {
+	if IsExternal(kind) {
 		return g.external(ctx, meta, req, want)
 	}
 	var out struct {

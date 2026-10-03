@@ -30,6 +30,8 @@ type DocGenTask struct {
 	// RepairErrors is set on the single repair retry: the schema problems in the previous result.
 	RepairErrors            []string `json:"repair_errors,omitempty"`
 	MaxOutputTokensPerChunk int      `json:"max_output_tokens_per_chunk,omitempty"`
+	// Model is the model the docgen route names (an engine may use it; {model} in a command template).
+	Model string `json:"model,omitempty"`
 }
 
 // GeneratedDoc is one section of generated documentation.
