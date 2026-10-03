@@ -44,6 +44,10 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "invite" {
 		os.Exit(inviteMain())
 	}
+	// `dth-hub rotate-key --to-…`: move every stored secret to a new key-encryption key (see rotate.go).
+	if len(os.Args) > 1 && os.Args[1] == "rotate-key" {
+		os.Exit(rotateKeyMain())
+	}
 	cfgPath := flag.String("config", envOr("DTH_CONFIG", "dth.yaml"), "path to the bootstrap config file (optional)")
 	roles := flag.String("roles", "", "comma-separated roles to run (api,worker,scheduler); overrides config")
 	flag.Parse()
@@ -250,25 +254,24 @@ func run(cfgPath string) error {
 	return runErr
 }
 
-func openSecrets(ctx context.Context, c config.SecretsConfig) (*secrets.Box, error) {
-	var (
-		kek ports.KeyEncrypter
-		err error
-	)
+// openKEK opens the key-encryption key c names; localB64 (DTH_LOCAL_KEY) takes the place of the key file.
+func openKEK(ctx context.Context, c config.SecretsConfig, localB64 string) (ports.KeyEncrypter, error) {
 	switch c.Provider {
 	case "localfile":
-		if v := os.Getenv("DTH_LOCAL_KEY"); v != "" {
-			kek, err = localfile.FromBase64(v)
-		} else {
-			kek, err = localfile.Open(expandHome(c.LocalKeyFile))
+		if localB64 != "" {
+			return localfile.FromBase64(localB64)
 		}
+		return localfile.Open(expandHome(c.LocalKeyFile))
 	case "awskms":
-		kek, err = awskms.New(ctx, c.KMSKeyID)
+		return awskms.New(ctx, c.KMSKeyID)
 	case "gcpkms":
-		kek, err = gcpkms.New(ctx, c.KMSKeyID)
-	default:
-		return nil, fmt.Errorf("secrets.provider %q: use localfile, awskms, or gcpkms", c.Provider)
+		return gcpkms.New(ctx, c.KMSKeyID)
 	}
+	return nil, fmt.Errorf("secrets.provider %q: use localfile, awskms, or gcpkms", c.Provider)
+}
+
+func openSecrets(ctx context.Context, c config.SecretsConfig) (*secrets.Box, error) {
+	kek, err := openKEK(ctx, c, os.Getenv("DTH_LOCAL_KEY"))
 	if err != nil {
 		return nil, err
 	}

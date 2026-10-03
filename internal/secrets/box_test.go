@@ -90,3 +90,38 @@ func TestLocalFile_RejectsLoosePermissionsAndBadLength(t *testing.T) {
 	_, err = localfile.Open(short)
 	assert.ErrorContains(t, err, "32 bytes")
 }
+
+func TestRewrap(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	oldK, err := localfile.Open(filepath.Join(dir, "old.key"))
+	require.NoError(t, err)
+	newK, err := localfile.Open(filepath.Join(dir, "new.key"))
+	require.NoError(t, err)
+	otherK, err := localfile.Open(filepath.Join(dir, "other.key"))
+	require.NoError(t, err)
+	blob, err := secrets.NewBox(oldK).Seal(ctx, []byte("sk-team"), []byte("llm_provider:1:key"))
+	require.NoError(t, err)
+
+	moved, changed, err := secrets.Rewrap(ctx, blob, oldK, newK)
+	require.NoError(t, err)
+	require.True(t, changed)
+	id, _ := secrets.KeyIDOf(moved)
+	require.Equal(t, newK.KeyID(), id)
+	pt, err := secrets.NewBox(newK).Open(ctx, moved, []byte("llm_provider:1:key"))
+	require.NoError(t, err)
+	require.Equal(t, "sk-team", string(pt))
+	_, err = secrets.NewBox(newK).Open(ctx, moved, []byte("llm_provider:2:key"))
+	require.Error(t, err, "still bound to its record")
+	_, err = secrets.NewBox(oldK).Open(ctx, moved, []byte("llm_provider:1:key"))
+	require.Error(t, err, "the old key no longer opens it")
+
+	again, changed, err := secrets.Rewrap(ctx, moved, oldK, newK)
+	require.NoError(t, err)
+	require.False(t, changed, "a re-run leaves rotated secrets alone")
+	require.Equal(t, moved, again)
+	_, _, err = secrets.Rewrap(ctx, blob, otherK, newK)
+	require.Error(t, err, "sealed with neither key")
+	_, _, err = secrets.Rewrap(ctx, []byte{9, 9}, oldK, newK)
+	require.Error(t, err)
+}

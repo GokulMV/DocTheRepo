@@ -119,3 +119,56 @@ func ConnectorCredsAAD(connectorID string) []byte {
 func ConnectorWebhookAAD(connectorID string) []byte {
 	return []byte("connector:" + connectorID + ":webhook")
 }
+
+// KeyIDOf returns the key that sealed blob, without opening it.
+func KeyIDOf(blob []byte) (string, error) {
+	if len(blob) < 2 || blob[0] != formatV1 || len(blob) < 2+int(blob[1]) {
+		return "", ErrCorrupt
+	}
+	return string(blob[2 : 2+int(blob[1])]), nil
+}
+
+// Rewrap moves a sealed secret from one key-encryption key to another: the data key is unwrapped with
+// from and wrapped with to, and the encrypted secret itself is untouched (no plaintext is handled, and
+// the binding to its record stays). A blob already under to is returned as is with changed false.
+func Rewrap(ctx context.Context, blob []byte, from, to ports.KeyEncrypter) (out []byte, changed bool, err error) {
+	keyID, err := KeyIDOf(blob)
+	if err != nil {
+		return nil, false, err
+	}
+	if keyID == to.KeyID() {
+		return blob, false, nil
+	}
+	if keyID != from.KeyID() {
+		return nil, false, fmt.Errorf("secret was sealed with key %q, which is neither the current key %q nor the new key %q", keyID, from.KeyID(), to.KeyID())
+	}
+	p := 2 + len(keyID)
+	if len(blob) < p+2 {
+		return nil, false, ErrCorrupt
+	}
+	wl := int(binary.BigEndian.Uint16(blob[p:]))
+	p += 2
+	if len(blob) < p+wl+12 {
+		return nil, false, ErrCorrupt
+	}
+	dek, err := from.UnwrapKey(ctx, blob[p:p+wl])
+	if err != nil {
+		return nil, false, fmt.Errorf("unwrap data key: %w", err)
+	}
+	defer clear(dek)
+	wrapped, err := to.WrapKey(ctx, dek)
+	if err != nil {
+		return nil, false, fmt.Errorf("wrap data key: %w", err)
+	}
+	newID := to.KeyID()
+	if len(newID) > 255 || len(wrapped) > 65535 {
+		return nil, false, errors.New("key id or wrapped key too long")
+	}
+	rest := blob[p+wl:]
+	out = make([]byte, 0, 4+len(newID)+len(wrapped)+len(rest))
+	out = append(out, formatV1, byte(len(newID)))
+	out = append(out, newID...)
+	out = binary.BigEndian.AppendUint16(out, uint16(len(wrapped)))
+	out = append(out, wrapped...)
+	return append(out, rest...), true, nil
+}
