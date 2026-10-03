@@ -82,3 +82,33 @@ func TestErrorsAndLimits(t *testing.T) {
 	_, transient := ports.AsTransient(err)
 	assert.True(t, transient, "a response without our answer is retried")
 }
+
+func TestJudgeAsksBooleanQuestions(t *testing.T) {
+	var got map[string]any
+	reply := `{"model":"jev-1.13.0","answers":{"rel0":{"type":"boolean","probability":0.91},"rel1":{"type":"boolean","probability":0.04}},
+		"usage":{"input_tokens":800,"output_tokens":4}}`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&got)
+		_, _ = w.Write([]byte(reply))
+	}))
+	defer srv.Close()
+	c, err := New(ports.ProviderConfig{APIKey: "k", BaseURL: srv.URL})
+	require.NoError(t, err)
+	j, err := c.Judge(context.Background(), "", ports.JudgeRequest{Task: "ask_evidence", State: `{"question":"q"}`,
+		Questions: []ports.JudgeQuestion{{ID: "rel0", Instructions: "first?"}, {ID: "rel1", Instructions: "second?"}}})
+	require.NoError(t, err)
+	assert.Equal(t, map[string]any{"rel0": map[string]any{"type": "boolean", "instructions": "first?"},
+		"rel1": map[string]any{"type": "boolean", "instructions": "second?"}}, got["questions"])
+	assert.Equal(t, map[string]float64{"rel0": 0.91, "rel1": 0.04}, j.P)
+	assert.True(t, j.Calibrated)
+	assert.Equal(t, int64(800), j.Usage.InputTokens)
+
+	reply = `{"answers":{"rel0":{"type":"boolean","probability":0.5}}}`
+	c.http.MaxRetries = 0
+	_, err = c.Judge(context.Background(), "", ports.JudgeRequest{State: "s",
+		Questions: []ports.JudgeQuestion{{ID: "rel0", Instructions: "a"}, {ID: "rel1", Instructions: "b"}}})
+	assert.Error(t, err, "an unanswered question is an error, not a silent 0")
+	_, err = c.Judge(context.Background(), "", ports.JudgeRequest{State: "s"})
+	var perm *ports.PermanentError
+	assert.ErrorAs(t, err, &perm)
+}

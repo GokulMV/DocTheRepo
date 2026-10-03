@@ -20,6 +20,7 @@ const FEATURE_HELP: Record<string, string> = {
   suggest: 'Proposes known-issue rules from pasted text',
   decide: 'Typed yes/no decisions behind confidence gates (e.g. skip decoding obvious noise); TypeSafe Jev or any chat model',
   security: 'Attacks, verifies and fixes code on the Security page (uses the Ask model when unset); a strong model finds more',
+  sift: 'Cheap yes/no judging that picks which sources an Ask answer reads, so the Ask model reads less; TypeSafe Jev or a small fast model. Uses decide, then docs (short code), when unset; skipped when it would not save',
 };
 
 type RouteOut = { docs_queued?: number };

@@ -24,6 +24,7 @@ const SAVINGS_LABEL: Record<string, string> = {
   known_issue_suppressed: 'Known issues not decoded',
   decode_reused: 'Explanations reused (code unchanged)',
   decision_gate: 'Noise skipped by the decision gate',
+  evidence_sifted: 'Ask sources trimmed before answering',
 };
 
 export default function Analytics() {

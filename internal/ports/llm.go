@@ -151,3 +151,31 @@ type Decision struct {
 type Decider interface {
 	Decide(ctx context.Context, model string, q DecisionQuestion) (Decision, error)
 }
+
+// JudgeQuestion is one yes/no question about a judgment's shared state.
+type JudgeQuestion struct {
+	ID           string `json:"id"`
+	Instructions string `json:"instructions"`
+}
+
+// JudgeRequest asks many yes/no questions about one state in a single call (the Ask evidence sifter asks
+// two per retrieved piece of source), so the shared state is paid for once.
+type JudgeRequest struct {
+	Task      string          `json:"task"`
+	State     string          `json:"state"`
+	Questions []JudgeQuestion `json:"questions"`
+}
+
+// Judgment is the probability of "yes" per question ID. Calibrated is as for Decision.
+type Judgment struct {
+	P          map[string]float64 `json:"p"`
+	Calibrated bool               `json:"calibrated"`
+	Model      string             `json:"model,omitempty"`
+	Usage      TokenUsage         `json:"usage"`
+}
+
+// Judger is implemented by providers with a native yes/no model (TypeSafe Jev). Chat providers answer
+// judgments through a JSON contract instead.
+type Judger interface {
+	Judge(ctx context.Context, model string, r JudgeRequest) (Judgment, error)
+}

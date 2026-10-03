@@ -112,6 +112,11 @@ Ask is retrieval-augmented generation with an agent fallback:
 - **Cost:** at most 1 + `agent_steps` + 1 model calls, and only for questions that need it. The result is
   cached like any other answer, so asking again costs nothing.
 
+Before answering, the **source picker** ([ask-sources.md](ask-sources.md)) has a cheap judge (TypeSafe Jev or a
+small chat model) answer yes/no relevance and scope questions for every retrieved piece, many per call, and
+sends the answering model only the pieces that pass. When search finds too little, it explores the indexed
+tree directory by directory before the agent spends model calls.
+
 Two caches keep repeated questions cheap:
 
 - **Answer cache** (Postgres, `answer_cache`). The first question of a thread is looked up by its

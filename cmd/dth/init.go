@@ -366,6 +366,9 @@ func runWizard(w *wizard) (settings.Document, func(string) string, error) {
 			}
 			doc.Routes[f] = settings.Route{Provider: prov.Name, Model: md}
 		}
+		if m.fast != "" { // Ask's source picker: worth it only on a cheaper model than the one answering
+			doc.Routes["sift"] = settings.Route{Provider: prov.Name, Model: m.fast}
+		}
 		fmt.Fprintln(w.out)
 	}
 

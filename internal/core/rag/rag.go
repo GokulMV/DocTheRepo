@@ -20,6 +20,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/core/chunker"
 	"github.com/GokulMV/DocTheRepo/internal/core/llmgateway"
 	"github.com/GokulMV/DocTheRepo/internal/core/palace"
+	"github.com/GokulMV/DocTheRepo/internal/core/sift"
 	"github.com/GokulMV/DocTheRepo/internal/core/spendguard"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
 )
@@ -91,6 +92,9 @@ type Engine struct {
 	// SimilarAnswer is the embedding similarity at which a reworded question reuses a cached answer
 	// (0: off). It needs a SemanticCache store and an embedding route.
 	SimilarAnswer float64
+	// Sift picks the retrieved sources an answer needs with cheap yes/no judgments, and explores the index
+	// before the agent when retrieval finds too little; optional.
+	Sift *sift.Sifter
 }
 
 // Query is one question.
@@ -130,6 +134,20 @@ type Answer struct {
 	Provider  string           `json:"provider,omitempty"`
 	// Investigated: retrieval found too little, so the agent looked further before answering.
 	Investigated bool `json:"investigated,omitempty"`
+	// Sift reports how the sources were picked (absent when sifting was off or skipped).
+	Sift *SiftSummary `json:"sift,omitempty"`
+}
+
+// SiftSummary is what the source picker did for one answer.
+type SiftSummary struct {
+	Candidates  int     `json:"candidates"`
+	Kept        int     `json:"kept"`
+	TokensSaved int     `json:"tokens_saved"` // answer-model input tokens not sent
+	JudgeTokens int64   `json:"judge_tokens"` // tokens the judge read
+	CostUSD     float64 `json:"cost_usd"`     // the judge's cost
+	Calibrated  bool    `json:"calibrated"`
+	Explored    int     `json:"explored,omitempty"` // files read while exploring the index
+	Model       string  `json:"model,omitempty"`
 }
 
 // ErrEmptyQuestion is returned for blank or oversized questions.
@@ -265,28 +283,64 @@ func (e *Engine) Ask(ctx context.Context, q Query) (Answer, error) {
 	q.Question = question
 	var agentUsage ports.TokenUsage
 	investigated := false
+	var sum *SiftSummary
+	weak := false
+	if e.Sift != nil {
+		before := packedTokens(Pack(chunks, budget))
+		kept, rep := e.Sift.Select(ctx, meta, question, chunks, rt)
+		if rep.Skipped == "" {
+			chunks, weak = kept, rep.Weak
+			sum = e.siftSummary(rep)
+			sum.TokensSaved = max(0, before-packedTokens(Pack(chunks, budget)))
+		}
+	}
+	tree := e.tree(q.Scope)
+	canLook := e.AgentSteps > 0 || (e.Sift != nil && tree != nil)
+	explored, agentRan := false, false
+	// deeper looks further: explore the index with cheap judgments first, then (if that found nothing, or
+	// on a second call) let the agent's model search.
 	deeper := func() {
-		chunks = e.investigate(ctx, meta, q, chunks, &agentUsage)
 		investigated = true
+		if !explored && e.Sift != nil && tree != nil {
+			explored = true
+			found, rep := e.Sift.Navigate(ctx, meta, question, tree, rt)
+			if rep.Skipped == "" || rep.Calls > 0 {
+				if sum == nil {
+					sum = &SiftSummary{}
+				}
+				e.addSift(sum, rep)
+			}
+			if len(found) > 0 { // judge-confirmed: enough to answer from, however few
+				chunks = append(found, chunks...)
+				return
+			}
+		}
+		if e.AgentSteps > 0 && !agentRan {
+			agentRan = true
+			chunks = e.investigate(ctx, meta, q, chunks, &agentUsage)
+		}
 	}
 	packed := Pack(chunks, budget)
-	if e.AgentSteps > 0 && len(packed) < AgentMinSources {
+	// Few sources are too little, unless the judge confirmed them: then few is simply what it takes.
+	confirmed := sum != nil && !weak && len(packed) > 0
+	if canLook && (weak || (len(packed) < AgentMinSources && !confirmed)) {
 		deeper() // too little to answer from: look further first
 		packed = Pack(chunks, budget)
 	}
 	if len(packed) == 0 {
-		a := Answer{Text: NotFoundAnswer, Citations: []Citation{}, Investigated: investigated, Usage: agentUsage}
+		a := Answer{Text: NotFoundAnswer, Citations: []Citation{}, Investigated: investigated, Usage: agentUsage, Sift: sum}
 		if q.OnDelta != nil {
 			q.OnDelta(a.Text)
 		}
 		return a, nil
 	}
 	// While the agent could still run, a "not found" reply is held back rather than streamed.
-	a, streamed, err := e.answer(ctx, meta, rt, q, packed, e.AgentSteps > 0 && !investigated)
+	moreToTry := func() bool { return (e.AgentSteps > 0 && !agentRan) || (!explored && e.Sift != nil && tree != nil) }
+	a, streamed, err := e.answer(ctx, meta, rt, q, packed, canLook && moreToTry())
 	if err != nil {
 		return Answer{}, err
 	}
-	if len(a.Citations) == 0 && e.AgentSteps > 0 && !investigated {
+	if len(a.Citations) == 0 && canLook && moreToTry() {
 		if streamed && q.OnReset != nil {
 			q.OnReset() // an uncited reply was shown; the investigated answer replaces it
 		}
@@ -303,6 +357,13 @@ func (e *Engine) Ask(ctx context.Context, q Query) (Answer, error) {
 		}
 	}
 	a.Investigated = investigated
+	a.Sift = sum
+	if sum != nil && e.Savings != nil && sum.TokensSaved > 0 && e.Cost != nil {
+		saved, ok := e.Cost(rt.ProviderKind, a.Model, llmgateway.FeatureQA, int64(sum.TokensSaved), 0)
+		if net := saved - sum.CostUSD; ok && net > 0 {
+			_ = e.Savings.Record(ctx, "evidence_sifted", int64(sum.TokensSaved), net, CacheKey(question, q.Scope)[:16])
+		}
+	}
 	a.Usage.InputTokens += agentUsage.InputTokens
 	a.Usage.OutputTokens += agentUsage.OutputTokens
 	a.Usage.CacheReadTokens += agentUsage.CacheReadTokens
@@ -585,6 +646,76 @@ func Sources(include []string) ([]ports.ChunkSource, error) {
 			out = append(out, ports.SourceIssueDecode)
 		default:
 			return nil, fmt.Errorf("unknown include %q (code, docs, confluence, notion, knowledge, issues)", i)
+		}
+	}
+	return out, nil
+}
+
+func packedTokens(cs []ports.Chunk) int {
+	n := 0
+	for _, c := range cs {
+		n += chunker.EstimateTokens(c.Content) + 30
+	}
+	return n
+}
+
+func (e *Engine) siftSummary(rep sift.Report) *SiftSummary {
+	sum := &SiftSummary{Candidates: rep.Candidates, Kept: rep.Kept}
+	e.addSift(sum, rep)
+	return sum
+}
+
+// addSift adds a sift or navigation report's judge usage and cost to sum.
+func (e *Engine) addSift(sum *SiftSummary, rep sift.Report) {
+	tokens := rep.Usage.InputTokens + rep.Usage.CacheReadTokens + rep.Usage.CacheWriteTokens
+	sum.JudgeTokens += tokens
+	sum.Calibrated = sum.Calibrated || rep.Calibrated
+	sum.Explored += rep.Navigated
+	if rep.Model != "" {
+		sum.Model = rep.Model
+	}
+	if e.Cost != nil {
+		if c, ok := e.Cost(rep.Provider, rep.Model, llmgateway.FeatureSift, tokens, rep.Usage.OutputTokens); ok {
+			sum.CostUSD += c
+		}
+	}
+}
+
+// tree lets the source picker explore the index within the question's scope (nil without an Explorer).
+func (e *Engine) tree(s Scope) sift.Tree {
+	ex, ok := e.Store.(Explorer)
+	if !ok {
+		return nil
+	}
+	return scopedTree{ex, s}
+}
+
+type scopedTree struct {
+	ex Explorer
+	s  Scope
+}
+
+func (t scopedTree) Paths(ctx context.Context, limit int) ([]sift.File, error) {
+	ps, err := t.ex.ListPaths(ctx, "", t.s, limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]sift.File, len(ps))
+	for i, p := range ps {
+		out[i] = sift.File{Repo: p.Repo, Path: p.Path}
+	}
+	return out, nil
+}
+
+func (t scopedTree) Read(ctx context.Context, f sift.File, limit int) ([]ports.Chunk, error) {
+	cs, err := t.ex.ChunksForPath(ctx, f.Path, t.s, limit*4)
+	if err != nil {
+		return nil, err
+	}
+	out := cs[:0]
+	for _, c := range cs { // the same path can exist in several repositories
+		if c.Scope == f.Repo && len(out) < limit {
+			out = append(out, c)
 		}
 	}
 	return out, nil

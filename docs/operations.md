@@ -41,6 +41,7 @@ Unknown keys fail at start.
 | `DTH_DOCS_MODE` | Docs generation cost mode: `thorough`, `balanced` (default) or `economy` ([docs-generation.md](docs-generation.md#what-it-costs-and-how-to-spend-less)) |
 | `DTH_ASK_SIMILAR_ANSWER` | How alike a reworded question must be to reuse a cached answer (default 0.95, 0 = off; needs an embedding route) |
 | `DTH_ASK_AGENT_STEPS` | How far Ask may look when search finds too little (default 4, 0 = off) |
+| `DTH_ASK_SIFT`, `DTH_ASK_SIFT_KEEP_AT` | Ask's source picker: a cheap judge keeps only the sources an answer needs (`on` by default; skips itself when it would not save) ([ask-sources.md](ask-sources.md)) |
 | `DTH_VECTOR_BACKEND` | `pgvector` (default) or `qdrant` (`DTH_QDRANT_URL`) |
 | `DTH_LOG_LEVEL`, `DTH_LOG_FORMAT` | `info`/`debug`; `json` (default) or `text` |
 | `DTH_TRACING_ENABLED`, `DTH_OTLP_ENDPOINT` | OpenTelemetry traces (off by default) |

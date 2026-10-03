@@ -812,7 +812,7 @@ func (h *adminHandlers) testProvider(w http.ResponseWriter, r *http.Request) {
 }
 
 var features = []string{llmgateway.FeatureDocGen, llmgateway.FeatureDocGenFast, llmgateway.FeatureQA, llmgateway.FeatureDecode, llmgateway.FeatureTriage,
-	llmgateway.FeatureEmbedding, llmgateway.FeatureSuggest, llmgateway.FeatureDecide, llmgateway.FeatureSecurity}
+	llmgateway.FeatureEmbedding, llmgateway.FeatureSuggest, llmgateway.FeatureDecide, llmgateway.FeatureSecurity, llmgateway.FeatureSift}
 
 func (h *adminHandlers) listRoutes(w http.ResponseWriter, r *http.Request) {
 	rs, err := h.d.Routes.ListRoutes(r.Context())
@@ -856,8 +856,8 @@ func (h *adminHandlers) putRoute(w http.ResponseWriter, r *http.Request) {
 		if id == "" {
 			continue
 		}
-		if p, err := h.d.Providers.Get(r.Context(), id); err == nil && p.Kind == "jev" && feature != llmgateway.FeatureDecide {
-			fail(w, r, errBadParam("jev answers decisions only: route it to the decide feature"))
+		if p, err := h.d.Providers.Get(r.Context(), id); err == nil && p.Kind == "jev" && feature != llmgateway.FeatureDecide && feature != llmgateway.FeatureSift {
+			fail(w, r, errBadParam("jev answers decisions only: route it to the decide or sift feature"))
 			return
 		}
 	}

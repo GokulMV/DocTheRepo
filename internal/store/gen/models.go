@@ -582,6 +582,8 @@ const (
 	LlmFeatureSuggest    LlmFeature = "suggest"
 	LlmFeatureDecide     LlmFeature = "decide"
 	LlmFeatureDocgenFast LlmFeature = "docgen_fast"
+	LlmFeatureSecurity   LlmFeature = "security"
+	LlmFeatureSift       LlmFeature = "sift"
 )
 
 func (e *LlmFeature) Scan(src interface{}) error {
@@ -850,6 +852,7 @@ const (
 	SavingsKindDecisionGate         SavingsKind = "decision_gate"
 	SavingsKindDocReused            SavingsKind = "doc_reused"
 	SavingsKindDocNoCall            SavingsKind = "doc_no_call"
+	SavingsKindEvidenceSifted       SavingsKind = "evidence_sifted"
 )
 
 func (e *SavingsKind) Scan(src interface{}) error {
@@ -1742,6 +1745,52 @@ type SealKey struct {
 	PrivateCt []byte     `json:"private_ct"`
 	CreatedAt time.Time  `json:"created_at"`
 	RetiredAt *time.Time `json:"retired_at"`
+}
+
+type SecurityFinding struct {
+	ID             string          `json:"id"`
+	ScanID         string          `json:"scan_id"`
+	RepoID         string          `json:"repo_id"`
+	Dimension      string          `json:"dimension"`
+	Title          string          `json:"title"`
+	Surface        string          `json:"surface"`
+	File           string          `json:"file"`
+	LineStart      int32           `json:"line_start"`
+	LineEnd        int32           `json:"line_end"`
+	Repro          json.RawMessage `json:"repro"`
+	Evidence       string          `json:"evidence"`
+	Severity       string          `json:"severity"`
+	Exploitability string          `json:"exploitability"`
+	Priority       string          `json:"priority"`
+	Status         string          `json:"status"`
+	FixStatus      string          `json:"fix_status"`
+	Fix            json.RawMessage `json:"fix"`
+	FixPrUrl       string          `json:"fix_pr_url"`
+	FixError       string          `json:"fix_error"`
+	CreatedAt      time.Time       `json:"created_at"`
+}
+
+type SecurityModuleCache struct {
+	RepoID     string          `json:"repo_id"`
+	Module     string          `json:"module"`
+	InputsHash string          `json:"inputs_hash"`
+	Findings   json.RawMessage `json:"findings"`
+	CreatedAt  time.Time       `json:"created_at"`
+}
+
+type SecurityScan struct {
+	ID         string          `json:"id"`
+	RepoID     string          `json:"repo_id"`
+	JobID      *string         `json:"job_id"`
+	Status     string          `json:"status"`
+	CommitSha  string          `json:"commit_sha"`
+	Modules    []string        `json:"modules"`
+	Verdict    string          `json:"verdict"`
+	Summary    json.RawMessage `json:"summary"`
+	Error      string          `json:"error"`
+	StartedBy  *string         `json:"started_by"`
+	CreatedAt  time.Time       `json:"created_at"`
+	FinishedAt *time.Time      `json:"finished_at"`
 }
 
 type ServiceMap struct {

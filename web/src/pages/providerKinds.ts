@@ -32,6 +32,8 @@ export interface ProviderKind {
   features?: string[];
 }
 
+// "Use for every feature" routes these. sift is left out: the source picker only pays off on a cheaper
+// model than the one answering, so it is routed on its own (or to Jev, whose features include it).
 export const CHAT_FEATURES = ['docgen', 'docgen_fast', 'qa', 'decode', 'triage', 'suggest', 'decide', 'security'];
 
 export const PROVIDER_KINDS: ProviderKind[] = [
@@ -174,11 +176,11 @@ export const PROVIDER_KINDS: ProviderKind[] = [
   {
     kind: 'jev',
     label: 'TypeSafe Jev',
-    blurb: 'Calibrated yes/no decisions (for example, skip decoding obvious noise). Decisions only.',
+    blurb: 'Calibrated yes/no decisions: skip decoding obvious noise, and pick which sources an Ask answer needs. Decisions only.',
     key: 'required',
     baseURL: 'optional',
     modelPlaceholder: 'jev-latest',
-    features: ['decide'],
+    features: ['decide', 'sift'],
   },
 ];
 

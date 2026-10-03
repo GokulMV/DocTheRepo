@@ -77,6 +77,13 @@ type AskConfig struct {
 	// cached answer (DTH_ASK_SIMILAR_ANSWER; default 0.95, 0 turns it off). Questions naming different
 	// files or identifiers never share an answer.
 	SimilarAnswer float64 `yaml:"similar_answer"`
+	// Sift turns on the source picker (DTH_ASK_SIFT: on, the default, or off): a cheap judge model (the
+	// sift route, else decide, else docgen_fast) keeps only the retrieved sources an answer needs, and
+	// explores the index before the agent. It skips itself when the judge would not be cheaper.
+	Sift string `yaml:"sift"`
+	// SiftKeepAt is the probability of relevance a source needs to be kept (DTH_ASK_SIFT_KEEP_AT;
+	// default 0.5). Lower keeps more.
+	SiftKeepAt float64 `yaml:"sift_keep_at"`
 }
 
 // SettingsConfig is the policy for settings files pasted into the UI (Administration → Settings file).
@@ -264,7 +271,7 @@ func Default() Config {
 		Retention: RetentionConfig{EventDays: 30, ChunkGCDays: 14},
 		Grammars:  GrammarsConfig{LoadDir: "./grammars"},
 		Decide:    DecideConfig{GateThreshold: 0.9},
-		Ask:       AskConfig{AgentSteps: 4, SimilarAnswer: 0.95},
+		Ask:       AskConfig{AgentSteps: 4, SimilarAnswer: 0.95, Sift: "on", SiftKeepAt: 0.5},
 	}
 }
 
@@ -360,6 +367,16 @@ func applyEnv(cfg *Config) error {
 		}
 		cfg.Ask.SimilarAnswer = f
 	}
+	if v, ok := os.LookupEnv("DTH_ASK_SIFT"); ok {
+		cfg.Ask.Sift = strings.ToLower(strings.TrimSpace(v))
+	}
+	if v, ok := os.LookupEnv("DTH_ASK_SIFT_KEEP_AT"); ok {
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return fmt.Errorf("DTH_ASK_SIFT_KEEP_AT: want a probability from 0.1 to 0.95, got %q", v)
+		}
+		cfg.Ask.SiftKeepAt = f
+	}
 	if v, ok := os.LookupEnv("DTH_PR_SWEEP_INTERVAL"); ok {
 		d, err := time.ParseDuration(v)
 		if err != nil || d <= 0 {
@@ -443,6 +460,14 @@ func (c Config) Validate() error {
 	}
 	if s := c.Ask.SimilarAnswer; s != 0 && (s < 0.8 || s > 1) {
 		add("ask.similar_answer: want 0 (off) or a similarity from 0.8 to 1, got %g", s)
+	}
+	switch c.Ask.Sift {
+	case "", "on", "off":
+	default:
+		add("ask.sift: want on or off, got %q", c.Ask.Sift)
+	}
+	if k := c.Ask.SiftKeepAt; k != 0 && (k < 0.1 || k > 0.95) {
+		add("ask.sift_keep_at: want a probability from 0.1 to 0.95, got %g", k)
 	}
 	if c.Database.URLEnv == "" {
 		add("database.url_env: required")

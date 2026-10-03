@@ -12,6 +12,7 @@ self-reported probabilities that the Hub labels as such.
 
 | Decision | Question | When it is acted on | Saves |
 |---|---|---|---|
+| Ask source picking (`sift` route) | For each retrieved piece: does it answer the question, and is it about the asked-about component? Many pieces per call | Pieces at relevance ≥ 0.5 are kept, the rest not sent | Most of the answering model's input on most questions ([ask-sources.md](ask-sources.md)) |
 | Issue actionability (Phase 11.5) | Does this new issue need engineering attention, or is it recurring noise? | Only "known noise" at p ≥ `decide.gate_threshold` (default 0.9) | The full decode (~8k tokens on average) for that issue |
 
 Everything below the threshold, every "actionable" answer, and every error goes down the normal path, so a
@@ -20,7 +21,7 @@ in the Inbox with a short note ("Recurring noise … p=0.97, calibrated probabil
 one click away (`POST /api/v1/issues/{id}/decode {"force": true}`).
 
 Planned (same port, not wired yet): LLM triage fallback for file changes, likely-cause selection before a
-decode, issue → service routing, and the Q&A "is this answerable from the sources?" gate.
+decode and issue → service routing.
 
 ## Set it up
 
@@ -44,7 +45,7 @@ decode, issue → service routing, and the Q&A "is this answerable from the sour
    ```
 
    `base_url` is optional (default `https://api.typesafe.ai/v1`); set it to go through a gateway that
-   proxies the System One API. The Hub refuses to route any feature other than `decide` to a Jev provider,
+   proxies the System One API. The Hub refuses to route any feature other than `decide` and `sift` to a Jev provider,
    because Jev cannot write text.
 4. Optional: tune the gate in the Hub config:
 
