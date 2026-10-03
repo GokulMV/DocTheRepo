@@ -80,7 +80,7 @@ type answer struct {
 	Choice        string             `json:"choice"`
 	Confidence    float64            `json:"confidence"`
 	Probabilities map[string]float64 `json:"probabilities"`
-	Probability   *float64           `json:"probability"` // noul
+	Probability   *float64           `json:"probability"` // boolean questions
 }
 
 type response struct {
@@ -119,6 +119,42 @@ func (c *Client) Decide(ctx context.Context, model string, q ports.DecisionQuest
 		return ports.Decision{}, ports.Transient(fmt.Errorf("jev: response has no answer for %q", questionID))
 	}
 	return ports.Decision{Probabilities: a.Probabilities, Choice: a.Choice, P: a.Probabilities[a.Choice], Calibrated: true, Model: out.Model,
+		Usage: ports.TokenUsage{InputTokens: out.Usage.InputTokens, OutputTokens: out.Usage.OutputTokens, Reported: true}}, nil
+}
+
+// MaxQuestions bounds one judgment request; callers batch below it.
+const MaxQuestions = 128
+
+// Judge implements ports.Judger with boolean questions: each answer is the probability of "yes".
+//
+//	request  {"model": …, "state": "<text>", "questions": {"<id>": {"type": "boolean", "instructions": "<question>"}, …}}
+//	response {"answers": {"<id>": {"type": "boolean", "probability": 0.91}, …}, "usage": {…}}
+func (c *Client) Judge(ctx context.Context, model string, r ports.JudgeRequest) (ports.Judgment, error) {
+	if len(r.Questions) == 0 || len(r.Questions) > MaxQuestions {
+		return ports.Judgment{}, ports.Permanent(fmt.Errorf("jev: a judgment needs 1 to %d questions, got %d", MaxQuestions, len(r.Questions)))
+	}
+	if model == "" {
+		model = DefaultModel
+	}
+	qs := make(map[string]question, len(r.Questions))
+	for _, q := range r.Questions {
+		qs[q.ID] = question{Type: "boolean", Instructions: q.Instructions}
+	}
+	var out response
+	err := c.http.JSON(ctx, http.MethodPost, c.base+"/systemone", map[string]string{"Authorization": "Bearer " + c.key},
+		request{Model: model, State: r.State, Questions: qs}, &out)
+	if err != nil {
+		return ports.Judgment{}, err
+	}
+	p := make(map[string]float64, len(r.Questions))
+	for _, q := range r.Questions {
+		a, ok := out.Answers[q.ID]
+		if !ok || a.Probability == nil || *a.Probability < 0 || *a.Probability > 1 {
+			return ports.Judgment{}, ports.Transient(fmt.Errorf("jev: response has no probability for %q", q.ID))
+		}
+		p[q.ID] = *a.Probability
+	}
+	return ports.Judgment{P: p, Calibrated: true, Model: out.Model,
 		Usage: ports.TokenUsage{InputTokens: out.Usage.InputTokens, OutputTokens: out.Usage.OutputTokens, Reported: true}}, nil
 }
 

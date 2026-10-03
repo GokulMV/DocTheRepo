@@ -45,6 +45,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/core/pipeline"
 	"github.com/GokulMV/DocTheRepo/internal/core/rag"
 	"github.com/GokulMV/DocTheRepo/internal/core/security"
+	"github.com/GokulMV/DocTheRepo/internal/core/sift"
 	"github.com/GokulMV/DocTheRepo/internal/core/spendguard"
 	"github.com/GokulMV/DocTheRepo/internal/core/suggest"
 	"github.com/GokulMV/DocTheRepo/internal/ingest"
@@ -219,6 +220,9 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 		},
 		Observe:    func(stage string, d time.Duration) { m.Retrieval.WithLabelValues(stage).Observe(d.Seconds()) },
 		AgentSteps: cfg.Ask.AgentSteps, SimilarAnswer: cfg.Ask.SimilarAnswer}
+	if cfg.Ask.Sift != "off" {
+		a.rag.Sift = &sift.Sifter{GW: gw, Cache: &sift.Memory{}, Cost: a.rag.Cost, KeepAt: cfg.Ask.SiftKeepAt}
+	}
 	indexer := &pipeline.Indexer{GW: gw, Index: a.index}
 	a.decoder = &decode.Decoder{Store: store.NewDecodes(st, a.chunks), GW: gw, Index: a.index, Savings: store.NewSavings(st),
 		Embed: func(ctx context.Context, meta llmgateway.CallMeta, cs []ports.Chunk) error {

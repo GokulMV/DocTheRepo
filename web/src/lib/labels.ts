@@ -22,6 +22,7 @@ export const FEATURE_LABELS: Record<string, string> = {
   suggest: 'Known-issue suggestions',
   decide: 'Decisions',
   security: 'Security scans',
+  sift: 'Ask source picking',
 };
 
 export const featureLabel = (f: string) => FEATURE_LABELS[f] ?? sentence(f);
