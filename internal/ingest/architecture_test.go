@@ -18,7 +18,9 @@ type scanHost struct {
 	headErr error
 }
 
-func (h *scanHost) BranchHead(context.Context, string, string) (string, error) { return "abc", h.headErr }
+func (h *scanHost) BranchHead(context.Context, string, string) (string, error) {
+	return "abc", h.headErr
+}
 func (h *scanHost) ListTree(context.Context, string, string) ([]string, error) {
 	out := []string{}
 	for p := range h.files {
