@@ -73,7 +73,8 @@ function Feedback({ m }: { m: Message }) {
         className={cx('rounded-md p-1.5 hover:bg-slate-100 dark:hover:bg-white/[0.06]', value === 'down' ? 'text-red-600 dark:text-red-400' : 'text-slate-400')} onClick={() => send('down')}>
         <ThumbsDown className={cx('h-3.5 w-3.5', value === 'down' && 'fill-current')} aria-hidden />
       </button>
-      {m.cached && <Badge>cached</Badge>}
+      {m.cached && <Badge>Cached</Badge>}
+      {m.investigated && <span title="The first search found too little, so Ask looked further"><Badge tone="blue">Looked further</Badge></span>}
       {m.usage && m.usage.cost_usd > 0 && <span>{usd(m.usage.cost_usd)}</span>}
     </div>
   );

@@ -64,9 +64,9 @@ ORDER BY updated_at DESC LIMIT sqlc.arg(lim);
 DELETE FROM qa_threads WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
 
 -- name: InsertMessage :exec
-INSERT INTO qa_messages (id, thread_id, role, content, citations, provider, model, input_tokens, output_tokens, cost_usd, cached)
+INSERT INTO qa_messages (id, thread_id, role, content, citations, provider, model, input_tokens, output_tokens, cost_usd, cached, investigated)
 VALUES (sqlc.arg(id), sqlc.arg(thread_id), sqlc.arg(role), sqlc.arg(content), sqlc.arg(citations), sqlc.arg(provider), sqlc.arg(model),
-        sqlc.arg(input_tokens), sqlc.arg(output_tokens), sqlc.arg(cost_usd), sqlc.arg(cached));
+        sqlc.arg(input_tokens), sqlc.arg(output_tokens), sqlc.arg(cost_usd), sqlc.arg(cached), sqlc.arg(investigated));
 
 -- name: ThreadMessages :many
 -- A question and its answer are saved in one transaction (same created_at): the question comes first.

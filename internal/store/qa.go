@@ -166,8 +166,10 @@ type Message struct {
 	Model     string          `json:"model,omitempty"`
 	Usage     map[string]any  `json:"usage,omitempty"`
 	Cached    bool            `json:"cached"`
-	Feedback  *string         `json:"feedback,omitempty"`
-	CreatedAt time.Time       `json:"created_at"`
+	// Investigated: the first search found too little, so Ask looked further for this answer.
+	Investigated bool      `json:"investigated,omitempty"`
+	Feedback     *string   `json:"feedback,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // CreateThread starts a thread.
@@ -202,7 +204,7 @@ func (q *QA) GetThread(ctx context.Context, userID, id string, withMessages bool
 	}
 	out.Messages = make([]Message, len(rows))
 	for i, m := range rows {
-		msg := Message{ID: m.ID, Role: string(m.Role), Content: m.Content, Citations: m.Citations, Model: m.Model, Cached: m.Cached, CreatedAt: m.CreatedAt}
+		msg := Message{ID: m.ID, Role: string(m.Role), Content: m.Content, Citations: m.Citations, Model: m.Model, Cached: m.Cached, Investigated: m.Investigated, CreatedAt: m.CreatedAt}
 		if m.Role == gen.QaRoleAssistant {
 			msg.Usage = map[string]any{"input_tokens": m.InputTokens, "output_tokens": m.OutputTokens, "cost_usd": m.CostUsd}
 		}
@@ -249,7 +251,8 @@ func (q *QA) AddExchange(ctx context.Context, threadID, question string, a rag.A
 			return err
 		}
 		if err := tq.InsertMessage(ctx, gen.InsertMessageParams{ID: aid, ThreadID: threadID, Role: gen.QaRoleAssistant, Content: a.Text, Citations: cits,
-			Provider: a.Provider, Model: a.Model, InputTokens: a.Usage.InputTokens, OutputTokens: a.Usage.OutputTokens, CostUsd: a.CostUSD, Cached: a.Cached}); err != nil {
+			Provider: a.Provider, Model: a.Model, InputTokens: a.Usage.InputTokens, OutputTokens: a.Usage.OutputTokens, CostUsd: a.CostUSD, Cached: a.Cached,
+			Investigated: a.Investigated}); err != nil {
 			return err
 		}
 		return tq.TouchThread(ctx, threadID)

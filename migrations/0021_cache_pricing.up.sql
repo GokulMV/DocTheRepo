@@ -4,6 +4,9 @@
 ALTER TABLE usage_events ADD COLUMN cache_read_tokens bigint NOT NULL DEFAULT 0;
 ALTER TABLE usage_events ADD COLUMN cache_write_tokens bigint NOT NULL DEFAULT 0;
 
+-- Ask answers found by looking further (the agent) say so in the thread history too.
+ALTER TABLE qa_messages ADD COLUMN investigated boolean NOT NULL DEFAULT false;
+
 -- NULL: priced as plain input (the old behaviour) until the operator sets them.
 ALTER TABLE cost_table ADD COLUMN cache_read_per_mtok_usd numeric(12, 6);
 ALTER TABLE cost_table ADD COLUMN cache_write_per_mtok_usd numeric(12, 6);
