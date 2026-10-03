@@ -20,12 +20,14 @@ import (
 
 // Features that make paid calls.
 const (
-	FeatureDocGen    = "docgen"
-	FeatureQA        = "qa"
-	FeatureDecode    = "decode"
-	FeatureTriage    = "triage"
-	FeatureEmbedding = "embedding"
-	FeatureSuggest   = "suggest"
+	FeatureDocGen = "docgen"
+	// FeatureDocGenFast is an optional cheaper model for short code (docrouter); docgen serves it when unset.
+	FeatureDocGenFast = "docgen_fast"
+	FeatureQA         = "qa"
+	FeatureDecode     = "decode"
+	FeatureTriage     = "triage"
+	FeatureEmbedding  = "embedding"
+	FeatureSuggest    = "suggest"
 )
 
 // Route is a feature's configured provider and model.

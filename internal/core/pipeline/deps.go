@@ -8,6 +8,7 @@ import (
 	"log/slog"
 
 	"github.com/GokulMV/DocTheRepo/internal/core/docgen"
+	"github.com/GokulMV/DocTheRepo/internal/core/docrouter"
 	"github.com/GokulMV/DocTheRepo/internal/core/grammars"
 	"github.com/GokulMV/DocTheRepo/internal/core/llmgateway"
 	"github.com/GokulMV/DocTheRepo/internal/core/palace"
@@ -38,6 +39,14 @@ type GraphStore interface {
 type DocsStore interface {
 	ReplaceFile(ctx context.Context, repoID, repoName string, f ports.DocFile) error
 	RemoveFile(ctx context.Context, repoID, docPath string) error
+	// DocumentedChunks lists the chunks that have a generated doc section.
+	DocumentedChunks(ctx context.Context, repoID string) (map[string]bool, error)
+}
+
+// DocCache holds generated docs by the code they describe (docrouter).
+type DocCache interface {
+	Get(ctx context.Context, keys []docrouter.Key) (map[docrouter.Key]string, error)
+	Put(ctx context.Context, model string, bodies map[docrouter.Key]string) error
 }
 
 // SavingsRecorder records usage the Hub avoided.
@@ -69,6 +78,11 @@ type Pipeline struct {
 	Progress func(ctx context.Context, jobID string, p ports.JobProgress)
 	// DocGenParallel is how many files one job documents at once (default 4).
 	DocGenParallel int
+	// DocCache reuses docs of code documented before; DocMode trades thoroughness for cost (docrouter).
+	DocCache DocCache
+	DocMode  docrouter.Mode
+	// ModeSetting, if set, returns the mode chosen in the UI ("" keeps DocMode).
+	ModeSetting func(ctx context.Context) string
 }
 
 func (p *Pipeline) log() *slog.Logger {

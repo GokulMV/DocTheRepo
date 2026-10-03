@@ -570,13 +570,14 @@ func (ns NullKnownIssueSource) Value() (driver.Value, error) {
 type LlmFeature string
 
 const (
-	LlmFeatureDocgen    LlmFeature = "docgen"
-	LlmFeatureQa        LlmFeature = "qa"
-	LlmFeatureDecode    LlmFeature = "decode"
-	LlmFeatureTriage    LlmFeature = "triage"
-	LlmFeatureEmbedding LlmFeature = "embedding"
-	LlmFeatureSuggest   LlmFeature = "suggest"
-	LlmFeatureDecide    LlmFeature = "decide"
+	LlmFeatureDocgen     LlmFeature = "docgen"
+	LlmFeatureQa         LlmFeature = "qa"
+	LlmFeatureDecode     LlmFeature = "decode"
+	LlmFeatureTriage     LlmFeature = "triage"
+	LlmFeatureEmbedding  LlmFeature = "embedding"
+	LlmFeatureSuggest    LlmFeature = "suggest"
+	LlmFeatureDecide     LlmFeature = "decide"
+	LlmFeatureDocgenFast LlmFeature = "docgen_fast"
 )
 
 func (e *LlmFeature) Scan(src interface{}) error {
@@ -841,6 +842,8 @@ const (
 	SavingsKindAnswerCacheHit       SavingsKind = "answer_cache_hit"
 	SavingsKindRenameRekey          SavingsKind = "rename_rekey"
 	SavingsKindDecisionGate         SavingsKind = "decision_gate"
+	SavingsKindDocReused            SavingsKind = "doc_reused"
+	SavingsKindDocNoCall            SavingsKind = "doc_no_call"
 )
 
 func (e *SavingsKind) Scan(src interface{}) error {
@@ -1249,6 +1252,12 @@ type ApiToken struct {
 	CreatedAt  time.Time  `json:"created_at"`
 }
 
+type AppSetting struct {
+	Key       string    `json:"key"`
+	Value     string    `json:"value"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
 type ArchitectureDiagram struct {
 	ID        string    `json:"id"`
 	RepoID    string    `json:"repo_id"`
@@ -1362,6 +1371,15 @@ type Decode struct {
 	CostUsd            float64          `json:"cost_usd"`
 	FingerprintVersion int32            `json:"fingerprint_version"`
 	CreatedAt          time.Time        `json:"created_at"`
+}
+
+type DocCache struct {
+	ContentHash string    `json:"content_hash"`
+	Symbol      string    `json:"symbol"`
+	Body        string    `json:"body"`
+	Model       string    `json:"model"`
+	CreatedAt   time.Time `json:"created_at"`
+	UsedAt      time.Time `json:"used_at"`
 }
 
 type DocNode struct {

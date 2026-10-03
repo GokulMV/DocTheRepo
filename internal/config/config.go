@@ -162,6 +162,9 @@ type DocsConfig struct {
 	// PRSweepInterval is how often the scheduler merges green docs PRs, rebases conflicted ones, and
 	// closes stale ones.
 	PRSweepInterval time.Duration `yaml:"pr_sweep_interval"`
+	// GenerationMode trades thoroughness for cost (DTH_DOCS_MODE): thorough, balanced (default) or
+	// economy. See docs/docs-generation.md.
+	GenerationMode string `yaml:"generation_mode"`
 }
 
 // SpendConfig holds the acknowledgements that guard the spend ceilings (limits themselves live in the DB).
@@ -310,6 +313,9 @@ func applyEnv(cfg *Config) error {
 	}
 	if v, ok := os.LookupEnv("DTH_OIDC_ALLOWED_DOMAINS"); ok {
 		cfg.Auth.OIDC.AllowedDomains = splitList(v)
+	}
+	if v, ok := os.LookupEnv("DTH_DOCS_MODE"); ok {
+		cfg.Docs.GenerationMode = v
 	}
 	if v, ok := os.LookupEnv("DTH_ASK_AGENT_STEPS"); ok {
 		n, err := strconv.Atoi(v)

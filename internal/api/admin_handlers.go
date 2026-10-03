@@ -56,6 +56,9 @@ type AdminDeps struct {
 	GenerateDocs func(ctx context.Context, repoID, reason string) (jobID string, err error)
 	// ReposWithoutDocs lists synced repositories that have no docs yet (synced before docgen was routed).
 	ReposWithoutDocs func(ctx context.Context) ([]string, error)
+	// Settings holds hub-wide settings changed in the UI; DefaultDocMode is the deployment's docs mode.
+	Settings       AppSettings
+	DefaultDocMode string
 	// DryRun runs code_push in dry-run mode synchronously.
 	DryRun func(ctx context.Context, job ports.Job) (ports.Outcome, error)
 	// ReloadSpend applies edited ceilings immediately on this replica.
@@ -125,6 +128,8 @@ func AdminRoutes(d AdminDeps) func(chi.Router) {
 			r.Post("/providers/{id}/test", h.testProvider)
 			r.Get("/routes", h.listRoutes)
 			r.Put("/routes/{feature}", h.putRoute)
+			r.Get("/docs/mode", h.getDocMode)
+			r.Put("/docs/mode", h.putDocMode)
 			r.Get("/spend/limits", h.getLimits)
 			r.Put("/spend/limits", h.putLimits)
 		})
@@ -806,7 +811,7 @@ func (h *adminHandlers) testProvider(w http.ResponseWriter, r *http.Request) {
 	WriteJSON(w, http.StatusOK, map[string]any{"ok": true, "latency_ms": lat.Milliseconds()})
 }
 
-var features = []string{llmgateway.FeatureDocGen, llmgateway.FeatureQA, llmgateway.FeatureDecode, llmgateway.FeatureTriage,
+var features = []string{llmgateway.FeatureDocGen, llmgateway.FeatureDocGenFast, llmgateway.FeatureQA, llmgateway.FeatureDecode, llmgateway.FeatureTriage,
 	llmgateway.FeatureEmbedding, llmgateway.FeatureSuggest, llmgateway.FeatureDecide}
 
 func (h *adminHandlers) listRoutes(w http.ResponseWriter, r *http.Request) {
@@ -944,4 +949,65 @@ func (h *adminHandlers) reindex(w http.ResponseWriter, r *http.Request) {
 	}
 	h.audit(r, "index.reindex", "job", job.ID, map[string]int64{"chunks": n})
 	WriteJSON(w, http.StatusAccepted, map[string]any{"job_id": job.ID, "chunks_to_reembed": n, "estimated_tokens": tokens})
+}
+
+// AppSettings stores hub-wide settings changed in the UI.
+type AppSettings interface {
+	Get(ctx context.Context, key string) (string, error)
+	Set(ctx context.Context, key, value string) error
+}
+
+// DocModeKey is the app setting that overrides the deployment's docs generation mode.
+const DocModeKey = "docs.generation_mode"
+
+var docModes = []string{"thorough", "balanced", "economy"}
+
+func (h *adminHandlers) docMode(ctx context.Context) (mode, source string, err error) {
+	def := h.d.DefaultDocMode
+	if !slices.Contains(docModes, def) {
+		def = "balanced"
+	}
+	if h.d.Settings != nil {
+		v, err := h.d.Settings.Get(ctx, DocModeKey)
+		if err != nil {
+			return "", "", err
+		}
+		if slices.Contains(docModes, v) {
+			return v, "settings", nil
+		}
+	}
+	return def, "default", nil
+}
+
+func (h *adminHandlers) getDocMode(w http.ResponseWriter, r *http.Request) {
+	mode, source, err := h.docMode(r.Context())
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"mode": mode, "source": source, "modes": docModes})
+}
+
+func (h *adminHandlers) putDocMode(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Mode string `json:"mode"`
+	}
+	if err := decodeJSON(w, r, &in); err != nil {
+		fail(w, r, err)
+		return
+	}
+	if !slices.Contains(docModes, in.Mode) {
+		fail(w, r, errBadParam("mode must be thorough, balanced or economy"))
+		return
+	}
+	if h.d.Settings == nil {
+		WriteError(w, r, http.StatusNotImplemented, "NOT_AVAILABLE", "settings are not available on this Hub", nil)
+		return
+	}
+	if err := h.d.Settings.Set(r.Context(), DocModeKey, in.Mode); err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	_ = h.d.Auth.Audit(r.Context(), auth.FromContext(r.Context()), "docs.mode", "app_setting", DocModeKey, in, clientIP(r))
+	h.getDocMode(w, r)
 }

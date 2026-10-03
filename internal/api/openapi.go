@@ -32,6 +32,8 @@ var Operations = []op{
 	{"GET", "/api/v1/tokens", "Auth", "List your personal access tokens", "viewer", false, false},
 	{"POST", "/api/v1/tokens", "Auth", "Create a personal access token (returned once)", "viewer", true, false},
 	{"DELETE", "/api/v1/tokens/{id}", "Auth", "Revoke a token", "viewer", false, false},
+	{"GET", "/api/v1/docs/mode", "Admin", "Docs generation mode (thorough, balanced, economy)", "admin", false, false},
+	{"PUT", "/api/v1/docs/mode", "Admin", "Change the docs generation mode", "admin", true, false},
 	{"GET", "/api/v1/users", "Users", "List users", "admin", false, false},
 	{"POST", "/api/v1/users", "Users", "Add a user (optionally with an invite link)", "admin", true, false},
 	{"PATCH", "/api/v1/users/{id}", "Users", "Change name or role, or disable", "admin", true, false},
