@@ -227,7 +227,7 @@ func TestAsk_SimilarQuestionReusesAnswer(t *testing.T) {
 
 	e.fg.Emb.Same = map[string]string{
 		"What happens when an order gets its money back?": "How do refunds work?",
-		"What does refund.go do when money goes back?":     "How do refunds work?",
+		"What does refund.go do when money goes back?":    "How do refunds work?",
 	}
 	code, out, _ = owner.do("POST", "/api/v1/ask", map[string]any{"question": "What happens when an order gets its money back?"})
 	require.Equal(t, http.StatusOK, code, out)
