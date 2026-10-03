@@ -154,6 +154,88 @@ func (a *app) settingsCmd() *cobra.Command {
 		},
 	}
 	resolve.Flags().StringArrayVarP(&files, "file", "f", nil, "settings file or directory (repeatable; - for stdin)")
-	c.AddCommand(export, resolve)
+	c.AddCommand(export, resolve, a.settingsCheckCmd())
 	return c
+}
+
+func (a *app) settingsCheckCmd() *cobra.Command {
+	var files []string
+	var resolveRefs, requireOwner bool
+	c := &cobra.Command{
+		Use:   "check -f <file|dir> [-f …]",
+		Short: "Validate settings files before deploying, without a Hub",
+		Long: `check reads settings files the way the Hub does at startup and reports problems without contacting a Hub:
+syntax, unknown keys, missing fields, owners and admins outside the SSO allowed domains, and (with
+--require-owner) a file that names no owner. With --resolve it also fetches every secret reference to prove
+it exists, printing names only, never values. It exits non-zero on any problem, so a deploy pipeline can
+run it first.`,
+		Example: "  dth settings check -f deploy/environments/production/settings.yaml --require-owner\n" +
+			"  dth settings check -f deploy/environments/production/ --require-owner --resolve",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if len(files) == 0 {
+				return errors.New("pass one or more -f files")
+			}
+			srcs, err := settings.ReadPaths(files, cmd.InOrStdin())
+			if err != nil {
+				return err
+			}
+			opts := settings.CheckOptions{RequireOwner: requireOwner}
+			if resolveRefs {
+				opts.Resolver = &settings.Resolver{}
+			}
+			rep, err := settings.Check(cmd.Context(), srcs, opts)
+			if err != nil {
+				return err
+			}
+			if a.asJSON {
+				if err := a.printJSON(rep); err != nil {
+					return err
+				}
+			} else {
+				a.printCheck(rep)
+			}
+			if !rep.OK() {
+				return fmt.Errorf("%d problem(s) in the settings", len(rep.Problems))
+			}
+			return nil
+		},
+	}
+	c.Flags().StringArrayVarP(&files, "file", "f", nil, "settings file or directory (repeatable; - for stdin)")
+	c.Flags().BoolVar(&resolveRefs, "resolve", false, "also resolve every secret reference (needs access to the secret stores)")
+	c.Flags().BoolVar(&requireOwner, "require-owner", false, "fail unless at least one user has role owner")
+	return c
+}
+
+func (a *app) printCheck(rep settings.CheckReport) {
+	list := func(v []string) string {
+		if len(v) == 0 {
+			return "none"
+		}
+		return strings.Join(v, ", ")
+	}
+	sso := "not in this file (set by the deployment, or off)"
+	if rep.SSO {
+		sso = "configured"
+	}
+	password := "deployment default"
+	if rep.Password != nil {
+		password = map[bool]string{true: "on", false: "off"}[*rep.Password]
+	}
+	fmt.Fprintf(a.out, "Owners:    %s\nAdmins:    %s\nSSO:       %s\nPasswords: %s\n", list(rep.Owners), list(rep.Admins), sso, password)
+	state := "not resolved (add --resolve)"
+	if rep.Resolved {
+		state = "resolved"
+	}
+	fmt.Fprintf(a.out, "Secrets:   %d reference(s), %s\n", len(rep.References), state)
+	for _, r := range rep.References {
+		fmt.Fprintf(a.out, "  %s\n", r)
+	}
+	if rep.OK() {
+		fmt.Fprintln(a.out, "\nNo problems found.")
+		return
+	}
+	fmt.Fprintln(a.out, "\nProblems:")
+	for _, p := range rep.Problems {
+		fmt.Fprintf(a.out, "  - %s\n", p)
+	}
 }

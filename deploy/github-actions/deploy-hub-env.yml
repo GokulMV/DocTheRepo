@@ -1,0 +1,141 @@
+# One environment's deploy, called by deploy-hub.yml for nonlive and then production. Copy both files to
+# .github/workflows/. Everything environment-specific comes from the GitHub environment named by the input
+# (Settings → Environments → <name>) and from deploy/environments/<name>/; see docs/environments.md,
+# "Deploying from GitHub".
+#
+# Environment variables (non-secret, per environment):
+#   required  DEPLOY_ROLE_ARN  cloud role this environment's job assumes through GitHub OIDC
+#             AWS_REGION, EKS_CLUSTER
+#             HUB_URL          https://… the Hub is served at (also the SSO callback base)
+#   optional  SECRETS_FROM     cloud (default): the cluster secrets named in values.yaml already exist
+#                              (External Secrets, Terraform, or a platform team) and the workflow only checks;
+#                              github: the workflow writes them from this environment's secrets, below
+# Environment secrets (only with SECRETS_FROM=github):
+#   required  DATABASE_URL, OIDC_CLIENT_SECRET
+#   optional  SMTP_URL; any DTH_SECRET_<NAME>, readable in settings.yaml as ${env:DTH_SECRET_<NAME>}
+name: deploy-hub-env
+
+on:
+  workflow_call:
+    inputs:
+      environment: { type: string, required: true }
+      repo:        { type: string, required: true }
+      digest:      { type: string, required: true }
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.environment }}
+      url: ${{ vars.HUB_URL }}
+    env:
+      ENV_NAME: ${{ inputs.environment }}
+      ENV_DIR: deploy/environments/${{ inputs.environment }}
+      IMAGE: ${{ inputs.repo }}@${{ inputs.digest }}
+      SECRETS_FROM: ${{ vars.SECRETS_FROM || 'cloud' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Preflight — environment variables and files
+        env:
+          DEPLOY_ROLE_ARN: ${{ vars.DEPLOY_ROLE_ARN }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          EKS_CLUSTER: ${{ vars.EKS_CLUSTER }}
+          HUB_URL: ${{ vars.HUB_URL }}
+          HAS_DATABASE_URL: ${{ secrets.DATABASE_URL != '' }}
+          HAS_OIDC_CLIENT_SECRET: ${{ secrets.OIDC_CLIENT_SECRET != '' }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for v in DEPLOY_ROLE_ARN AWS_REGION EKS_CLUSTER HUB_URL; do [ -n "${!v}" ] || missing+=("variable $v"); done
+          for f in values.yaml settings.yaml; do [ -f "$ENV_DIR/$f" ] || missing+=("file $ENV_DIR/$f"); done
+          case "$SECRETS_FROM" in
+            cloud) ;;
+            github)
+              [ "$HAS_DATABASE_URL" = true ] || missing+=("secret DATABASE_URL")
+              [ "$HAS_OIDC_CLIENT_SECRET" = true ] || missing+=("secret OIDC_CLIENT_SECRET") ;;
+            *) missing+=("variable SECRETS_FROM must be cloud or github, not $SECRETS_FROM") ;;
+          esac
+          [ "$(yq '.environment' "$ENV_DIR/values.yaml")" = "$ENV_NAME" ] ||
+            missing+=("environment: $ENV_NAME in $ENV_DIR/values.yaml")
+          case "$HUB_URL" in https://*) ;; *) missing+=("variable HUB_URL must start with https://") ;; esac
+          [ "$(yq '.publicURL' "$ENV_DIR/values.yaml")" = "$HUB_URL" ] ||
+            missing+=("publicURL in $ENV_DIR/values.yaml equal to the HUB_URL variable (the SSO callback is built from it)")
+          if [ ${#missing[@]} -gt 0 ]; then
+            for m in "${missing[@]}"; do echo "::error title=GitHub environment '$ENV_NAME'::missing or wrong: $m"; done
+            exit 1
+          fi
+
+      - name: Cloud login (GitHub OIDC, no stored cloud keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+        # Google Cloud instead: google-github-actions/auth@v2 (workload_identity_provider, service_account),
+        # then google-github-actions/get-gke-credentials@v2.
+      - run: aws eks update-kubeconfig --name "${{ vars.EKS_CLUSTER }}" --region "${{ vars.AWS_REGION }}"
+
+      - name: Preflight — settings name an owner, and every secret they reference resolves
+        # The pinned image's own CLI checks the file the Hub will apply at startup. Names are printed, never values.
+        env:
+          GITHUB_SECRETS: ${{ toJSON(secrets) }}
+        run: |
+          set -euo pipefail
+          envs=()
+          for k in $(jq -r 'keys[] | select(test("^DTH_SECRET_[A-Z0-9_]+$"))' <<<"$GITHUB_SECRETS"); do
+            export "$k=$(jq -r --arg k "$k" '.[$k]' <<<"$GITHUB_SECRETS")"; envs+=(-e "$k")
+          done
+          docker run --rm --entrypoint /dth -v "$PWD/$ENV_DIR:/env:ro" \
+            -e AWS_ACCESS_KEY_ID -e AWS_SECRET_ACCESS_KEY -e AWS_SESSION_TOKEN -e AWS_REGION "${envs[@]}" \
+            "$IMAGE" settings check -f /env/settings.yaml --require-owner --resolve
+
+      - name: Cluster secrets
+        id: secrets
+        env:
+          GITHUB_SECRETS: ${{ toJSON(secrets) }}
+        run: |
+          set -euo pipefail
+          kubectl create namespace dth --dry-run=client -o yaml | kubectl apply -f -
+          if [ "$SECRETS_FROM" = cloud ]; then
+            # Created outside this workflow; only prove they exist so a missing one fails here, not in a crash loop.
+            for s in $(yq '[.database.existingSecret, .auth.oidc.existingSecret, .email.existingSecret, .secrets.localKey.existingSecret] | .[] | select(. != null and . != "")' "$ENV_DIR/values.yaml"); do
+              kubectl -n dth get secret "$s" -o name >/dev/null || { echo "::error::cluster secret $s (named in $ENV_DIR/values.yaml) does not exist"; exit 1; }
+            done
+            echo "helm_args=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # SECRETS_FROM=github: write this environment's GitHub secrets into two cluster secrets and point the chart at them.
+          jq '{apiVersion: "v1", kind: "Secret", type: "Opaque", metadata: {name: "dth-github", namespace: "dth"},
+               stringData: with_entries(select(.key | test("^(DATABASE_URL|OIDC_CLIENT_SECRET|SMTP_URL)$")))}' <<<"$GITHUB_SECRETS" | kubectl apply -f - >/dev/null
+          jq '{apiVersion: "v1", kind: "Secret", type: "Opaque", metadata: {name: "dth-github-env", namespace: "dth"},
+               stringData: with_entries(select(.key | test("^DTH_SECRET_[A-Z0-9_]+$")))}' <<<"$GITHUB_SECRETS" | kubectl apply -f - >/dev/null
+          args="--set database.existingSecret=dth-github --set database.key=DATABASE_URL"
+          args="$args --set auth.oidc.existingSecret=dth-github --set auth.oidc.key=OIDC_CLIENT_SECRET"
+          args="$args --set extraEnvFrom[0].secretRef.name=dth-github-env"
+          if jq -e '.SMTP_URL // "" | length > 0' <<<"$GITHUB_SECRETS" >/dev/null; then
+            args="$args --set email.existingSecret=dth-github --set email.key=SMTP_URL"
+          fi
+          echo "helm_args=$args" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy
+        run: |
+          # shellcheck disable=SC2086  # helm_args is a list of flags
+          helm upgrade --install dth charts/dth --namespace dth \
+            -f "$ENV_DIR/values.yaml" \
+            --set-file settings.inline="$ENV_DIR/settings.yaml" \
+            --set image.repository="${{ inputs.repo }}" --set image.digest="${{ inputs.digest }}" \
+            ${{ steps.secrets.outputs.helm_args }} \
+            --wait --timeout 10m --atomic
+
+      - name: Smoke test — up, right environment, single sign-on ready
+        env:
+          HUB_URL: ${{ vars.HUB_URL }}
+        run: |
+          set -euo pipefail
+          curl -fsS "$HUB_URL/readyz"
+          curl -fsS "$HUB_URL/api/v1/auth/config" | tee /dev/stderr |
+            jq -e --arg env "$ENV_NAME" '.environment == $env and .sso == true'

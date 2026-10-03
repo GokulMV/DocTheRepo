@@ -5,12 +5,18 @@
 # run); the same shape works for the Terraform modules (replace the helm step with
 # `terraform apply -var-file=deploy/environments/<env>/terraform.tfvars -var image=<repo>@<digest>`).
 #
-# Set up once, in the repository's Settings → Environments:
-#   nonlive     variables: DEPLOY_ROLE_ARN, AWS_REGION, EKS_CLUSTER, HUB_URL; no reviewers
+# Copy deploy-hub-env.yml next to it: each environment runs the same steps there (preflight, cloud login,
+# settings and secrets check, cluster secrets, deploy, smoke test).
+#
+# Set up once, in the repository's Settings → Environments (the full list is at the top of deploy-hub-env.yml
+# and in docs/environments.md, "Deploying from GitHub"):
+#   nonlive     variables DEPLOY_ROLE_ARN, AWS_REGION, EKS_CLUSTER, HUB_URL; no reviewers
 #   production  its own values of the same variables (another account or cluster), plus "Required reviewers"
 #               (who may promote) and "Deployment branches: main"
+# Repository variable HUB_IMAGE: the image to deploy when the input is empty.
 # The cloud login uses GitHub's OIDC token, trusted per environment by each cloud role, so the nonlive job can
-# never reach production. Application secrets stay in the cloud secret manager; values files only name them.
+# never reach production. Who owns each Hub is in deploy/environments/<env>/settings.yaml, reviewed like code;
+# no password is ever created or printed.
 name: deploy-hub
 
 on:
@@ -54,64 +60,12 @@ jobs:
 
   nonlive:
     needs: resolve
-    runs-on: ubuntu-latest
-    environment:
-      name: nonlive
-      url: ${{ vars.HUB_URL }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Cloud login (GitHub OIDC, no stored cloud keys)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
-        # Google Cloud instead: google-github-actions/auth@v2 (workload_identity_provider, service_account),
-        # then google-github-actions/get-gke-credentials@v2.
-      - run: aws eks update-kubeconfig --name "${{ vars.EKS_CLUSTER }}" --region "${{ vars.AWS_REGION }}"
-      - name: Deploy
-        run: |
-          helm upgrade --install dth charts/dth --namespace dth --create-namespace \
-            -f deploy/environments/nonlive/values.yaml \
-            --set-file settings.inline=deploy/environments/nonlive/settings.yaml \
-            --set image.repository="$REPO" --set image.digest="$DIGEST" \
-            --wait --timeout 10m
-        env:
-          REPO: ${{ needs.resolve.outputs.repo }}
-          DIGEST: ${{ needs.resolve.outputs.digest }}
-      - name: Smoke test
-        run: |
-          set -euo pipefail
-          curl -fsS "${{ vars.HUB_URL }}/readyz"
-          curl -fsS "${{ vars.HUB_URL }}/api/v1/auth/config" | jq -e '.environment == "nonlive"'
+    uses: ./.github/workflows/deploy-hub-env.yml
+    with: { environment: nonlive, repo: "${{ needs.resolve.outputs.repo }}", digest: "${{ needs.resolve.outputs.digest }}" }
+    secrets: inherit
 
   production:
-    needs: [resolve, nonlive]
-    runs-on: ubuntu-latest
-    environment:
-      name: production     # waits for a required reviewer
-      url: ${{ vars.HUB_URL }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Cloud login (GitHub OIDC, no stored cloud keys)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION }}
-        # Google Cloud instead: google-github-actions/auth@v2 (workload_identity_provider, service_account),
-        # then google-github-actions/get-gke-credentials@v2.
-      - run: aws eks update-kubeconfig --name "${{ vars.EKS_CLUSTER }}" --region "${{ vars.AWS_REGION }}"
-      - name: Deploy the same image
-        run: |
-          helm upgrade --install dth charts/dth --namespace dth --create-namespace \
-            -f deploy/environments/production/values.yaml \
-            --set-file settings.inline=deploy/environments/production/settings.yaml \
-            --set image.repository="$REPO" --set image.digest="$DIGEST" \
-            --wait --timeout 10m --atomic
-        env:
-          REPO: ${{ needs.resolve.outputs.repo }}
-          DIGEST: ${{ needs.resolve.outputs.digest }}
-      - name: Smoke test
-        run: |
-          set -euo pipefail
-          curl -fsS "${{ vars.HUB_URL }}/readyz"
-          curl -fsS "${{ vars.HUB_URL }}/api/v1/auth/config" | jq -e '.environment == "production"'
+    needs: [resolve, nonlive]   # the production environment's required reviewers approve this job
+    uses: ./.github/workflows/deploy-hub-env.yml
+    with: { environment: production, repo: "${{ needs.resolve.outputs.repo }}", digest: "${{ needs.resolve.outputs.digest }}" }
+    secrets: inherit
