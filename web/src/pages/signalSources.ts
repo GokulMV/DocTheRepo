@@ -70,10 +70,12 @@ export const sourceSpec = (type: string) => SOURCES.find((s) => s.type === type)
 // Knowledge sources (Confluence, Jira): synced read-only every 15 minutes for Q&A, decode runbooks, the
 // Library, and known-issue import.
 export interface KnowledgeSpec {
-  type: 'confluence' | 'jira';
+  type: 'confluence' | 'jira' | 'notion';
   label: string;
   config: { key: string; label: string; hint: string; required?: boolean; placeholder?: string }[];
   help: string;
+  /** Label and hint for the token field. */
+  token?: { label: string; hint: string };
 }
 
 const labelField = { key: 'known_issue_label', label: 'Known-issue label', hint: 'Issues/pages with this label become draft known-issue rules (default known-issue; "-" turns import off).' };
@@ -96,6 +98,9 @@ export const KNOWLEDGE: KnowledgeSpec[] = [
       { key: 'lookback_days', label: 'History on first sync (days)', hint: 'Default 365' },
       labelField,
     ] },
+  { type: 'notion', label: 'Notion', help: 'Every page shared with your Notion integration is synced (changed pages every 15 minutes, unshared or deleted pages removed daily). Share only what the whole team may read.',
+    config: [],
+    token: { label: 'Integration token', hint: 'Notion → Settings → Connections → Develop or manage integrations → New integration (read content only). Then share pages with it from each page’s ••• → Connections. Stored encrypted; never shown again.' } },
 ];
 
 export const knowledgeSpec = (type: string) => KNOWLEDGE.find((k) => k.type === type);

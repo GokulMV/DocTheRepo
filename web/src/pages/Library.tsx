@@ -5,6 +5,8 @@ import { api } from '@/api/client';
 import { keys, useInvalidating, useMe, useShelf, useShelves } from '@/api/hooks';
 import { atLeast } from '@/api/types';
 import { Badge, Button, Card, Dialog, DialogFooter, Empty, ErrorNote, Field, Input, PageHeader, Spinner, Textarea, Toggle } from '@/components/ui';
+import { nameOf } from '@/lib/labels';
+import { UploadDocs, UploadedList } from './Uploads';
 
 function NewShelf() {
   const [open, setOpen] = useState(false);
@@ -55,7 +57,7 @@ export default function Library() {
       <PageHeader
         title="Library"
         description="Documentation organised by topic — architecture, services, APIs, runbooks, decisions — whichever repository it came from."
-        actions={atLeast(me.data?.role, 'editor') && <NewShelf />}
+        actions={atLeast(me.data?.role, 'editor') && <><UploadDocs collections={[]} /><NewShelf /></>}
       />
       {shelves.isLoading && <Spinner />}
       <ErrorNote error={shelves.error} />
@@ -72,10 +74,11 @@ export default function Library() {
                     <Badge>{s.item_count}</Badge>
                   </div>
                   <p className="mt-1 text-sm text-slate-500">{s.description}</p>
-                  {s.curated && <Badge tone="blue">curated</Badge>}
+                  {s.curated && <Badge tone="blue">Curated</Badge>}
                 </Link>
               ))}
           </div>
+          <UploadedList />
         </>
       )}
       {slug && (
@@ -88,15 +91,18 @@ export default function Library() {
               <li key={i.type + i.id} className="py-2 text-sm">
                 {i.type === 'doc_node' ? (
                   <Link to={`/docs/${i.id}`} className="font-medium text-brand-600">{i.title}</Link>
-                ) : i.type === 'confluence_page' || i.type === 'jira_issue' ? (
+                ) : i.path?.startsWith('/library/uploads/') ? (
+                  <Link to={i.path} className="font-medium text-brand-600">{i.title}</Link>
+                ) : i.type === 'confluence_page' || i.type === 'jira_issue' || i.type === 'knowledge_doc' ? (
                   <a href={i.path} target="_blank" rel="noreferrer" className="font-medium text-brand-600">{i.title}</a>
                 ) : (
                   <Link to={`/palace/${i.id}`} className="font-medium text-brand-600">{i.title}</Link>
                 )}
                 {i.type === 'confluence_page' && <Badge>Confluence</Badge>}
                 {i.type === 'jira_issue' && <Badge>Jira</Badge>}
-                {i.pinned && <Badge tone="amber">pinned</Badge>}
-                {i.type !== 'confluence_page' && i.type !== 'jira_issue' && <p className="font-mono text-xs text-slate-500">{i.path}</p>}
+                {i.type === 'knowledge_doc' && i.source && <Badge>{nameOf(i.source)}</Badge>}
+                {i.pinned && <Badge tone="amber">Pinned</Badge>}
+                {i.type !== 'confluence_page' && i.type !== 'jira_issue' && i.type !== 'knowledge_doc' && <p className="font-mono text-xs text-slate-500">{i.path}</p>}
                 {i.summary && <p className="text-slate-600 dark:text-slate-400">{i.summary}</p>}
                 {i.note && <p className="text-xs italic text-slate-500">{i.note}</p>}
               </li>

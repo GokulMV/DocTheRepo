@@ -442,7 +442,7 @@ func (q *Queries) InsertSpendLimit(ctx context.Context, arg InsertSpendLimitPara
 const listConnectorsPublic = `-- name: ListConnectorsPublic :many
 SELECT id, type, name, config, mode, extract(epoch FROM poll_interval)::bigint AS poll_seconds, enabled, health, last_error, last_sync_at,
        creds_ciphertext IS NOT NULL AS has_credentials, webhook_secret_ct IS NOT NULL AS has_webhook_secret, created_at
-FROM connectors ORDER BY name
+FROM connectors WHERE type::text <> 'upload' ORDER BY name
 `
 
 type ListConnectorsPublicRow struct {
@@ -766,6 +766,7 @@ func (q *Queries) ShelvesWithCounts(ctx context.Context) ([]ShelvesWithCountsRow
 }
 
 const updateConnector = `-- name: UpdateConnector :execrows
+
 UPDATE connectors SET name = coalesce($1, name), config = coalesce($2, config),
     creds_ciphertext = coalesce($3, creds_ciphertext),
     webhook_secret_ct = coalesce($4, webhook_secret_ct),
@@ -788,6 +789,7 @@ type UpdateConnectorParams struct {
 	ID                string          `json:"id"`
 }
 
+// the internal holder of uploaded documents is not a connector people manage
 func (q *Queries) UpdateConnector(ctx context.Context, arg UpdateConnectorParams) (int64, error) {
 	result, err := q.db.Exec(ctx, updateConnector,
 		arg.Name,

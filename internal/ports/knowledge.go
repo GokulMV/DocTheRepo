@@ -6,10 +6,11 @@ import (
 	"time"
 )
 
-// SharedSources are chunk sources that belong to no repository (Confluence pages, Jira issues). Their
-// repo-less chunks are readable by every viewer: the Hub syncs them with one read-only service account,
-// so access is decided by what an admin chose to sync, not by repository grants.
-var SharedSources = []ChunkSource{SourceConfluence, SourceJira}
+// SharedSources are chunk sources that belong to no repository (Confluence pages, Jira issues, Notion pages,
+// uploaded documents). Their repo-less chunks are readable by every viewer: the Hub syncs them with one
+// read-only service account (or an editor uploaded them), so access is decided by what was chosen to add,
+// not by repository grants.
+var SharedSources = []ChunkSource{SourceConfluence, SourceJira, SourceNotion, SourceUpload}
 
 // KnowledgeDoc is one Confluence page or Jira issue, converted to Markdown by its adapter.
 type KnowledgeDoc struct {
@@ -24,6 +25,8 @@ type KnowledgeDoc struct {
 	// Done is true when a Jira issue's status category is Done (a fixed bug).
 	Done      bool      `json:"done"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// UploadedBy is the user who uploaded the document (uploads only).
+	UploadedBy string `json:"uploaded_by,omitempty"`
 }
 
 // KnowledgeSource reads a knowledge connector (plan § 8.16). Streams are spaces or projects; each keeps its

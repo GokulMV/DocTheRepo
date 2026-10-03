@@ -15,6 +15,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/adapters/codehost"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/knowledge/confluence"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/knowledge/jira"
+	"github.com/GokulMV/DocTheRepo/internal/adapters/knowledge/notion"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/llm"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/push"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/push/lifecycle"
@@ -89,10 +90,11 @@ type app struct {
 	suggestions *store.Suggestions
 	suggest     *suggest.Service
 	// Knowledge: Confluence and Jira sync (Phase 13).
-	knowledge *ingest.KnowledgeSync
-	arch      *store.ArchitectureStore
-	sealKeys  *store.SealKeys
-	archSync  *ingest.ArchitectureSync
+	knowledge     *ingest.KnowledgeSync
+	knowledgeDocs *store.Knowledge
+	arch          *store.ArchitectureStore
+	sealKeys      *store.SealKeys
+	archSync      *ingest.ArchitectureSync
 }
 
 func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.Box, q *queue.Queue, log *slog.Logger, m *observability.Metrics) (*app, error) {
@@ -238,8 +240,10 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 		Decide: gw.Decide, GateThreshold: cfg.Decide.GateThreshold, Estimate: a.signalStore.DecodeEstimate}
 	a.suggestions = store.NewSuggestions(st, a.knownIssues)
 	a.suggest = &suggest.Service{Store: a.suggestions, GW: gw, Index: a.index}
-	a.knowledge = &ingest.KnowledgeSync{Store: conns, Queue: q, Docs: store.NewKnowledge(st, shelves), Rules: a.knownIssues,
-		Sources: map[string]ports.KnowledgeSource{"confluence": confluence.New(), "jira": jira.New()},
+	knowledgeDocs := store.NewKnowledge(st, shelves)
+	a.knowledgeDocs = knowledgeDocs
+	a.knowledge = &ingest.KnowledgeSync{Store: conns, Queue: q, Docs: knowledgeDocs, Rules: a.knownIssues, Uploads: knowledgeDocs,
+		Sources: map[string]ports.KnowledgeSource{"confluence": confluence.New(), "jira": jira.New(), "notion": notion.New()},
 		Embed:   indexer.Embed, ReloadRules: a.signals.Reload,
 		Propose: func(ctx context.Context, text string) (ingest.Proposal, error) {
 			res, err := a.suggest.FromText(ctx, text, nil, "")
@@ -414,6 +418,7 @@ func (a *app) v1Routes() []func(chi.Router) {
 	return []func(chi.Router){
 		api.AskRoutes(a.rag, a.qa, a.auth),
 		api.BrowseRoutes(a.browse, a.auth),
+		api.UploadRoutes(api.UploadDeps{Auth: a.auth, Upload: a.knowledge.Upload, Store: a.knowledgeDocs}),
 		api.AdminRoutes(admin),
 		api.OpsRoutes(a.q, a.browse, a.auth),
 		api.IssueRoutes(api.IssueDeps{Auth: a.auth, Issues: store.NewIssues(a.st, a.knownIssues), KnownIssues: a.knownIssues,

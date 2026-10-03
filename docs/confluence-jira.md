@@ -8,7 +8,8 @@ The Hub syncs Confluence spaces and Jira projects **read-only**. Synced pages an
 - **The Palace**: links from services to the pages that document them.
 - **Known issues**: labelled issues and pages are imported as draft rules.
 
-Cloud and Data Center are both supported.
+Cloud and Data Center are both supported. Notion pages and uploaded documents work the same way: see
+[team-docs.md](team-docs.md).
 
 ## Connect
 

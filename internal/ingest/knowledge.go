@@ -45,6 +45,8 @@ type KnowledgeSync struct {
 	Sources map[string]ports.KnowledgeSource
 	Docs    KnowledgeDocs
 	Rules   UpstreamRules
+	// Uploads holds documents people upload to the Library; nil turns uploads off.
+	Uploads UploadStore
 	// Embed embeds changed chunks (pipeline.Indexer.Embed); nil skips embedding.
 	Embed func(ctx context.Context, meta llmgateway.CallMeta, chunks []ports.Chunk) (int, error)
 	// Propose drafts a rule from a labelled document's text (suggest route); nil or an error leaves the

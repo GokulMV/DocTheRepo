@@ -50,7 +50,7 @@ const NAMES: Record<string, string> = {
   grafana: 'Grafana', alertmanager: 'Alertmanager', generic: 'Generic webhook', wiz: 'Wiz', splunk: 'Splunk',
   cloudwatch: 'AWS CloudWatch', firehose: 'Amazon Data Firehose', gcp: 'Google Cloud', pubsub: 'Google Pub/Sub', kafka: 'Kafka',
   sqs: 'Amazon SQS', sns: 'Amazon SNS', eventbridge: 'Amazon EventBridge', kinesis: 'Amazon Kinesis', pubsub_bus: 'Google Pub/Sub (backlog)',
-  rabbitmq: 'RabbitMQ', confluence: 'Confluence', jira: 'Jira',
+  rabbitmq: 'RabbitMQ', confluence: 'Confluence', jira: 'Jira', notion: 'Notion', upload: 'Uploaded',
   anthropic: 'Anthropic', openai: 'OpenAI', azure_openai: 'Azure OpenAI', bedrock: 'AWS Bedrock', vertex: 'Google Vertex AI',
   ollama: 'Ollama', openai_compat: 'OpenAI-compatible', external_cli: 'Agent CLI', opencode: 'opencode', github_models: 'GitHub Models', jev: 'TypeSafe Jev',
   webhook: 'Webhook', poll: 'Polling', both: 'Webhook and polling',

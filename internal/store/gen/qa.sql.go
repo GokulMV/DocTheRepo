@@ -15,7 +15,7 @@ const chunksByIDsScoped = `-- name: ChunksByIDsScoped :many
 SELECT chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url, tsv, created_at, updated_at, deleted_at FROM chunks
 WHERE chunk_id = ANY($1::text[]) AND deleted_at IS NULL
   AND ($2::boolean OR repo_id = ANY($3::uuid[])
-       OR (repo_id IS NULL AND source IN ('confluence', 'jira')))
+       OR (repo_id IS NULL AND source IN ('confluence', 'jira', 'notion', 'upload')))
 `
 
 type ChunksByIDsScopedParams struct {
@@ -65,7 +65,7 @@ const chunksForPath = `-- name: ChunksForPath :many
 SELECT chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url, tsv, created_at, updated_at, deleted_at FROM chunks c
 WHERE c.deleted_at IS NULL AND (c.path = $1::text OR c.path LIKE '%/' || $1::text)
   AND ($2::boolean OR c.repo_id = ANY($3::uuid[])
-       OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira')))
+       OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira', 'notion', 'upload')))
   AND (cardinality($4::text[]) = 0 OR c.source::text = ANY($4::text[]))
 ORDER BY c.scope, c.path, c.chunk_id
 LIMIT $5
@@ -270,7 +270,7 @@ const listChunkPaths = `-- name: ListChunkPaths :many
 SELECT c.scope, c.path, count(*)::int AS chunks FROM chunks c
 WHERE c.deleted_at IS NULL AND c.path ILIKE '%' || $1::text || '%'
   AND ($2::boolean OR c.repo_id = ANY($3::uuid[])
-       OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira')))
+       OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira', 'notion', 'upload')))
   AND (cardinality($4::text[]) = 0 OR c.source::text = ANY($4::text[]))
 GROUP BY c.scope, c.path
 ORDER BY c.scope, c.path
@@ -443,7 +443,7 @@ FROM chunks c,
      (SELECT websearch_to_tsquery('english', $1::text) || websearch_to_tsquery('simple', $1::text) AS query) q
 WHERE c.deleted_at IS NULL AND c.tsv @@ q.query
   AND ($2::boolean OR c.repo_id = ANY($3::uuid[])
-       OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira')))
+       OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira', 'notion', 'upload')))
   AND (cardinality($4::text[]) = 0 OR c.source::text = ANY($4::text[]))
 ORDER BY rank DESC, c.chunk_id
 LIMIT $5

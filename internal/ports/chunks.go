@@ -11,6 +11,8 @@ const (
 	SourceImportedDoc  ChunkSource = "imported_doc"
 	SourceConfluence   ChunkSource = "confluence"
 	SourceJira         ChunkSource = "jira"
+	SourceNotion       ChunkSource = "notion"
+	SourceUpload       ChunkSource = "upload"
 	SourceIssueDecode  ChunkSource = "issue_decode"
 )
 
