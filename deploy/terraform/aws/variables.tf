@@ -188,3 +188,9 @@ variable "hub_settings" {
   default     = ""
   sensitive   = true
 }
+
+variable "environment" {
+  description = "Name of this deployment, e.g. nonlive or production. Anything but production shows a banner in the UI."
+  type        = string
+  default     = "production"
+}

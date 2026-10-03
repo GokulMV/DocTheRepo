@@ -1,0 +1,34 @@
+# Settings applied when the nonlive Hub starts. Only references to secrets: safe to commit and review.
+# The Hub resolves ${awssm:…} with its own cloud role, so these values never pass through CI.
+version: 1
+
+auth:
+  password: false                        # SSO only; the SSO app itself comes from the Helm values
+
+users:                                   # who may do what here (wider than production: people test things)
+  - { email: platform-lead@acme.com, role: owner }
+  - { email: dev1@acme.com, role: admin }
+
+providers:
+  - name: anthropic
+    kind: anthropic
+    api_key: ${awssm:nonlive/dth/anthropic#api_key}   # a separate key with its own spend limit at the provider
+
+routes:
+  docgen:      { provider: anthropic, model: claude-haiku-4-5 }   # cheaper models are enough to test with
+  docgen_fast: { provider: anthropic, model: claude-haiku-4-5 }
+  qa:          { provider: anthropic, model: claude-haiku-4-5 }
+
+connectors:
+  - name: github
+    type: github
+    mode: webhook
+    credentials: ${awssm:nonlive/dth/github#token}    # its own GitHub App or bot, installed on the test repositories
+    webhook_secret: ${awssm:nonlive/dth/github#webhook_secret}
+
+repos:                                   # nonlive follows the integration branch and never auto-merges
+  - { full_name: acme/payments, connector: github, tracked_branch: develop, push_mode: pr_with_approver }
+
+spend:
+  limits:
+    - { scope: global, window: day, max_tokens: 500000 }

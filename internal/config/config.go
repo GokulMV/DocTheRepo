@@ -115,6 +115,9 @@ type ServerConfig struct {
 	WriteTimeout  time.Duration `yaml:"write_timeout"`
 	// ShutdownGrace bounds how long in-flight requests and jobs get on SIGTERM.
 	ShutdownGrace time.Duration `yaml:"shutdown_grace"`
+	// Environment names this deployment (DTH_ENVIRONMENT), e.g. nonlive or production. Anything but
+	// production (or empty) shows a banner in the UI so nobody mistakes one environment for another.
+	Environment string `yaml:"environment"`
 }
 
 // DatabaseConfig points at PostgreSQL. The URL is read from the named env var so it never sits in the file.
@@ -296,6 +299,7 @@ func applyEnv(cfg *Config) error {
 		"DTH_LISTEN":              &cfg.Server.Listen,
 		"DTH_METRICS_LISTEN":      &cfg.Server.MetricsListen,
 		"DTH_PUBLIC_URL":          &cfg.Server.PublicURL,
+		"DTH_ENVIRONMENT":         &cfg.Server.Environment,
 		"DTH_SECRETS_PROVIDER":    &cfg.Secrets.Provider,
 		"DTH_LOCAL_KEY_FILE":      &cfg.Secrets.LocalKeyFile,
 		"DTH_KMS_KEY_ID":          &cfg.Secrets.KMSKeyID,

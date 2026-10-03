@@ -61,6 +61,8 @@ app.kubernetes.io/component: {{ .role }}
 {{- define "dth.env" -}}
 - name: DTH_PUBLIC_URL
   value: {{ .Values.publicURL | quote }}
+- name: DTH_ENVIRONMENT
+  value: {{ .Values.environment | default "production" | quote }}
 - name: DTH_LISTEN
   value: "0.0.0.0:8080"
 - name: DTH_METRICS_LISTEN

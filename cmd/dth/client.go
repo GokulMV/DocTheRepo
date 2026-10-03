@@ -18,6 +18,46 @@ import (
 type cliConfig struct {
 	Server string `json:"server"`
 	Token  string `json:"token"`
+	// Profiles are named hubs (nonlive, production, …); Current is the one used when no --profile is given.
+	Profiles map[string]cliProfile `json:"profiles,omitempty"`
+	Current  string                `json:"current,omitempty"`
+}
+
+// cliProfile is one named hub.
+type cliProfile struct {
+	Server string `json:"server"`
+	Token  string `json:"token"`
+}
+
+// resolve returns the hub of the named profile, the current one, or the unnamed default.
+func (c cliConfig) resolve(name string) (cliProfile, error) {
+	if name == "" {
+		name = c.Current
+	}
+	if name == "" {
+		return cliProfile{Server: c.Server, Token: c.Token}, nil
+	}
+	p, ok := c.Profiles[name]
+	if !ok {
+		return cliProfile{}, fmt.Errorf("no profile %q (sign in with `dth login --profile %s --server … --token …`)", name, name)
+	}
+	return p, nil
+}
+
+// withProfile stores server and token under name ("": the unnamed default), keeping every other profile.
+func (c cliConfig) withProfile(name, server, token string) cliConfig {
+	if name == "" {
+		c.Server, c.Token = server, token
+		return c
+	}
+	if c.Profiles == nil {
+		c.Profiles = map[string]cliProfile{}
+	}
+	c.Profiles[name] = cliProfile{Server: server, Token: token}
+	if c.Current == "" {
+		c.Current = name
+	}
+	return c
 }
 
 func configPath() string {
