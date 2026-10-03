@@ -77,12 +77,38 @@ func parseDiagram(b []byte, p string) (generator, title string, ok bool) {
 
 // ScanResult reports a scan.
 type ScanResult struct {
-	Found     int      `json:"found"`
-	Removed   int64    `json:"removed"`
-	Checked   int      `json:"checked"`
-	Skipped   []string `json:"skipped,omitempty"`
-	CommitSHA string   `json:"commit_sha"`
+	Found   int      `json:"found"`
+	Removed int64    `json:"removed"`
+	Checked int      `json:"checked"`
+	Skipped []string `json:"skipped,omitempty"`
+	// Failed are files that could not be read; their stored copies are kept and the scan goes on.
+	Failed    []ScanFailure `json:"failed,omitempty"`
+	CommitSHA string        `json:"commit_sha"`
 }
+
+// ScanFailure is one file a scan could not read.
+type ScanFailure struct {
+	Path  string `json:"path"`
+	Error string `json:"error"`
+}
+
+// HostError is a scan failure talking to the git host (reading the branch or the file list).
+type HostError struct {
+	Op  string
+	Err error
+}
+
+func (e *HostError) Error() string { return e.Op + ": " + plainError(e.Err) }
+
+// plainError is an error's text for people: without the retry-class prefixes.
+func plainError(err error) string {
+	s := err.Error()
+	for _, p := range []string{"transient: ", "permanent: "} {
+		s = strings.ReplaceAll(s, p, "")
+	}
+	return s
+}
+func (e *HostError) Unwrap() error { return e.Err }
 
 // Scan reads the repository's tree at the tracked branch head and replaces its stored diagrams.
 func (s *ArchitectureSync) Scan(ctx context.Context, repoID string) (ScanResult, error) {
@@ -96,14 +122,14 @@ func (s *ArchitectureSync) Scan(ctx context.Context, repoID string) (ScanResult,
 	}
 	head, err := host.BranchHead(ctx, repo.FullName, repo.Branch())
 	if err != nil {
-		return ScanResult{}, fmt.Errorf("branch head: %w", err)
+		return ScanResult{}, &HostError{Op: "read the head of " + repo.Branch(), Err: err}
 	}
 	tree, err := host.ListTree(ctx, repo.FullName, head)
 	if err != nil {
-		return ScanResult{}, fmt.Errorf("list tree: %w", err)
+		return ScanResult{}, &HostError{Op: "list the files at " + head, Err: err}
 	}
 	res := ScanResult{CommitSHA: head}
-	found := []string{}
+	found, keep := []string{}, []string{}
 	for _, p := range tree {
 		if !IsDiagramCandidate(p) {
 			continue
@@ -114,15 +140,22 @@ func (s *ArchitectureSync) Scan(ctx context.Context, repoID string) (ScanResult,
 		}
 		res.Checked++
 		ok, err := s.syncFile(ctx, host, repo, p, head)
+		if ctx.Err() != nil {
+			return res, ctx.Err()
+		}
 		if err != nil {
-			return res, err
+			// One unreadable file must not stop the scan or drop the copy stored from an earlier one.
+			s.log().Warn("architecture diagram read failed", "repo", repo.FullName, "path", p, "err", err)
+			res.Failed = append(res.Failed, ScanFailure{Path: p, Error: plainError(err)})
+			keep = append(keep, p)
+			continue
 		}
 		if ok {
 			found = append(found, p)
 		}
 	}
 	res.Found = len(found)
-	if res.Removed, err = s.Store.KeepDiagrams(ctx, repo.ID, found); err != nil {
+	if res.Removed, err = s.Store.KeepDiagrams(ctx, repo.ID, append(keep, found...)); err != nil {
 		return res, err
 	}
 	return res, nil

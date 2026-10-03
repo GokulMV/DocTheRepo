@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -99,6 +100,14 @@ func ArchitectureRoutes(d ArchitectureDeps) func(chi.Router) {
 					return
 				}
 				res, err := d.Scan(r.Context(), id)
+				var he *ingest.HostError
+				if errors.As(err, &he) && !errors.Is(err, ports.ErrNotFound) {
+					// Say what the git host answered: a generic "retry shortly" hides a revoked token or
+					// a missing permission.
+					loggerFor(r).Warn("architecture scan: git host", "repo_id", id, "err", err)
+					WriteError(w, r, http.StatusBadGateway, "GIT_HOST_ERROR", "Could not "+he.Error(), nil)
+					return
+				}
 				if err != nil {
 					WriteErr(w, r, err)
 					return
