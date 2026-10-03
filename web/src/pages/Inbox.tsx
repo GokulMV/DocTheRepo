@@ -8,9 +8,10 @@ import { IssueStatusBadge, RuleTester, SeverityBadge, Sparkline, reasonLabel } f
 import { Button, Card, Dialog, DialogFooter, Empty, ErrorNote, Field, Input, PageHeader, Select, Spinner, Table, Td } from '@/components/ui';
 import { num, relTime } from '@/lib/format';
 import { SOURCES } from './signalSources';
+import { sentence } from '@/lib/labels';
 
 const STATUSES = ['', 'new', 'decoded', 'regressed', 'acknowledged', 'resolved', 'suppressed'];
-const KINDS: [string, string][] = [['', 'any kind'], ['error', 'errors'], ['alert', 'alerts'], ['security_finding', 'security findings'], ['log_match', 'log matches'], ['event_bus', 'event bus']];
+const KINDS: [string, string][] = [['', 'Any kind'], ['error', 'Errors'], ['alert', 'Alerts'], ['security_finding', 'Security findings'], ['log_match', 'Log matches'], ['event_bus', 'Event bus']];
 
 /** MarkKnown creates one rule covering the selected issues' fingerprints (applies to new events). */
 function MarkKnown({ issues, onDone }: { issues: Issue[]; onDone: () => void }) {
@@ -70,28 +71,28 @@ export default function Inbox() {
         <div className="mb-3 flex flex-wrap gap-2">
           <Input aria-label="Search" placeholder="Search titles and explanations" className="w-64" value={f.q ?? ''} onChange={(e) => set({ q: e.target.value })} />
           <Select aria-label="Status" className="w-44" value={f.status ?? ''} onChange={(e) => set({ status: e.target.value })}>
-            {STATUSES.map((s) => <option key={s} value={s}>{s || 'open (not known)'}</option>)}
+            {STATUSES.map((s) => <option key={s} value={s}>{s ? sentence(s) : 'Open (not known)'}</option>)}
           </Select>
           <Select aria-label="Severity" className="w-36" value={f.severity ?? ''} onChange={(e) => set({ severity: e.target.value })}>
-            <option value="">any severity</option>
-            <option value="warning">warning and up</option>
-            <option value="error">error and up</option>
-            <option value="critical">critical</option>
+            <option value="">Any severity</option>
+            <option value="warning">Warning and up</option>
+            <option value="error">Error and up</option>
+            <option value="critical">Critical</option>
           </Select>
           <Select aria-label="Source" className="w-44" value={f.source ?? ''} onChange={(e) => set({ source: e.target.value })}>
-            <option value="">any source</option>
+            <option value="">Any source</option>
             {SOURCES.map((s) => <option key={s.type} value={s.type}>{s.label}</option>)}
           </Select>
           <Select aria-label="Kind" className="w-40" value={f.kind ?? ''} onChange={(e) => set({ kind: e.target.value })}>
             {KINDS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
           </Select>
-          <Input aria-label="Service" placeholder="service" className="w-36" value={f.service ?? ''} onChange={(e) => set({ service: e.target.value })} />
-          <Input aria-label="Environment" placeholder="environment" className="w-32" value={f.env ?? ''} onChange={(e) => set({ env: e.target.value })} />
+          <Input aria-label="Service" placeholder="Service" className="w-36" value={f.service ?? ''} onChange={(e) => set({ service: e.target.value })} />
+          <Input aria-label="Environment" placeholder="Environment" className="w-32" value={f.env ?? ''} onChange={(e) => set({ env: e.target.value })} />
           <Select aria-label="Seen within" className="w-32" value={f.since ?? ''} onChange={(e) => set({ since: e.target.value })}>
             <option value="24h">24 hours</option>
             <option value="7d">7 days</option>
             <option value="30d">30 days</option>
-            <option value="">any time</option>
+            <option value="">Any time</option>
           </Select>
         </div>
         {issues.isLoading && <Spinner />}

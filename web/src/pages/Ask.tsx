@@ -50,7 +50,7 @@ function NotFoundTips() {
       <ul className="mt-1 list-disc space-y-0.5 pl-4">
         <li>Name what you mean: a file, function, endpoint, service or error message.</li>
         <li>Check the repository has docs under <Link className="underline" to="/docs">Docs</Link>; answers draw on code, docs and READMEs.</li>
-        <li>Search by meaning, not just words, by routing <b>embedding</b> to a provider under <Link className="underline" to="/providers">Providers &amp; routing</Link>.</li>
+        <li>Search by meaning, not just words, by routing <b>Embeddings</b> to a provider under <Link className="underline" to="/providers">Providers &amp; routing</Link>.</li>
       </ul>
     </div>
   );

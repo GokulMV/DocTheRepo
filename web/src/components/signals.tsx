@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '@/api/client';
 import type { IssueStatus, Match, RuleTest, Severity } from '@/api/types';
 import { Badge, Button, ErrorNote, Field, Input, Select, type Tone } from '@/components/ui';
+import { sentence } from '@/lib/labels';
 
 const severityTone: Record<Severity, Tone> = { critical: 'red', error: 'red', warning: 'amber', info: 'gray' };
 
@@ -56,8 +57,8 @@ export function MatchEditor({ value, onChange }: { value: Match; onChange: (m: M
       <Field label="Sources" hint="sentry, cloudwatch, alertmanager, …"><Input value={(value.sources ?? []).join(', ')} onChange={(e) => set({ sources: list(e.target.value) })} /></Field>
       <Field label="Highest severity covered">
         <Select value={value.max_severity ?? ''} onChange={(e) => set({ max_severity: e.target.value as Severity | '' })}>
-          <option value="">any</option>
-          {(['info', 'warning', 'error', 'critical'] as const).map((s) => <option key={s} value={s}>{s}</option>)}
+          <option value="">Any</option>
+          {(['info', 'warning', 'error', 'critical'] as const).map((s) => <option key={s} value={s}>{sentence(s)}</option>)}
         </Select>
       </Field>
     </div>
@@ -97,4 +98,4 @@ export function RuleTester({ match }: { match: Match }) {
   );
 }
 
-export const reasonLabel = (r: string) => r.replaceAll('_', ' ');
+export const reasonLabel = (r: string) => sentence(r);

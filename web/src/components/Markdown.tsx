@@ -23,7 +23,7 @@ function Mermaid({ code }: { code: string }) {
     };
   }, [code, id]);
   if (err) return <pre className="text-xs text-red-600">{code}</pre>;
-  return <div ref={ref} className="my-3 overflow-x-auto" aria-label="diagram" />;
+  return <div ref={ref} className="my-3 overflow-x-auto" aria-label="Diagram" />;
 }
 
 /** Markdown renders generated docs and answers: GFM, sanitized HTML, Mermaid code blocks. */

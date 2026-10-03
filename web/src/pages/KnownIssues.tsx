@@ -7,6 +7,7 @@ import { atLeast, KNOWN_REASONS, type KnownIssue, type LinkedDoc, type Match, ty
 import { MatchEditor, RuleTester, reasonLabel } from '@/components/signals';
 import { Badge, Button, Card, Dialog, DialogFooter, Empty, ErrorNote, Field, Input, PageHeader, Select, Spinner, Table, Td, Textarea, cx } from '@/components/ui';
 import { num, relTime } from '@/lib/format';
+import { nameOf } from '@/lib/labels';
 
 const describe = (m: Match) =>
   [
@@ -44,8 +45,8 @@ function RuleDialog({ initial, origin, onDone }: { initial?: Partial<KnownIssue>
           </Field>
           <Field label="Action" hint="Label only keeps decoding and shows the label.">
             <Select value={action} onChange={(e) => setAction(e.target.value as 'suppress' | 'label_only')}>
-              <option value="suppress">suppress</option>
-              <option value="label_only">label only</option>
+              <option value="suppress">Suppress</option>
+              <option value="label_only">Label only</option>
             </Select>
           </Field>
         </div>
@@ -79,7 +80,7 @@ function Rules({ canEdit }: { canEdit: boolean }) {
               <Td className="max-w-sm">
                 <span className="font-medium">{k.title}</span>
                 <p className="text-xs text-slate-500">
-                  {reasonLabel(k.reason)} · {k.source}{k.label_managed && ' (label)'}{k.action === 'label_only' && ' · label only'}
+                  {reasonLabel(k.reason)} · {nameOf(k.source)}{k.label_managed && ' (label)'}{k.action === 'label_only' && ' · Label only'}
                   {k.ticket_url && <> · <a className="text-brand-700 hover:underline dark:text-brand-100" href={k.ticket_url} target="_blank" rel="noreferrer">{k.jira_key || 'page'}</a></>}
                   {k.upstream_status && <> · {k.upstream_status}</>}
                 </p>

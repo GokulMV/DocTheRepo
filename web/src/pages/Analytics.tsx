@@ -3,6 +3,7 @@ import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContai
 import { usePipelineStats, useSavings, useUsage } from '@/api/hooks';
 import { Card, ErrorNote, PageHeader, Select, Spinner, Table, Td } from '@/components/ui';
 import { daysAgoISO, num, relTime, shortSha, usd } from '@/lib/format';
+import { capFirst, featureLabel } from '@/lib/labels';
 
 const COLORS = ['#2f6fed', '#0f766e', '#ea580c', '#7c3aed', '#db2777', '#ca8a04', '#64748b'];
 
@@ -35,19 +36,21 @@ export default function Analytics() {
   const savings = useSavings(from);
   const pipe = usePipelineStats();
 
+  // Feature series read as their names ("docgen" → "Docs generation").
+  const seriesLabel = (k: string) => (!k ? '—' : groupBy === 'feature' ? featureLabel(k) : capFirst(k));
   const chart = useMemo(() => {
     const rows = new Map<string, Record<string, number | string>>();
     for (const s of usage.data?.series ?? []) {
       for (const p of s.points) {
         const t = gran === 'hour' ? p.t.slice(5, 16).replace('T', ' ') : p.t.slice(0, 10);
         const row = rows.get(t) ?? { t };
-        row[s.key || '—'] = p[metric];
+        row[seriesLabel(s.key)] = p[metric];
         rows.set(t, row);
       }
     }
     return [...rows.values()];
   }, [usage.data, metric, gran]);
-  const seriesKeys = usage.data?.series.map((s) => s.key || '—') ?? [];
+  const seriesKeys = usage.data?.series.map((s) => seriesLabel(s.key)) ?? [];
   const t = usage.data?.totals;
 
   return (
@@ -68,7 +71,7 @@ export default function Analytics() {
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Calls" value={num(t?.calls)} hint={t ? `${num(t.cached_calls)} cached, ${num(t.blocked)} blocked` : undefined} />
         <Stat label="Tokens" value={num(t?.tokens)} />
-        <Stat label="Cost" value={usd(t?.cost_usd)} hint="at your cost table prices" />
+        <Stat label="Cost" value={usd(t?.cost_usd)} hint="At your cost table prices" />
         <Stat label="Saved" value={usd(savings.data?.total.cost_avoided_usd)} hint={savings.data ? `${num(savings.data.total.tokens_avoided)} tokens avoided` : undefined} />
       </div>
       <Card
@@ -77,12 +80,12 @@ export default function Analytics() {
         actions={
           <>
             <Select aria-label="Group by" value={groupBy} onChange={(e) => setGroupBy(e.target.value)} className="w-36">
-              {['feature', 'provider', 'model', 'repo', 'user'].map((g) => <option key={g} value={g}>by {g}</option>)}
+              {['feature', 'provider', 'model', 'repo', 'user'].map((g) => <option key={g} value={g}>By {g === 'repo' ? 'repository' : g}</option>)}
             </Select>
             <Select aria-label="Metric" value={metric} onChange={(e) => setMetric(e.target.value as typeof metric)} className="w-32">
-              <option value="tokens">tokens</option>
-              <option value="cost_usd">cost</option>
-              <option value="calls">calls</option>
+              <option value="tokens">Tokens</option>
+              <option value="cost_usd">Cost</option>
+              <option value="calls">Calls</option>
             </Select>
           </>
         }

@@ -5,6 +5,7 @@ import { useInRouterContext, useLocation } from 'react-router-dom';
 import { CircleDashed, type LucideIcon } from 'lucide-react';
 import { ApiError } from '@/api/client';
 import { navItemFor } from '@/layouts/nav';
+import { capFirst, sentence } from '@/lib/labels';
 
 const cx = (...c: (string | false | undefined | null)[]) => c.filter(Boolean).join(' ');
 export { cx };
@@ -103,8 +104,12 @@ const tones = {
 };
 export type Tone = keyof typeof tones;
 
+/** Badge capitalizes its text ("spend_blocked" reads "Spend blocked"); values shown stay identifiers elsewhere. */
 export function Badge({ tone = 'gray', children }: { tone?: Tone; children: ReactNode }) {
-  return <span className={cx('inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium', tones[tone])}>{children}</span>;
+  let content = children;
+  if (typeof children === 'string') content = sentence(children);
+  else if (Array.isArray(children) && typeof children[0] === 'string') content = [capFirst(children[0]), ...children.slice(1)];
+  return <span className={cx('inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium', tones[tone])}>{content}</span>;
 }
 
 export function statusTone(status: string): Tone {

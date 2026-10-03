@@ -3,6 +3,7 @@ import { ArrowRight, BookOpen, ChevronDown, CircleCheck, Cpu, FolderGit2, KeyRou
 import { useState } from 'react';
 import { useAuthConfig, useConnectors, useLimits, useMe, useProviders, useRepos, useRoutes, useTree } from '@/api/hooks';
 import { PageHeader, Spinner, cx } from '@/components/ui';
+import { featureLabel } from '@/lib/labels';
 
 interface Step {
   title: string;
@@ -68,7 +69,7 @@ export default function Setup() {
       done: routed.has('docgen') && routed.has('qa'),
       why: 'The model writes the docs and answers questions. You use your own account; nothing is shared.',
       need: 'An API key, e.g. from console.anthropic.com → API keys (or OpenAI, Azure, Bedrock, Vertex, or local Ollama with no key). The form links to the right page.',
-      status: routed.size ? `Used for: ${[...routed].join(', ')}` : (providers.data?.items.length ? 'A provider is added, but not yet used for docs and answers' : undefined),
+      status: routed.size ? `Used for: ${[...routed].map(featureLabel).join(', ')}` : (providers.data?.items.length ? 'A provider is added, but not yet used for docs and answers' : undefined),
       to: '/providers', action: 'Add a model', icon: Cpu,
     },
     {
@@ -120,14 +121,14 @@ export default function Setup() {
                         : 'bg-slate-100 text-slate-400 ring-slate-200 dark:bg-white/[0.05] dark:text-slate-500 dark:ring-white/10',
                   )}
                 >
-                  {s.done ? <CircleCheck className="h-5 w-5" aria-label="done" /> : <s.icon className="h-5 w-5" aria-hidden />}
+                  {s.done ? <CircleCheck className="h-5 w-5" aria-label="Done" /> : <s.icon className="h-5 w-5" aria-hidden />}
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">
                     <span className="mr-1.5 text-slate-400">{i + 1}.</span>
                     {s.title}
-                    {s.done && <span className="ml-2 rounded-md bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">done</span>}
-                    {isNext && <span className="ml-2 rounded-md bg-brand-100 px-1.5 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-500/20 dark:text-brand-200">next</span>}
+                    {s.done && <span className="ml-2 rounded-md bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300">Done</span>}
+                    {isNext && <span className="ml-2 rounded-md bg-brand-100 px-1.5 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-500/20 dark:text-brand-200">Next</span>}
                   </p>
                   <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-400">{s.why}</p>
                   {!s.done && <p className="mt-1.5 text-xs text-slate-500"><b className="font-medium text-slate-600 dark:text-slate-300">You need:</b> {s.need}</p>}

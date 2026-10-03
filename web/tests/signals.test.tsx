@@ -74,7 +74,7 @@ describe('IssueDetail', () => {
     expect(await screen.findByText('payment is null for partial refunds')).toBeInTheDocument();
     expect(screen.getByText(/RefundService.refund/)).toBeInTheDocument();
     expect(screen.getByText(/Allow partial refunds/)).toBeInTheDocument();
-    expect(screen.getByText('high confidence')).toBeInTheDocument();
+    expect(screen.getByText('High confidence')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /NullPointerException in OrderService.refund/ }));
     expect(screen.getByText('[REDACTED]')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Resolve' }));

@@ -61,7 +61,7 @@ describe('Known issues: from a link', () => {
     await userEvent.type(screen.getByLabelText('Jira issue or Confluence page URL'), 'https://acme.atlassian.net/browse/ENG-7');
     await userEvent.click(screen.getByRole('button', { name: 'Explain link' }));
     expect(await screen.findByText(/ENG-7 describes the checkout timeouts/)).toBeInTheDocument();
-    expect(screen.getByText('done upstream')).toBeInTheDocument();
+    expect(screen.getByText('Done upstream')).toBeInTheDocument();
     expect(body(calls, 'POST', '/known-issues/from-link')).toEqual({ url: 'https://acme.atlassian.net/browse/ENG-7' });
 
     await userEvent.click(screen.getByRole('button', { name: 'Review and save as a rule' }));

@@ -40,11 +40,11 @@ spend:
 `;
 
 const REFS: [string, string][] = [
-  ['${env:NAME}', 'environment variable (GitHub Actions secrets via env:)'],
-  ['${file:keys.json#github.token}', 'a key in a JSON/YAML file, or the whole file without #key'],
-  ['${file:application.properties#db.password}', 'a key in a .properties or .env file'],
+  ['${env:NAME}', 'Environment variable (GitHub Actions secrets via env:)'],
+  ['${file:keys.json#github.token}', 'A key in a JSON/YAML file, or the whole file without #key'],
+  ['${file:application.properties#db.password}', 'A key in a .properties or .env file'],
   ['${vault:secret/data/dth#key}', 'HashiCorp Vault KV v1/v2'],
-  ['${gopass:infra/dth#key}', 'gopass'],
+  ['${gopass:infra/dth#key}', 'Gopass (password store)'],
   ['${awssm:prod/dth#key}', 'AWS Secrets Manager'],
   ['${gcpsm:project/secret}', 'Google Secret Manager'],
 ];

@@ -7,6 +7,7 @@ import { atLeast, type Role, type User } from '@/api/types';
 import { CopyField } from '@/components/CopyField';
 import { Badge, Button, Card, Dialog, DialogFooter, ErrorNote, Field, Input, PageHeader, Select, Spinner, Table, Td, cx } from '@/components/ui';
 import { relTime } from '@/lib/format';
+import { sentence } from '@/lib/labels';
 
 const ROLES: { role: Role; text: string }[] = [
   { role: 'viewer', text: 'Reads docs and asks questions in the repositories they can see.' },
@@ -221,7 +222,7 @@ export default function Users() {
                 </Td>
                 <Td>
                   <Select aria-label={`Role for ${u.email}`} value={u.role} disabled={self || ownerOnly} onChange={(e) => update.mutate({ id: u.id, role: e.target.value as Role })} className="w-28">
-                    {ROLES.filter((r) => r.role !== 'owner' || isOwner || u.role === 'owner').map((r) => <option key={r.role}>{r.role}</option>)}
+                    {ROLES.filter((r) => r.role !== 'owner' || isOwner || u.role === 'owner').map((r) => <option key={r.role} value={r.role}>{sentence(r.role)}</option>)}
                   </Select>
                 </Td>
                 <Td><Badge tone={st.tone}>{st.text}</Badge></Td>
