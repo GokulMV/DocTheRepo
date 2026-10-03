@@ -46,4 +46,27 @@ describe('Ask', () => {
     end();
     await waitFor(() => expect(screen.queryByText(/The first search found little/)).not.toBeInTheDocument());
   });
+
+  it('shows what source picking saved, per answer and for the conversation', async () => {
+    const sift = (kept: number, saved: number, usd: number) => ({ candidates: 20, kept, tokens_saved: saved, judge_tokens: 3000, cost_usd: 0.001, saved_usd: usd, calibrated: true, model: 'jev-latest' });
+    const answer = (id: string, content: string, s?: unknown) => ({ id, role: 'assistant', content, citations: [], cached: false, sift: s, usage: { input_tokens: 900, output_tokens: 40, cost_usd: 0.01 }, created_at: '2026-10-03T10:00:00Z' });
+    mockApi({
+      'GET /me': me('viewer'),
+      'GET /repos': { items: [] },
+      'GET /threads': { items: [], next_cursor: null },
+      'GET /threads/t1': { id: 't1', title: 'Key rotation', messages: [
+        { id: 'u1', role: 'user', content: 'how do keys rotate?', citations: [], cached: false, created_at: '2026-10-03T10:00:00Z' },
+        answer('a1', 'Every 24 hours [1].', sift(3, 9400, 0.046)),
+        { id: 'u2', role: 'user', content: 'and who runs it?', citations: [], cached: false, created_at: '2026-10-03T10:01:00Z' },
+        answer('a2', 'A cron job [1].', sift(2, 6100, 0.03)),
+        { id: 'u3', role: 'user', content: 'thanks', citations: [], cached: false, created_at: '2026-10-03T10:02:00Z' },
+        answer('a3', 'You are welcome.'),
+      ] },
+    });
+    renderAt('/ask/t1', <Route path="/ask/:threadId" element={<Ask />} />);
+    expect(await screen.findByText('Read 3 of 20 sources · 9.4k tokens saved ($0.05)')).toBeInTheDocument();
+    expect(screen.getByText('Read 2 of 20 sources · 6.1k tokens saved ($0.03)')).toBeInTheDocument();
+    expect(screen.getByText('Source picking saved 15.5k tokens ($0.08) in this conversation')).toBeInTheDocument();
+    expect(screen.getByText('Read 3 of 20 sources · 9.4k tokens saved ($0.05)').parentElement).toHaveAttribute('title', expect.stringContaining('Judge (jev-latest): 3,000 tokens'));
+  });
 });

@@ -1692,6 +1692,7 @@ type QaMessage struct {
 	FeedbackComment string          `json:"feedback_comment"`
 	CreatedAt       time.Time       `json:"created_at"`
 	Investigated    bool            `json:"investigated"`
+	Sift            json.RawMessage `json:"sift"`
 }
 
 type QaThread struct {

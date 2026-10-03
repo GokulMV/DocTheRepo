@@ -145,6 +145,7 @@ type SiftSummary struct {
 	TokensSaved int     `json:"tokens_saved"` // answer-model input tokens not sent
 	JudgeTokens int64   `json:"judge_tokens"` // tokens the judge read
 	CostUSD     float64 `json:"cost_usd"`     // the judge's cost
+	SavedUSD    float64 `json:"saved_usd"`    // answer-model cost not spent, minus the judge's cost (can be negative)
 	Calibrated  bool    `json:"calibrated"`
 	Explored    int     `json:"explored,omitempty"` // files read while exploring the index
 	Model       string  `json:"model,omitempty"`
@@ -358,10 +359,11 @@ func (e *Engine) Ask(ctx context.Context, q Query) (Answer, error) {
 	}
 	a.Investigated = investigated
 	a.Sift = sum
-	if sum != nil && e.Savings != nil && sum.TokensSaved > 0 && e.Cost != nil {
-		saved, ok := e.Cost(rt.ProviderKind, a.Model, llmgateway.FeatureQA, int64(sum.TokensSaved), 0)
-		if net := saved - sum.CostUSD; ok && net > 0 {
-			_ = e.Savings.Record(ctx, "evidence_sifted", int64(sum.TokensSaved), net, CacheKey(question, q.Scope)[:16])
+	if sum != nil && e.Cost != nil {
+		saved, _ := e.Cost(rt.ProviderKind, a.Model, llmgateway.FeatureQA, int64(sum.TokensSaved), 0)
+		sum.SavedUSD = saved - sum.CostUSD
+		if e.Savings != nil && sum.TokensSaved > 0 && sum.SavedUSD > 0 {
+			_ = e.Savings.Record(ctx, "evidence_sifted", int64(sum.TokensSaved), sum.SavedUSD, CacheKey(question, q.Scope)[:16])
 		}
 	}
 	a.Usage.InputTokens += agentUsage.InputTokens
