@@ -10,7 +10,8 @@
 #   Go 1.25.13 and Node.js 22.12+ (into ~/.dth-quickstart/toolchain when the system ones are missing or too old),
 #   and Docker + Compose v2 for PostgreSQL/pgvector (Linux: get.docker.com; macOS: Homebrew + Colima).
 # Then it builds the UI and the hub from this checkout (make release), starts PostgreSQL in Docker, runs the
-# hub, signs in, and opens the UI. Re-running is safe: passwords are reused and the hub is rebuilt/restarted.
+# hub, and opens a one-time link to choose the owner password (no password is printed or kept). Re-running is
+# safe: the hub is rebuilt/restarted and later runs use the API token the first run created.
 # --container skips the host Go/Node toolchain and builds the container image instead.
 #
 # Options (or environment variables):
@@ -23,6 +24,7 @@
 #                                         users, models, repositories); export the secrets it references first
 #   --init                                ask the setup questions first (dth init) and use the file it writes
 #   --down [--wipe]                       stop the stack (and delete its volumes)
+#   --reset-password                      print a new one-time link to choose the owner password
 # Model keys (optional, configured through the API so the setup wizard has nothing left to ask):
 #   ANTHROPIC_API_KEY   chat features (docgen, qa, decode, triage, suggest)
 #   OPENAI_API_KEY      embeddings (text-embedding-3-small); chat too if DTH_OPENAI_CHAT_MODEL is set
@@ -55,6 +57,7 @@ while [ $# -gt 0 ]; do
     --settings) SETTINGS="$2"; shift 2 ;;
     --init) INIT=1; shift ;;
     --down) ACTION=down; shift ;;
+    --reset-password) ACTION=reset; shift ;;
     --wipe) WIPE=1; shift ;;
     -h|--help) sed -n '2,31p' "$0"; exit 0 ;;
     *) echo "unknown option: $1 (see --help)" >&2; exit 2 ;;
@@ -319,7 +322,12 @@ if [ "$MODE" = native ] && [ -f "$ENV_FILE" ] && [ ! -f "$STATE_DIR/master.key" 
 fi
 get_env() { if [ -f "$ENV_FILE" ]; then sed -n "s/^$1=//p" "$ENV_FILE" | tail -1; fi; }
 DB_PW="$(get_env DTH_DB_PASSWORD)"; [ -n "$DB_PW" ] || DB_PW="$(openssl rand -hex 24)"
-OWNER_PW="$(get_env DTH_OWNER_PASSWORD)"; [ -n "$OWNER_PW" ] || OWNER_PW="$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-20)"
+# The owner never gets a printed password: on the first run a random bootstrap password signs this script in
+# once, it creates an API token for later runs (revocable under Account) and a one-time link for you to choose
+# your own password, and the bootstrap password is then dropped from disk.
+QS_TOKEN="$(get_env DTH_QUICKSTART_TOKEN)"
+OWNER_PW="$(get_env DTH_OWNER_PASSWORD)"
+if [ -z "$QS_TOKEN" ] && [ -z "$OWNER_PW" ]; then OWNER_PW="$(openssl rand -base64 24 | tr -d '/+=' | cut -c1-28)"; fi
 PREV_EMAIL="$(get_env DTH_OWNER_EMAIL)"; if [ -n "$PREV_EMAIL" ]; then EMAIL="$PREV_EMAIL"; fi
 # Settings applied at start live in $STATE_DIR/settings (Compose mounts it in container mode); a re-run
 # without --settings keeps the ones copied there before.
@@ -333,6 +341,15 @@ if [ -n "$SETTINGS" ]; then
   say "Settings from $SETTINGS are applied when the hub starts"
 fi
 URL="http://localhost:$PORT"
+if [ "$ACTION" = reset ]; then
+  [ -n "$QS_TOKEN" ] || die "no API token from an earlier run; with the hub running, use: $( [ "$MODE" = native ] && echo "DTH_DATABASE_URL=… $REPO_ROOT/bin/dth-hub invite $EMAIL" || echo "docker compose -p $PROJECT exec hub /dth-hub invite $EMAIL" )"
+  auth=(-H "Authorization: Bearer $QS_TOKEN" -H 'Content-Type: application/json')
+  me="$(curl -fsS "${auth[@]}" "$URL/api/v1/me" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)" || die "the hub at $URL is not running (start it with $0)"
+  path="$(curl -fsS "${auth[@]}" -X POST -d '{}' "$URL/api/v1/users/$me/invite" | sed -n 's/.*"path":"\([^"]*\)".*/\1/p')"
+  [ -n "$path" ] || die "could not create a password link"
+  printf '\n  Choose a new password for %s with this one-time link (works once, expires in 7 days):\n    %s%s\n\n' "$EMAIL" "$URL" "$path"
+  exit 0
+fi
 
 port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 
@@ -393,13 +410,14 @@ umask 077
 cat > "$ENV_FILE" <<EOF
 DTH_DB_PASSWORD=$DB_PW
 DTH_OWNER_EMAIL=$EMAIL
-DTH_OWNER_PASSWORD=$OWNER_PW
 DTH_IMAGE=${IMAGE:-}
 DTH_PORT=$PORT
 DTH_PG_PORT=$PG_PORT
 DTH_PUBLIC_URL=$URL
 DTH_AUTH_MODE=local
 EOF
+if [ -n "$OWNER_PW" ]; then echo "DTH_OWNER_PASSWORD=$OWNER_PW" >> "$ENV_FILE"; fi
+if [ -n "$QS_TOKEN" ]; then echo "DTH_QUICKSTART_TOKEN=$QS_TOKEN" >> "$ENV_FILE"; fi
 # Email invite and password links when DTH_SMTP_URL and DTH_EMAIL_FROM are exported (docs/users-and-sign-in.md#email).
 if [ -n "${DTH_SMTP_URL:-}" ]; then
   printf 'DTH_SMTP_URL=%s\nDTH_EMAIL_FROM=%s\n' "$DTH_SMTP_URL" "${DTH_EMAIL_FROM:-}" >> "$ENV_FILE"
@@ -419,7 +437,8 @@ if [ "$MODE" = native ]; then
     cd "$STATE_DIR"
     export DTH_DATABASE_URL="postgres://dth:$DB_PW@127.0.0.1:$PG_PORT/dth?sslmode=disable"
     export DTH_LISTEN="127.0.0.1:$PORT" DTH_PUBLIC_URL="$URL" DTH_AUTH_MODE=local
-    export DTH_OWNER_EMAIL="$EMAIL" DTH_OWNER_PASSWORD="$OWNER_PW"
+    export DTH_OWNER_EMAIL="$EMAIL"
+    if [ -n "$OWNER_PW" ]; then export DTH_OWNER_PASSWORD="$OWNER_PW"; fi
     export DTH_LOCAL_KEY_FILE="$STATE_DIR/master.key" DTH_GRAMMARS_DIR="$STATE_DIR/grammars" DTH_LOG_FORMAT=text
     export DTH_SETTINGS_FILE="$STATE_DIR/settings"
     mkdir -p "$STATE_DIR/grammars"
@@ -457,7 +476,30 @@ api_login() {
   [ -n "$CSRF" ]
 }
 api() { # method path [json]
-  curl -fsS -b "$JAR" -X "$1" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' ${3:+-d "$3"} "$URL/api/v1$2"
+  if [ -n "$QS_TOKEN" ]; then
+    curl -fsS -X "$1" -H "Authorization: Bearer $QS_TOKEN" -H 'Content-Type: application/json' ${3:+-d "$3"} "$URL/api/v1$2"
+  else
+    curl -fsS -b "$JAR" -X "$1" -H "X-CSRF-Token: $CSRF" -H 'Content-Type: application/json' ${3:+-d "$3"} "$URL/api/v1$2"
+  fi
+}
+drop_env() { if [ -f "$ENV_FILE" ]; then sed -i.bak "/^$1=/d" "$ENV_FILE" && rm -f "$ENV_FILE.bak"; fi; }
+# api_auth signs the script in: with its API token, or (first run) with the bootstrap password, which it
+# trades for a token and for your one-time password link.
+SETUP_LINK=""
+api_auth() {
+  if [ -n "$QS_TOKEN" ]; then api GET /me >/dev/null && return 0; QS_TOKEN=""; drop_env DTH_QUICKSTART_TOKEN; fi
+  [ -n "$OWNER_PW" ] && api_login || return 1
+  local tok me inv
+  tok="$(api POST /tokens '{"name":"quickstart script","expires_in_days":0}' | sed -n 's/.*"token":"\([^"]*\)".*/\1/p')"
+  me="$(api GET /me | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)"
+  inv="$(api POST "/users/$me/invite" '{}' | sed -n 's/.*"path":"\([^"]*\)".*/\1/p')"
+  [ -n "$inv" ] && SETUP_LINK="$URL$inv"
+  if [ -n "$tok" ]; then
+    QS_TOKEN="$tok"
+    echo "DTH_QUICKSTART_TOKEN=$QS_TOKEN" >> "$ENV_FILE"
+    drop_env DTH_OWNER_PASSWORD # the owner exists; the bootstrap password is never needed again
+  fi
+  return 0
 }
 provider_id() { # kind → existing provider id
   api GET /providers | tr '{' '\n' | grep "\"kind\":\"$1\"" | sed -n 's/.*"id":"\([^"]*\)".*/\1/p' | head -1
@@ -482,8 +524,9 @@ route() {
   api PUT "/routes/$1" "{\"provider_id\":\"$2\",\"model\":\"$3\"}" >/dev/null && echo "    route $1 → $3"
 }
 
+API_OK=""; if api_auth; then API_OK=1; fi
 if [ -n "${ANTHROPIC_API_KEY:-}${OPENAI_API_KEY:-}" ]; then
-  if api_login; then
+  if [ -n "$API_OK" ]; then
     say "Configuring model providers from your environment"
     if [ -n "${ANTHROPIC_API_KEY:-}" ]; then
       pid="$(ensure_provider anthropic Anthropic "$ANTHROPIC_API_KEY")"
@@ -514,15 +557,20 @@ rm -f "$JAR"
 # ---------------------------------------------------------------------------------------------------------
 # Done
 # ---------------------------------------------------------------------------------------------------------
-CREDS="$STATE_DIR/credentials.txt"
-printf 'URL: %s\nEmail: %s\nPassword: %s\n' "$URL" "$EMAIL" "$OWNER_PW" > "$CREDS"
+rm -f "$STATE_DIR/credentials.txt" # older versions saved a password here
+if [ -n "$SETUP_LINK" ]; then
+  SIGNIN="Owner:    $EMAIL
+  Choose your password with this one-time link (works once, expires in 7 days):
+            $SETUP_LINK"
+else
+  SIGNIN="Sign in:  $EMAIL with the password you chose
+  Forgot it? $0 --reset-password"
+fi
 cat <<EOF
 
   DocTheRepo Hub is running at $URL
 
-  Sign in:  $EMAIL
-            $OWNER_PW
-  (saved in $CREDS)
+  $SIGNIN
 
   Stop:     $0 --down        Wipe: $0 --down --wipe
   Logs:     $( [ "$MODE" = native ] && echo "tail -f $LOG_FILE" || echo "docker compose -p $PROJECT logs -f hub" )
@@ -530,9 +578,10 @@ cat <<EOF
 EOF
 
 if [ -z "$NO_BROWSER" ]; then
-  if [ "$OS" = Darwin ]; then open "$URL" >/dev/null 2>&1 || true
-  elif have xdg-open && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then xdg-open "$URL" >/dev/null 2>&1 || true
-  elif grep -qi microsoft /proc/version 2>/dev/null && have cmd.exe; then cmd.exe /c start "$URL" >/dev/null 2>&1 || true
-  else echo "  (no desktop browser detected: open $URL yourself)"
+  OPEN_URL="${SETUP_LINK:-$URL}"
+  if [ "$OS" = Darwin ]; then open "$OPEN_URL" >/dev/null 2>&1 || true
+  elif have xdg-open && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then xdg-open "$OPEN_URL" >/dev/null 2>&1 || true
+  elif grep -qi microsoft /proc/version 2>/dev/null && have cmd.exe; then cmd.exe /c start "$OPEN_URL" >/dev/null 2>&1 || true
+  else echo "  (no desktop browser detected: open the link above yourself)"
   fi
 fi

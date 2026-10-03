@@ -23,7 +23,8 @@ Checks and installs what is missing, unattended: git, curl, tar, make, openssl, 
 and Node.js 22.12+ (private copies under `~/.dth-quickstart/toolchain` when the system ones are missing or too
 old), and Docker + Compose (Linux: get.docker.com; macOS: Homebrew + Colima). It then builds the UI and the
 hub (`make release`), starts PostgreSQL/pgvector in Docker, runs the hub, creates the owner account, and
-opens <http://localhost:8080> with the credentials printed (and saved in `~/.dth-quickstart/credentials.txt`).
+opens a one-time link where you choose the owner password. No password is printed or stored; later runs use an
+API token the first run created (revoke it under **Account**), and `--reset-password` prints a new link.
 Set `ANTHROPIC_API_KEY` and/or `OPENAI_API_KEY` first to have the model routes configured too. Stop with
 `./scripts/quickstart.sh --down` (`--wipe` deletes the data); `--container` builds and runs the container
 image instead of using a host toolchain; `--help` lists every option. See

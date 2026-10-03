@@ -49,8 +49,10 @@ type Options struct {
 type Result struct {
 	URL           string
 	OwnerEmail    string
-	OwnerPassword string // set only on the first run; printed once and never stored
-	Token         string // CLI token created on the first run
+	// SetupLink is a one-time link for the owner to choose their password (first run only). The
+	// generated bootstrap password is never shown or stored, and stops working once the link is used.
+	SetupLink string
+	Token     string // CLI token created on the first run
 }
 
 func (o *Options) defaults() error {
@@ -160,10 +162,11 @@ func Up(ctx context.Context, o Options) (Result, error) {
 	}
 	res := Result{URL: fmt.Sprintf("http://localhost:%d", o.Port), OwnerEmail: o.OwnerEmail}
 	first := env["DTH_DB_PASSWORD"] == ""
+	var bootstrapPW string
 	if first {
 		env["DTH_DB_PASSWORD"] = secret(24)
-		res.OwnerPassword = secret(18)
-		env["DTH_OWNER_EMAIL"], env["DTH_OWNER_PASSWORD"] = o.OwnerEmail, res.OwnerPassword
+		bootstrapPW = secret(24)
+		env["DTH_OWNER_EMAIL"], env["DTH_OWNER_PASSWORD"] = o.OwnerEmail, bootstrapPW
 	} else if env["DTH_OWNER_EMAIL"] != "" {
 		res.OwnerEmail = env["DTH_OWNER_EMAIL"]
 	}
@@ -188,16 +191,19 @@ func Up(ctx context.Context, o Options) (Result, error) {
 		return res, err
 	}
 	if first {
-		// The owner exists now; the password lives only in this run's output.
+		// The owner exists now; the bootstrap password is dropped from disk and never shown.
 		delete(env, "DTH_OWNER_PASSWORD")
 		if err := writeEnv(envPath, env); err != nil {
 			return res, err
 		}
-		tok, err := o.cliToken(ctx, res.URL, res.OwnerEmail, res.OwnerPassword)
+		tok, err := o.cliToken(ctx, res.URL, res.OwnerEmail, bootstrapPW)
 		if err != nil {
-			return res, fmt.Errorf("hub is up, but creating a CLI token failed (sign in and create one under Account): %w", err)
+			return res, fmt.Errorf("hub is up, but creating a CLI token failed (run `dth-hub invite %s` in the hub container for a password link): %w", res.OwnerEmail, err)
 		}
 		res.Token = tok
+		if res.SetupLink, err = o.setupLink(ctx, res.URL, tok); err != nil {
+			return res, fmt.Errorf("hub is up, but creating your password link failed (run `dth-hub invite %s` in the hub container): %w", res.OwnerEmail, err)
+		}
 	}
 	return res, nil
 }
@@ -257,6 +263,38 @@ func (o *Options) cliToken(ctx context.Context, url, email, password string) (st
 		return "", err
 	}
 	return tok.Token, nil
+}
+
+// setupLink asks the hub, as the owner, for a one-time link to set the owner's password.
+func (o *Options) setupLink(ctx context.Context, url, token string) (string, error) {
+	call := func(method, path string, out any) error {
+		req, _ := http.NewRequestWithContext(ctx, method, url+"/api/v1"+path, bytes.NewReader([]byte("{}")))
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := o.HTTP.Do(req)
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode >= 300 {
+			msg, _ := io.ReadAll(resp.Body)
+			return fmt.Errorf("%s: HTTP %d: %s", path, resp.StatusCode, msg)
+		}
+		return json.NewDecoder(resp.Body).Decode(out)
+	}
+	var me struct {
+		ID string `json:"id"`
+	}
+	if err := call(http.MethodGet, "/me", &me); err != nil {
+		return "", err
+	}
+	var inv struct {
+		Path string `json:"path"`
+	}
+	if err := call(http.MethodPost, "/users/"+me.ID+"/invite", &inv); err != nil {
+		return "", err
+	}
+	return url + inv.Path, nil
 }
 
 // Down stops the stack; volumes (all data) are removed only with wipe.
