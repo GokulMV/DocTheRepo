@@ -21,7 +21,7 @@ changed. It answers questions about your systems with citations, maps how servic
 datastores connect, and explains the errors and alerts your tools report.
 
 It runs in your infrastructure: one Go binary, PostgreSQL, and the LLM provider accounts you already have
-(Claude, OpenAI, Azure OpenAI, Bedrock, Vertex, Ollama or any OpenAI-compatible server). Hard spend limits
+(Claude, OpenAI, Azure OpenAI, Bedrock, Vertex, GitHub Models, Ollama, opencode or any OpenAI-compatible server). Hard spend limits
 are checked before every paid call.
 
 <p align="center">
@@ -135,7 +135,7 @@ deploy command. Owners can change any of this later in the UI (**Sign-in & SSO**
 |---|---|
 | A domain and HTTPS | e.g. `https://docs-hub.acme.com`. SSO providers and GitHub webhooks require https. |
 | An identity provider app (for SSO) | A web OpenID Connect app with the callback `https://<your domain>/api/v1/auth/callback`. `dth init` and **Sign-in & SSO** show the steps per provider. Without SSO, people sign in with passwords you send them links for. |
-| A model provider | An API key (Anthropic, OpenAI, Azure OpenAI) or cloud access (Bedrock, Vertex), or an Ollama server. You pay the provider directly; spend limits are enforced before every call. |
+| A model provider | An API key (Anthropic, OpenAI, Azure OpenAI), a GitHub token for GitHub Models, cloud access (Bedrock, Vertex), an Ollama server, or opencode for docs. You pay the provider directly; spend limits are enforced before every call. |
 | Access to your code | Rights to install a GitHub App on your organization (one click in the Hub), or a GitHub/GitLab token. |
 | Network | Outbound HTTPS to the git host, model provider and identity provider. Inbound HTTPS from the git host for webhooks (otherwise the Hub polls every minute). |
 

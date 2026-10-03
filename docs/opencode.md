@@ -25,8 +25,11 @@ dth adapter-test dth engine opencode --model anthropic/claude-sonnet-5-5 {task_f
 # → every check PASS and "Conforms to DocGen v2."
 ```
 
-**Add it** (UI: **Providers & routing → Add provider**, kind `external_cli`; then set the **docgen** route
-to it). With the API:
+**Add it** (UI: **Providers & routing → Add provider → opencode**, enter the model as opencode names it,
+and keep "Use it for everything": that routes **Docs generation** to it). The Hub runs
+`dth engine opencode --model {model} {task_file} {result_file}`, with `{model}` the route's model; set
+`command_template` under Advanced to change it. With the API (kind `opencode`, or `external_cli` with an
+explicit `command_template` for any other agent):
 
 ```sh
 curl -sS -X POST "$HUB/api/v1/providers" -H "Authorization: Bearer $DTH_TOKEN" -H 'Content-Type: application/json' -d '{
@@ -114,3 +117,17 @@ publicly described. Before relying on it:
 - The MCP config key and fields (`mcp`, `type: "local"`, `command` array, `environment`) are opencode's
   current format as far as we know; if your version differs, `opencode mcp list` (or its docs) shows the
   expected shape — the server itself is standard MCP over stdio and does not depend on it.
+
+## GitHub Copilot and GitHub Models
+
+**GitHub Models** is a provider kind of its own (**Add provider → GitHub Models (Copilot models)**). It is
+GitHub's OpenAI-compatible inference API (`https://models.github.ai/inference`) with models from OpenAI,
+Anthropic, Meta and others, named `publisher/model` (for example `openai/gpt-4.1`). The key is a
+fine-grained GitHub token with **Models: read**. Usage is billed to, and rate-limited for, that GitHub
+account or organization, not a Copilot seat; an organization owner turns GitHub Models and paid usage on in
+the organization's settings.
+
+**GitHub Copilot** itself has no chat API for other applications. GitHub offers the Copilot SDK, which
+drives the Copilot CLI and needs a Copilot subscription. To use it, run it as an agent engine: **Add
+provider → Other agent CLI** with a `command_template` that speaks the DocGen contract (check it with
+`dth adapter-test`). The Hub does not ship a Copilot engine.

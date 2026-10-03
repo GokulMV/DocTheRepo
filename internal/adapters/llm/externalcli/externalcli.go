@@ -97,7 +97,7 @@ func (e *Engine) generateWith(ctx context.Context, task contract.DocGenTask, ver
 	if err := os.WriteFile(taskPath, raw, 0o600); err != nil {
 		return res, ports.Transient(fmt.Errorf("write task file: %w", err))
 	}
-	out, runErr := e.run(ctx, taskPath, resultPath, dir)
+	out, runErr := e.run(ctx, taskPath, resultPath, dir, task.Model)
 	body, readErr := os.ReadFile(resultPath)
 	if runErr != nil {
 		if errors.Is(runErr, context.DeadlineExceeded) {
@@ -131,13 +131,14 @@ func (e *Engine) generateWith(ctx context.Context, task contract.DocGenTask, ver
 	return res, nil
 }
 
-func (e *Engine) run(ctx context.Context, taskPath, resultPath, dir string) ([]byte, error) {
+func (e *Engine) run(ctx context.Context, taskPath, resultPath, dir, model string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, e.timeout)
 	defer cancel()
 	args := make([]string, len(e.argv))
 	for i, a := range e.argv {
 		a = strings.ReplaceAll(a, "{task_file}", taskPath)
 		a = strings.ReplaceAll(a, "{result_file}", resultPath)
+		a = strings.ReplaceAll(a, "{model}", model)
 		args[i] = strings.ReplaceAll(a, "{work_dir}", dir)
 	}
 	cmd := exec.CommandContext(ctx, args[0], args[1:]...)

@@ -391,6 +391,7 @@ func (g *Gateway) GenerateDocs(ctx context.Context, meta CallMeta, task contract
 		perChunk = 2000
 	}
 	task.MaxOutputTokensPerChunk = perChunk
+	task.Model = route.Model
 	task.Context = g.protect(route, task.Context)
 	inEst := spendguard.EstimateTokens(task.Context)
 	outEst := int64(perChunk * max(1, len(task.ChunksToGenerate)))

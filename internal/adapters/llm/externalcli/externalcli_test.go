@@ -142,3 +142,16 @@ func TestConformance(t *testing.T) {
 	rep = Conformance(context.Background(), ports.ProviderConfig{})
 	assert.False(t, rep.Passed)
 }
+
+func TestGenerate_ModelPlaceholder(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "model.txt")
+	tmpl := `sh -c 'printf %s "$1" > "$2"; exec "$3" "$4" "$5"' sh {model} ` + out + " " + stubBin + " {task_file} {result_file}"
+	eng := engine(t, "ok", map[string]string{"command_template": tmpl})
+	task := FixtureTask("job-m")
+	task.Model = "anthropic/claude-sonnet-5-5"
+	_, err := eng.Generate(context.Background(), task)
+	require.NoError(t, err)
+	got, err := os.ReadFile(out)
+	require.NoError(t, err)
+	assert.Equal(t, "anthropic/claude-sonnet-5-5", string(got), "{model} is the route's model")
+}

@@ -52,7 +52,7 @@ const NAMES: Record<string, string> = {
   sqs: 'Amazon SQS', sns: 'Amazon SNS', eventbridge: 'Amazon EventBridge', kinesis: 'Amazon Kinesis', pubsub_bus: 'Google Pub/Sub (backlog)',
   rabbitmq: 'RabbitMQ', confluence: 'Confluence', jira: 'Jira',
   anthropic: 'Anthropic', openai: 'OpenAI', azure_openai: 'Azure OpenAI', bedrock: 'AWS Bedrock', vertex: 'Google Vertex AI',
-  ollama: 'Ollama', openai_compat: 'OpenAI-compatible', external_cli: 'Agent CLI', jev: 'TypeSafe Jev',
+  ollama: 'Ollama', openai_compat: 'OpenAI-compatible', external_cli: 'Agent CLI', opencode: 'opencode', github_models: 'GitHub Models', jev: 'TypeSafe Jev',
   webhook: 'Webhook', poll: 'Polling', both: 'Webhook and polling',
 };
 /** Connector, provider and mode identifiers as product names ("openai_compat" → "OpenAI-compatible"). */

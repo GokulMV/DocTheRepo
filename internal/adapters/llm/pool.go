@@ -87,6 +87,36 @@ func init() {
 	// TypeSafe Jev: decisions only (plan Phase 11.5); route it to the "decide" feature.
 	Register("jev", Factories{LLM: func(_ context.Context, c ports.ProviderConfig) (ports.LLM, error) { return jev.New(c) }})
 	Register("external_cli", Factories{DocGen: func(_ context.Context, c ports.ProviderConfig) (ports.DocGenerator, error) { return externalcli.New(c) }})
+	// opencode: the external_cli engine with `dth engine opencode` as the default command.
+	Register("opencode", Factories{DocGen: func(_ context.Context, c ports.ProviderConfig) (ports.DocGenerator, error) {
+		return externalcli.New(withOpencodeDefaults(c))
+	}})
+	// GitHub Models: OpenAI-compatible inference billed to a GitHub account; the key is a GitHub token
+	// with the models:read permission.
+	Register("github_models", openAIish(func(c ports.ProviderConfig) (*openaicompat.Client, error) {
+		if c.BaseURL == "" {
+			c.BaseURL = GitHubModelsURL
+		}
+		return openaicompat.FromConfig(c)
+	}))
+}
+
+// GitHubModelsURL is GitHub Models' inference endpoint.
+const GitHubModelsURL = "https://models.github.ai/inference"
+
+// OpencodeCommand runs opencode for one DocGen task; {model} is the route's model.
+const OpencodeCommand = "dth engine opencode --model {model} {task_file} {result_file}"
+
+func withOpencodeDefaults(c ports.ProviderConfig) ports.ProviderConfig {
+	extra := map[string]string{}
+	for k, v := range c.Extra {
+		extra[k] = v
+	}
+	if extra["command_template"] == "" {
+		extra["command_template"] = OpencodeCommand
+	}
+	c.Extra = extra
+	return c
 }
 
 // Source loads decrypted provider configuration by ID (store + secrets box in production).
