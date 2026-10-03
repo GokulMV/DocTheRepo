@@ -44,6 +44,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/core/manifest"
 	"github.com/GokulMV/DocTheRepo/internal/core/pipeline"
 	"github.com/GokulMV/DocTheRepo/internal/core/rag"
+	"github.com/GokulMV/DocTheRepo/internal/core/security"
 	"github.com/GokulMV/DocTheRepo/internal/core/spendguard"
 	"github.com/GokulMV/DocTheRepo/internal/core/suggest"
 	"github.com/GokulMV/DocTheRepo/internal/ingest"
@@ -91,6 +92,8 @@ type app struct {
 	suggest     *suggest.Service
 	// Knowledge: Confluence and Jira sync (Phase 13).
 	knowledge     *ingest.KnowledgeSync
+	securityJobs  *security.Jobs
+	securityStore *store.Security
 	knowledgeDocs *store.Knowledge
 	arch          *store.ArchitectureStore
 	sealKeys      *store.SealKeys
@@ -240,6 +243,11 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 		Decide: gw.Decide, GateThreshold: cfg.Decide.GateThreshold, Estimate: a.signalStore.DecodeEstimate}
 	a.suggestions = store.NewSuggestions(st, a.knownIssues)
 	a.suggest = &suggest.Service{Store: a.suggestions, GW: gw, Index: a.index}
+	a.securityStore = store.NewSecurity(st)
+	a.securityJobs = &security.Jobs{Scanner: &security.Scanner{GW: gw, Cache: a.securityStore}, Store: a.securityStore, Repos: a.repos,
+		Hosts: func(ctx context.Context, connectorID string) (ports.CodeHost, error) {
+			return a.hosts.Host(ctx, connectorID)
+		}}
 	knowledgeDocs := store.NewKnowledge(st, shelves)
 	a.knowledgeDocs = knowledgeDocs
 	a.knowledge = &ingest.KnowledgeSync{Store: conns, Queue: q, Docs: knowledgeDocs, Rules: a.knownIssues, Uploads: knowledgeDocs,
@@ -277,6 +285,8 @@ func (a *app) registerHandlers(pool *queue.Pool) {
 	pool.Register(ports.JobSignalBatch, a.polls.Handle)
 	pool.Register(ports.JobDecodeIssue, ingest.DecodeHandler(a.decoder))
 	pool.Register(ports.JobKnowledgeSync, a.knowledge.Handle)
+	pool.Register(security.JobScan, a.securityJobs.HandleScan)
+	pool.Register(security.JobFix, a.securityJobs.HandleFix)
 	pool.Register(ports.JobPRReview, func(ctx context.Context, job ports.Job) (ports.Outcome, error) {
 		var pl ingest.ReviewPayload
 		if err := json.Unmarshal(job.Payload, &pl); err != nil {
@@ -419,6 +429,7 @@ func (a *app) v1Routes() []func(chi.Router) {
 		api.AskRoutes(a.rag, a.qa, a.auth),
 		api.BrowseRoutes(a.browse, a.auth),
 		api.UploadRoutes(api.UploadDeps{Auth: a.auth, Upload: a.knowledge.Upload, Store: a.knowledgeDocs}),
+		api.SecurityRoutes(api.SecurityDeps{Auth: a.auth, Store: a.securityStore, Queue: a.q, Plan: a.securityPlan}),
 		api.AdminRoutes(admin),
 		api.OpsRoutes(a.q, a.browse, a.auth),
 		api.IssueRoutes(api.IssueDeps{Auth: a.auth, Issues: store.NewIssues(a.st, a.knownIssues), KnownIssues: a.knownIssues,
@@ -495,4 +506,22 @@ func (a *app) streams(log *slog.Logger) *ingest.StreamRunner {
 		},
 		OnError: func(cc ports.ConnectorConfig, err error) { health(cc.ID, err) },
 	}
+}
+
+// securityPlan reads what a scan would attack and estimates it, with no model call.
+func (a *app) securityPlan(ctx context.Context, repoID string, modules []string) (security.Plan, error) {
+	repo, err := a.repos.Get(ctx, repoID)
+	if err != nil {
+		return security.Plan{}, err
+	}
+	host, err := a.hosts.Host(ctx, repo.ConnectorID)
+	if err != nil {
+		return security.Plan{}, err
+	}
+	head, err := host.BranchHead(ctx, repo.FullName, repo.Branch())
+	if err != nil {
+		return security.Plan{}, err
+	}
+	p, _, err := a.securityJobs.Scanner.PlanScan(ctx, security.Target{Repo: repo, Host: host, Commit: head}, modules)
+	return p, err
 }

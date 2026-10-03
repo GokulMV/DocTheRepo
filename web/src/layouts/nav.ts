@@ -1,5 +1,5 @@
 import {
-  Activity, BookOpen, ChartColumn, FileCog, FolderGit2, Inbox, KeyRound, Library, MessageSquareText, Network, Plug, Rocket, ShieldCheck, SlidersHorizontal,
+  Activity, BookOpen, ChartColumn, FileCog, FolderGit2, Inbox, KeyRound, Library, MessageSquareText, Network, Plug, Rocket, ShieldAlert, ShieldCheck, SlidersHorizontal,
   Users, Wallet, Workflow, type LucideIcon,
 } from 'lucide-react';
 import type { Role } from '@/api/types';
@@ -37,6 +37,7 @@ export const NAV: { section: string; items: NavItem[] }[] = [
       { to: '/activity', label: 'Activity', min: 'viewer', icon: Activity },
       { to: '/analytics', label: 'Analytics', min: 'viewer', icon: ChartColumn },
       { to: '/repos', label: 'Repositories', min: 'viewer', icon: FolderGit2 },
+      { to: '/security', label: 'Security', min: 'editor', icon: ShieldAlert, blurb: 'Find weaknesses in your repositories and fix the ones you choose' },
     ],
   },
   {

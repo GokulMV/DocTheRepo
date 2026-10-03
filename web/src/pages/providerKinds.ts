@@ -32,7 +32,7 @@ export interface ProviderKind {
   features?: string[];
 }
 
-export const CHAT_FEATURES = ['docgen', 'docgen_fast', 'qa', 'decode', 'triage', 'suggest', 'decide'];
+export const CHAT_FEATURES = ['docgen', 'docgen_fast', 'qa', 'decode', 'triage', 'suggest', 'decide', 'security'];
 
 export const PROVIDER_KINDS: ProviderKind[] = [
   {

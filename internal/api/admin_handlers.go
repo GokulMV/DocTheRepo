@@ -812,7 +812,7 @@ func (h *adminHandlers) testProvider(w http.ResponseWriter, r *http.Request) {
 }
 
 var features = []string{llmgateway.FeatureDocGen, llmgateway.FeatureDocGenFast, llmgateway.FeatureQA, llmgateway.FeatureDecode, llmgateway.FeatureTriage,
-	llmgateway.FeatureEmbedding, llmgateway.FeatureSuggest, llmgateway.FeatureDecide}
+	llmgateway.FeatureEmbedding, llmgateway.FeatureSuggest, llmgateway.FeatureDecide, llmgateway.FeatureSecurity}
 
 func (h *adminHandlers) listRoutes(w http.ResponseWriter, r *http.Request) {
 	rs, err := h.d.Routes.ListRoutes(r.Context())

@@ -19,10 +19,14 @@ const (
 	JobSignalBatch   JobType = "signal_batch"
 	// JobPRReview advances a docs PR after its approver's review (webhook ingress does no git I/O itself).
 	JobPRReview JobType = "pr_review"
+	// JobSecurityScan and JobSecurityFix run the Security page's scans and requested fixes.
+	JobSecurityScan JobType = "security_scan"
+	JobSecurityFix  JobType = "security_fix"
 )
 
 // AllJobTypes lists every job type the worker pool knows about.
-var AllJobTypes = []JobType{JobCodePush, JobDecodeIssue, JobKnowledgeSync, JobImportDocs, JobReindex, JobSignalBatch, JobPRReview}
+var AllJobTypes = []JobType{JobCodePush, JobDecodeIssue, JobKnowledgeSync, JobImportDocs, JobReindex, JobSignalBatch, JobPRReview,
+	JobSecurityScan, JobSecurityFix}
 
 // JobStatus is the lifecycle state of a job (plan § 6.5).
 type JobStatus string

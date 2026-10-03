@@ -23,6 +23,7 @@ import (
 	"net/http/httptest"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -38,6 +39,7 @@ const (
 	Decode    = "decode"
 	Suggest   = "suggest"
 	Decide    = "decide"
+	Security  = "security"
 	Other     = "other"
 )
 
@@ -206,6 +208,8 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		out = suggest(user.String())
 	case Decide:
 		out = decideReply(user.String())
+	case Security:
+		out = security(system.String(), user.String())
 	default:
 		out = "ok"
 	}
@@ -266,6 +270,8 @@ func classify(system string) string {
 		return Suggest
 	case strings.HasPrefix(system, "You classify."):
 		return Decide
+	case strings.HasPrefix(system, "You are a kryptonite "):
+		return Security
 	}
 	return Other
 }
@@ -566,4 +572,77 @@ func decideReply(prompt string) string {
 	}
 	b, _ := json.Marshal(map[string]any{"probabilities": probs})
 	return string(b)
+}
+
+var (
+	fileBlockRE = regexp.MustCompile(`(?s)<file path="([^"]+)">\n(.*?)</file>`)
+	numLineRE   = regexp.MustCompile(`^\s*(\d+)  (.*)$`)
+	candRE      = regexp.MustCompile(`<candidate index="(\d+)">`)
+	fixFileRE   = regexp.MustCompile(`(?m)^- file: (\S+) lines`)
+)
+
+// security plays kryptonite's roles deterministically: the attacker reports string-built SQL passed to
+// Query, the verifier confirms every candidate, and the fixer switches that line to a placeholder and adds
+// two tests next to the file.
+func security(system, prompt string) string {
+	switch {
+	case strings.HasPrefix(system, "You are a kryptonite ATTACKER"):
+		var fs []map[string]any
+		for _, m := range fileBlockRE.FindAllStringSubmatch(prompt, -1) {
+			for _, line := range strings.Split(m[2], "\n") {
+				lm := numLineRE.FindStringSubmatch(line)
+				if lm == nil || !strings.Contains(lm[2], "SELECT") || !strings.Contains(lm[2], "+") {
+					continue
+				}
+				n, _ := strconv.Atoi(lm[1])
+				fs = append(fs, map[string]any{"title": "SQL built from user input", "surface": "login query", "file": m[1],
+					"line_start": n, "line_end": n, "repro": []string{"POST /login with name: ' OR '1'='1"}, "evidence": strings.TrimSpace(lm[2]),
+					"severity": "critical", "exploitability": "trivial"})
+			}
+		}
+		if fs == nil {
+			fs = []map[string]any{}
+		}
+		b, _ := json.Marshal(map[string]any{"findings": fs})
+		return string(b)
+	case strings.HasPrefix(system, "You are a kryptonite VERIFIER"):
+		vs := []map[string]any{}
+		for _, m := range candRE.FindAllStringSubmatch(prompt, -1) {
+			i, _ := strconv.Atoi(m[1])
+			vs = append(vs, map[string]any{"index": i, "status": "confirmed", "severity": "critical", "exploitability": "easy",
+				"evidence": "the name is concatenated into the query", "duplicate_of": -1})
+		}
+		b, _ := json.Marshal(map[string]any{"verdicts": vs})
+		return string(b)
+	case strings.HasPrefix(system, "You are a kryptonite FIXER"):
+		target := ""
+		if m := fixFileRE.FindStringSubmatch(prompt); m != nil {
+			target = m[1]
+		}
+		var body []string
+		for _, m := range fileBlockRE.FindAllStringSubmatch(prompt, -1) {
+			if m[1] != target {
+				continue
+			}
+			for _, line := range strings.Split(strings.TrimRight(m[2], "\n"), "\n") {
+				if lm := numLineRE.FindStringSubmatch(line); lm != nil {
+					text := lm[2]
+					if strings.Contains(text, "SELECT") && strings.Contains(text, "+") {
+						text = "\trows, err := db.Query(\"SELECT id FROM users WHERE name = $1\", name)"
+					}
+					body = append(body, text)
+				}
+			}
+		}
+		if body == nil {
+			return `{"files":[],"tests":[],"risk":"stub: file not shown"}`
+		}
+		test := strings.TrimSuffix(target, ".go") + "_test.go"
+		b, _ := json.Marshal(map[string]any{
+			"files": []any{map[string]string{"path": target, "content": strings.Join(body, "\n") + "\n"}},
+			"tests": []any{map[string]string{"path": test, "content": "package auth\n\n// vuln-closed: a quote in the name cannot change the query\nfunc TestLoginRejectsInjection(t *testing.T) {}\n\n// feature-intact: a normal name still logs in\nfunc TestLoginWorks(t *testing.T) {}\n"}},
+			"risk":  "stub: only the query changes"})
+		return string(b)
+	}
+	return "{}"
 }

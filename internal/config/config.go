@@ -251,7 +251,7 @@ func Default() Config {
 		},
 		Queue: QueueConfig{
 			Concurrency: map[string]int{
-				"code_push": 4, "decode_issue": 4, "knowledge_sync": 2,
+				"code_push": 4, "decode_issue": 4, "knowledge_sync": 2, "security_scan": 1, "security_fix": 1,
 				"import_docs": 1, "reindex": 1, "signal_batch": 8, "pr_review": 2,
 			},
 			LeaseTTL: 5 * time.Minute, MaxAttempts: 5, PollInterval: time.Second,
@@ -398,6 +398,12 @@ func splitList(v string) []string {
 func (c *Config) normalize() {
 	if c.Docs.DefaultPath != "" && !strings.HasSuffix(c.Docs.DefaultPath, "/") {
 		c.Docs.DefaultPath += "/"
+	}
+	// Job types added after a config file was written run with one worker unless the file says otherwise.
+	for t, n := range map[string]int{"security_scan": 1, "security_fix": 1} {
+		if _, set := c.Queue.Concurrency[t]; !set && c.Queue.Concurrency != nil {
+			c.Queue.Concurrency[t] = n
+		}
 	}
 }
 

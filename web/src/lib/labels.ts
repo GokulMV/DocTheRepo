@@ -21,6 +21,7 @@ export const FEATURE_LABELS: Record<string, string> = {
   embedding: 'Embeddings',
   suggest: 'Known-issue suggestions',
   decide: 'Decisions',
+  security: 'Security scans',
 };
 
 export const featureLabel = (f: string) => FEATURE_LABELS[f] ?? sentence(f);
@@ -29,7 +30,9 @@ export const featureLabel = (f: string) => FEATURE_LABELS[f] ?? sentence(f);
 export const JOB_LABELS: Record<string, string> = {
   code_push: 'Docs update',
   decode_issue: 'Error explanation',
-  knowledge_sync: 'Confluence/Jira sync',
+  knowledge_sync: 'Knowledge sync',
+  security_scan: 'Security scan',
+  security_fix: 'Security fix',
   import_docs: 'Docs import',
   reindex: 'Reindex',
   signal_batch: 'Signal batch',
