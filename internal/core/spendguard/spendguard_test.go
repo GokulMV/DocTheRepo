@@ -210,3 +210,25 @@ func TestFilterAndHelpers(t *testing.T) {
 	_, err = ParseScope("team")
 	assert.Error(t, err)
 }
+
+func TestCostUsagePricesCacheTokens(t *testing.T) {
+	rd, wr := 0.4, 5.0
+	g, err := New(nil, map[string]Price{
+		PriceKey("anthropic", "m"): {InputPerMTok: 4, OutputPerMTok: 20, CacheReadPerMTok: &rd, CacheWritePerMTok: &wr},
+		PriceKey("openai", "m"):    {InputPerMTok: 4, OutputPerMTok: 20},
+	}, true)
+	require.NoError(t, err)
+	// 1M input of which 600k read from cache and 100k written: 300k plain.
+	c, ok := g.CostUsage("anthropic", "m", "qa", 1_000_000, 100_000, 600_000, 100_000)
+	require.True(t, ok)
+	assert.InDelta(t, 0.3*4+0.6*0.4+0.1*5+0.1*20, c, 1e-9)
+	// No cache prices: cache tokens are plain input.
+	c, _ = g.CostUsage("openai", "m", "qa", 1_000_000, 0, 600_000, 0)
+	assert.InDelta(t, 4.0, c, 1e-9)
+	// No cache tokens: the same as Cost.
+	c1, _ := g.CostUsage("anthropic", "m", "qa", 1000, 500, 0, 0)
+	c2, _ := g.Cost("anthropic", "m", "qa", 1000, 500)
+	assert.Equal(t, c2, c1)
+	_, ok = g.CostUsage("x", "y", "qa", 1, 1, 1, 0)
+	assert.False(t, ok)
+}

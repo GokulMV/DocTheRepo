@@ -53,6 +53,17 @@ func TestLoadGuard_SeededDefaults(t *testing.T) {
 	c, ok := g.Cost("anthropic", "claude-opus-5-5", "qa", 1_000_000, 1_000_000)
 	assert.True(t, ok)
 	assert.InDelta(t, 24.0, c, 1e-9, "seeded list price $4 in + $20 out per MTok")
+	// Cache reads at 0.1x and writes at 1.25x of the $4 input price.
+	c, ok = g.CostUsage("anthropic", "claude-opus-5-5", "qa", 1_000_000, 0, 500_000, 500_000)
+	assert.True(t, ok)
+	assert.InDelta(t, 0.5*0.4+0.5*5, c, 1e-9)
+
+	// The ledger keeps the cache split.
+	require.NoError(t, store.NewLedger(st).Record(context.Background(), ports.UsageRecord{At: time.Now(), Feature: "qa", ProviderKind: "anthropic",
+		Model: "claude-opus-5-5", InputTokens: 1000, OutputTokens: 10, CacheReadTokens: 800, CacheWriteTokens: 100}))
+	var rd, wr int64
+	require.NoError(t, st.Pool.QueryRow(context.Background(), "SELECT cache_read_tokens, cache_write_tokens FROM usage_events").Scan(&rd, &wr))
+	assert.Equal(t, []int64{800, 100}, []int64{rd, wr})
 }
 
 // TestProviderToGatewayEndToEnd stores a provider with an encrypted key, routes QA to it with a fallback,

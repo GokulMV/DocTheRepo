@@ -70,7 +70,7 @@ export default function Analytics() {
       <ErrorNote error={usage.error ?? savings.error ?? pipe.error} />
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Stat label="Calls" value={num(t?.calls)} hint={t ? `${num(t.cached_calls)} cached, ${num(t.blocked)} blocked` : undefined} />
-        <Stat label="Tokens" value={num(t?.tokens)} />
+        <Stat label="Tokens" value={num(t?.tokens)} hint={t?.cache_read_tokens ? `${num(t.cache_read_tokens)} read from the prompt cache` : undefined} />
         <Stat label="Cost" value={usd(t?.cost_usd)} hint="At your cost table prices" />
         <Stat label="Saved" value={usd(savings.data?.total.cost_avoided_usd)} hint={savings.data ? `${num(savings.data.total.tokens_avoided)} tokens avoided` : undefined} />
       </div>

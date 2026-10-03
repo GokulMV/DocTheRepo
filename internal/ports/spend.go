@@ -12,9 +12,12 @@ type UsageRecord struct {
 	ProviderID   string
 	ProviderKind string
 	Model        string
-	InputTokens  int64
-	OutputTokens int64
-	CostUSD      float64
+	// InputTokens is all input, including the cache reads and writes counted below.
+	InputTokens      int64
+	OutputTokens     int64
+	CacheReadTokens  int64
+	CacheWriteTokens int64
+	CostUSD          float64
 	LatencyMS    int64
 	Cached       bool
 	// Estimated is true when the provider reported no usage and the estimate was recorded instead.

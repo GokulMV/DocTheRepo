@@ -12,12 +12,14 @@ import (
 
 // UsagePoint is one bucket of a usage series.
 type UsagePoint struct {
-	T           time.Time `json:"t"`
-	Calls       int64     `json:"calls"`
-	Tokens      int64     `json:"tokens"`
-	CostUSD     float64   `json:"cost_usd"`
-	CachedCalls int64     `json:"cached_calls"`
-	Blocked     int64     `json:"blocked"`
+	T       time.Time `json:"t"`
+	Calls   int64     `json:"calls"`
+	Tokens  int64     `json:"tokens"`
+	CostUSD float64   `json:"cost_usd"`
+	// CacheReadTokens is the part of Tokens read from the provider's prompt cache (billed far lower).
+	CacheReadTokens int64 `json:"cache_read_tokens"`
+	CachedCalls     int64 `json:"cached_calls"`
+	Blocked         int64 `json:"blocked"`
 }
 
 // UsageSeries is one group's series.
@@ -55,11 +57,12 @@ func (b *Browse) Usage(ctx context.Context, groupBy, granularity string, from, t
 			idx[r.Key] = i
 			rep.Series = append(rep.Series, UsageSeries{Key: r.Key})
 		}
-		p := UsagePoint{T: r.T, Calls: r.Calls, Tokens: r.Tokens, CostUSD: r.CostUsd, CachedCalls: r.CachedCalls, Blocked: r.Blocked}
+		p := UsagePoint{T: r.T, Calls: r.Calls, Tokens: r.Tokens, CostUSD: r.CostUsd, CacheReadTokens: r.CacheReadTokens, CachedCalls: r.CachedCalls, Blocked: r.Blocked}
 		rep.Series[i].Points = append(rep.Series[i].Points, p)
 		rep.Totals.Calls += p.Calls
 		rep.Totals.Tokens += p.Tokens
 		rep.Totals.CostUSD += p.CostUSD
+		rep.Totals.CacheReadTokens += p.CacheReadTokens
 		rep.Totals.CachedCalls += p.CachedCalls
 		rep.Totals.Blocked += p.Blocked
 	}

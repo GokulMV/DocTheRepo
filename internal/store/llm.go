@@ -42,7 +42,8 @@ func (l *Ledger) Record(ctx context.Context, r ports.UsageRecord) error {
 		ProviderKind: gen.LlmProviderKind(r.ProviderKind), Model: r.Model, InputTokens: r.InputTokens,
 		OutputTokens: r.OutputTokens, CostUsd: r.CostUSD, LatencyMs: int32(r.LatencyMS), Cached: r.Cached,
 		Estimated: r.Estimated, RepoID: strPtr(r.RepoID), UserID: strPtr(r.UserID), JobID: strPtr(r.JobID),
-		IssueID: strPtr(r.IssueID), Outcome: gen.UsageOutcome(outcome),
+		IssueID: strPtr(r.IssueID), Outcome: gen.UsageOutcome(outcome), CacheReadTokens: r.CacheReadTokens,
+		CacheWriteTokens: r.CacheWriteTokens,
 	})
 }
 
@@ -221,7 +222,8 @@ func LoadGuard(ctx context.Context, s *Store, allowUnlimited bool) (*spendguard.
 	prices := make(map[string]spendguard.Price, len(costs))
 	for _, c := range costs {
 		prices[spendguard.PriceKey(string(c.ProviderKind), c.Model)] = spendguard.Price{
-			InputPerMTok: c.InputPerMtokUsd, OutputPerMTok: c.OutputPerMtokUsd, EmbedPerMTok: c.EmbedPerMtokUsd}
+			InputPerMTok: c.InputPerMtokUsd, OutputPerMTok: c.OutputPerMtokUsd, EmbedPerMTok: c.EmbedPerMtokUsd,
+			CacheReadPerMTok: c.CacheReadPerMtokUsd, CacheWritePerMTok: c.CacheWritePerMtokUsd}
 	}
 	return spendguard.New(limits, prices, allowUnlimited)
 }

@@ -314,6 +314,7 @@ export interface UsagePoint {
   tokens: number;
   cost_usd: number;
   cached_calls: number;
+  cache_read_tokens?: number;
   blocked: number;
 }
 

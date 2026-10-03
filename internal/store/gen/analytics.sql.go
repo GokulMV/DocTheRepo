@@ -355,6 +355,7 @@ SELECT date_trunc($1::text, at)::timestamptz AS t,
        count(*)::bigint AS calls,
        coalesce(sum(input_tokens + output_tokens), 0)::bigint AS tokens,
        coalesce(sum(cost_usd), 0)::float8 AS cost_usd,
+       coalesce(sum(cache_read_tokens), 0)::bigint AS cache_read_tokens,
        count(*) FILTER (WHERE cached)::bigint AS cached_calls,
        count(*) FILTER (WHERE outcome = 'blocked')::bigint AS blocked
 FROM usage_events
@@ -372,13 +373,14 @@ type UsageSeriesParams struct {
 }
 
 type UsageSeriesRow struct {
-	T           time.Time `json:"t"`
-	Key         string    `json:"key"`
-	Calls       int64     `json:"calls"`
-	Tokens      int64     `json:"tokens"`
-	CostUsd     float64   `json:"cost_usd"`
-	CachedCalls int64     `json:"cached_calls"`
-	Blocked     int64     `json:"blocked"`
+	T               time.Time `json:"t"`
+	Key             string    `json:"key"`
+	Calls           int64     `json:"calls"`
+	Tokens          int64     `json:"tokens"`
+	CostUsd         float64   `json:"cost_usd"`
+	CacheReadTokens int64     `json:"cache_read_tokens"`
+	CachedCalls     int64     `json:"cached_calls"`
+	Blocked         int64     `json:"blocked"`
 }
 
 // Usage bucketed by hour or day and grouped by one dimension (plan § 7.7).
@@ -403,6 +405,7 @@ func (q *Queries) UsageSeries(ctx context.Context, arg UsageSeriesParams) ([]Usa
 			&i.Calls,
 			&i.Tokens,
 			&i.CostUsd,
+			&i.CacheReadTokens,
 			&i.CachedCalls,
 			&i.Blocked,
 		); err != nil {

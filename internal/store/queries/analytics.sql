@@ -11,6 +11,7 @@ SELECT date_trunc(sqlc.arg(granularity)::text, at)::timestamptz AS t,
        count(*)::bigint AS calls,
        coalesce(sum(input_tokens + output_tokens), 0)::bigint AS tokens,
        coalesce(sum(cost_usd), 0)::float8 AS cost_usd,
+       coalesce(sum(cache_read_tokens), 0)::bigint AS cache_read_tokens,
        count(*) FILTER (WHERE cached)::bigint AS cached_calls,
        count(*) FILTER (WHERE outcome = 'blocked')::bigint AS blocked
 FROM usage_events
