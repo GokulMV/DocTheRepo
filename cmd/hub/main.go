@@ -17,6 +17,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/GokulMV/DocTheRepo/internal/adapters/email"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/secrets/awskms"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/secrets/gcpkms"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/secrets/localfile"
@@ -190,8 +191,17 @@ func run(cfgPath string) error {
 
 	var servers []*http.Server
 	if cfg.HasRole(config.RoleAPI) {
+		var mailer api.Mailer // stays a nil interface when email is off
+		if raw := cfg.Email.SMTPURL(); raw != "" {
+			m, err := email.Parse(raw, cfg.Email.From)
+			if err != nil {
+				return err
+			}
+			mailer = m
+			log.Info("email on: invite and password links are sent by email", "server", m.Server(), "from", m.From())
+		}
 		h := api.NewRouter(api.Deps{Log: log, Metrics: metrics, Checks: a.readiness(), Git: a.ingest, Signals: a.signals, Auth: a.auth, OIDC: a.oidc, PublicURL: cfg.Server.PublicURL, SealKeys: a.sealKeys, RequireSealed: cfg.Settings.RequireSealed, SecureCookies: strings.HasPrefix(cfg.Server.PublicURL, "https://"),
-			V1: a.v1Routes(), UI: webui.Handler(),
+			V1: a.v1Routes(), UI: webui.Handler(), Mailer: mailer,
 			Settings: &api.SettingsPolicy{Sources: cfg.Settings.SecretSources, EnvPrefix: cfg.Settings.EnvPrefix, FileRoot: cfg.Settings.FileRoot}})
 		applyStartupSettings(ctx, cfg.Settings, h, log)
 		servers = append(servers, &http.Server{

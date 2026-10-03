@@ -46,6 +46,25 @@ type Config struct {
 	Decide    DecideConfig    `yaml:"decide"`
 	Settings  SettingsConfig  `yaml:"settings"`
 	Ask       AskConfig       `yaml:"ask"`
+	Email     EmailConfig     `yaml:"email"`
+}
+
+// EmailConfig sends invite and password links by email. Without it the admin copies the link and passes
+// it on. Any SMTP provider works; see docs/users-and-sign-in.md.
+type EmailConfig struct {
+	// SMTPURLEnv names the variable holding the SMTP URL (default DTH_SMTP_URL), since it carries the
+	// password: smtp://user:password@host:587 (STARTTLS) or smtps://user:password@host:465.
+	SMTPURLEnv string `yaml:"smtp_url_env"`
+	// From is the sender, e.g. "DocTheRepo <docs@example.com>" (DTH_EMAIL_FROM).
+	From string `yaml:"from"`
+}
+
+// SMTPURL is the SMTP URL from the environment ("" when email is off).
+func (e EmailConfig) SMTPURL() string {
+	if e.SMTPURLEnv == "" {
+		return ""
+	}
+	return strings.TrimSpace(os.Getenv(e.SMTPURLEnv))
 }
 
 // AskConfig tunes Ask.
@@ -213,6 +232,7 @@ func Default() Config {
 			MigrateOnStart: true, StatementTimeout: 60 * time.Second,
 		},
 		Secrets: SecretsConfig{Provider: "localfile", LocalKeyFile: filepath.Join(home, ".dth", "master.key")},
+		Email:   EmailConfig{SMTPURLEnv: "DTH_SMTP_URL"},
 		Auth: AuthConfig{
 			Mode: "local",
 			OIDC: OIDCConfig{
@@ -287,6 +307,7 @@ func applyEnv(cfg *Config) error {
 		"DTH_QDRANT_URL":          &cfg.Vector.QdrantURL,
 		"DTH_SETTINGS_ENV_PREFIX": &cfg.Settings.EnvPrefix,
 		"DTH_SETTINGS_FILE_ROOT":  &cfg.Settings.FileRoot,
+		"DTH_EMAIL_FROM":          &cfg.Email.From,
 	}
 	for k, dst := range str {
 		if v, ok := os.LookupEnv(k); ok {
@@ -395,6 +416,9 @@ func (c Config) Validate() error {
 		if u, err := url.Parse(c.Server.PublicURL); err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
 			add("server.public_url: must be an absolute http(s) URL")
 		}
+	}
+	if c.Email.SMTPURL() != "" && strings.TrimSpace(c.Email.From) == "" {
+		add("email.from: required when %s is set (e.g. \"DocTheRepo <docs@example.com>\")", c.Email.SMTPURLEnv)
 	}
 	if c.Database.URLEnv == "" {
 		add("database.url_env: required")

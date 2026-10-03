@@ -31,6 +31,9 @@ services:
       DTH_OWNER_EMAIL: ${DTH_OWNER_EMAIL:-}
       DTH_OWNER_PASSWORD: ${DTH_OWNER_PASSWORD:-}
       DTH_LOG_FORMAT: text
+      # Email invite and password links (optional): smtp://user:password@host:587 and a From address.
+      DTH_SMTP_URL: ${DTH_SMTP_URL:-}
+      DTH_EMAIL_FROM: ${DTH_EMAIL_FROM:-}
       # Settings applied at start (sign-in, users, models, repositories): put files made by `dth init`
       # in ./settings next to this file. Secret references like ${env:…} read the variables below.
       DTH_SETTINGS_FILE: /settings

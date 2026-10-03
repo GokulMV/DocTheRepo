@@ -88,6 +88,15 @@ app.kubernetes.io/component: {{ .role }}
 {{- end }}
 - name: DTH_AUTH_MODE
   value: {{ .Values.auth.mode }}
+{{- if .Values.email.existingSecret }}
+- name: DTH_EMAIL_FROM
+  value: {{ required "email.from is required with email.existingSecret" .Values.email.from | quote }}
+- name: DTH_SMTP_URL
+  valueFrom:
+    secretKeyRef:
+      name: {{ .Values.email.existingSecret }}
+      key: {{ .Values.email.key }}
+{{- end }}
 {{- with .Values.auth.ownerEmail }}
 - name: DTH_OWNER_EMAIL
   value: {{ . | quote }}

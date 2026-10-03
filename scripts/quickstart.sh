@@ -400,6 +400,10 @@ DTH_PG_PORT=$PG_PORT
 DTH_PUBLIC_URL=$URL
 DTH_AUTH_MODE=local
 EOF
+# Email invite and password links when DTH_SMTP_URL and DTH_EMAIL_FROM are exported (docs/users-and-sign-in.md#email).
+if [ -n "${DTH_SMTP_URL:-}" ]; then
+  printf 'DTH_SMTP_URL=%s\nDTH_EMAIL_FROM=%s\n' "$DTH_SMTP_URL" "${DTH_EMAIL_FROM:-}" >> "$ENV_FILE"
+fi
 
 if port_busy "$PORT" && ! curl -fsS "$URL/readyz" >/dev/null 2>&1; then
   die "port $PORT is in use by something else: re-run with --port <free port>"

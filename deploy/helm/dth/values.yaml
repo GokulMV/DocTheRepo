@@ -54,6 +54,14 @@ settings:
   key: hub.yaml
   inline: ""
 
+# Email invite and password links (docs/users-and-sign-in.md#email). Without it admins copy the link.
+# The SMTP URL carries the password, so it comes from an existing Secret:
+# smtp://user:password@host:587 (STARTTLS) or smtps://user:password@host:465.
+email:
+  from: "" # e.g. "DocTheRepo <docs@example.com>"
+  existingSecret: ""
+  key: smtp-url
+
 logLevel: info
 # Extra environment for every role (e.g. DTH_VECTOR_BACKEND, DTH_QDRANT_URL, DTH_OTLP_ENDPOINT).
 extraEnv: []

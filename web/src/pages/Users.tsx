@@ -1,4 +1,5 @@
 import { KeyRound, Link2, LogIn, Pencil, Trash2, UserPlus } from 'lucide-react';
+import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '@/api/client';
@@ -16,23 +17,36 @@ const ROLES: { role: Role; text: string }[] = [
   { role: 'owner', text: 'Everything, including other owners and sign-in settings.' },
 ];
 
-interface InviteLink { path: string; expires_at: string }
+interface InviteLink { path: string; expires_at: string; emailed?: boolean; email_error?: string }
 
-/** LinkResult shows a one-time password link to pass on. */
-function LinkResult({ who, link }: { who: string; link: InviteLink }) {
+/** LinkResult says whether the one-time password link was emailed, and shows it to pass on. */
+function LinkResult({ who, email, link }: { who: string; email: string; link: InviteLink }) {
+  const failed = link.emailed === false;
   return (
-    <div className="space-y-2 rounded-xl border border-emerald-300 bg-emerald-50/70 p-4 text-sm dark:border-emerald-500/30 dark:bg-emerald-500/10">
-      <p className="font-medium">Send this link to {who}.</p>
+    <div className={cx('space-y-2 rounded-xl border p-4 text-sm', failed
+      ? 'border-amber-300 bg-amber-50/70 dark:border-amber-500/30 dark:bg-amber-500/10'
+      : 'border-emerald-300 bg-emerald-50/70 dark:border-emerald-500/30 dark:bg-emerald-500/10')}>
+      {link.emailed ? (
+        <p className="font-medium" role="status">Emailed to {email}.</p>
+      ) : failed ? (
+        <>
+          <p className="font-medium" role="alert">The email could not be sent. Send this link to {who} yourself.</p>
+          <p className="break-words text-xs text-amber-800 dark:text-amber-200">{link.email_error}</p>
+        </>
+      ) : (
+        <p className="font-medium">Send this link to {who}.</p>
+      )}
       <CopyField value={window.location.origin + link.path} label="password link" />
       <p className="text-xs text-slate-600 dark:text-slate-400">
-        They open it, choose a password, and are signed in. It works once and expires {new Date(link.expires_at).toLocaleDateString()}.
-        The Hub does not send email, so share it the way you normally would (chat, email). Anyone with the link can set the password, so send it only to them.
+        They open it, choose a password, and are signed in. It works once and expires {new Date(link.expires_at).toLocaleDateString()}.{' '}
+        {link.emailed === undefined && 'Email is not set up on this Hub, so share it the way you normally would (chat, email). '}
+        Anyone with the link can set the password, so send it only to them.
       </p>
     </div>
   );
 }
 
-function AddUser({ onClose, canOwner, password, sso }: { onClose: () => void; canOwner: boolean; password: boolean; sso: boolean }) {
+function AddUser({ onClose, canOwner, password, sso, mail }: { onClose: () => void; canOwner: boolean; password: boolean; sso: boolean; mail: boolean }) {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [role, setRole] = useState<Role>('viewer');
@@ -48,7 +62,7 @@ function AddUser({ onClose, canOwner, password, sso }: { onClose: () => void; ca
       {done ? (
         <div className="space-y-3">
           <p className="text-sm"><b className="font-medium">{done.user.email}</b> is added as {done.user.role}.</p>
-          {done.invite && <LinkResult who={done.user.name || done.user.email} link={done.invite} />}
+          {done.invite && <LinkResult who={done.user.name || done.user.email} email={done.user.email} link={done.invite} />}
           {sso && <p className="text-sm text-slate-600 dark:text-slate-400">They can also use “Sign in with single sign-on” with this email address; they get the role you chose.</p>}
           {!done.invite && !sso && <p className="text-sm text-amber-700 dark:text-amber-300">No sign-in method is on, so they cannot sign in yet. Turn on passwords or single sign-on under Sign-in &amp; SSO.</p>}
           <DialogFooter><Button onClick={onClose}>Done</Button></DialogFooter>
@@ -71,7 +85,7 @@ function AddUser({ onClose, canOwner, password, sso }: { onClose: () => void; ca
           {password ? (
             <label className="flex items-center gap-2 text-sm">
               <input type="checkbox" className="accent-brand-600" checked={invite} onChange={(e) => setInvite(e.target.checked)} />
-              Create a link for them to set a password
+              {mail ? 'Email them a link to set a password' : 'Create a link for them to set a password'}
             </label>
           ) : sso ? (
             <p className="text-xs text-slate-500">They sign in with single sign-on using this email; the role applies on their first sign-in.</p>
@@ -105,21 +119,22 @@ function EditName({ user, onClose }: { user: User; onClose: () => void }) {
   );
 }
 
-function ResetLink({ user, onClose }: { user: User; onClose: () => void }) {
+function ResetLink({ user, onClose, mail }: { user: User; onClose: () => void; mail: boolean }) {
   const make = useInvalidating(() => api.post<InviteLink>(`/users/${user.id}/invite`, {}), keys.users);
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()} title={user.has_password ? `New password for ${user.email}` : `Password link for ${user.email}`}>
-      {make.data ? <LinkResult who={user.name || user.email} link={make.data} /> : (
+      {make.data ? <LinkResult who={user.name || user.email} email={user.email} link={make.data} /> : (
         <p className="text-sm text-slate-600 dark:text-slate-400">
           {user.has_password
             ? 'This makes a one-time link to choose a new password. When they use it, the old password stops working and they are signed out everywhere.'
             : 'This makes a one-time link for them to choose a password.'}
+          {mail && ` It is emailed to ${user.email}.`}
         </p>
       )}
       <ErrorNote error={make.error} />
       <DialogFooter>
         <Button variant="secondary" onClick={onClose}>{make.data ? 'Done' : 'Cancel'}</Button>
-        {!make.data && <Button onClick={() => make.mutate(undefined)} disabled={make.isPending}>Create link</Button>}
+        {!make.data && <Button onClick={() => make.mutate(undefined)} disabled={make.isPending}>{mail ? 'Email link' : 'Create link'}</Button>}
       </DialogFooter>
     </Dialog>
   );
@@ -159,7 +174,8 @@ function RepoAccess({ user, onClose }: { user: User; onClose: () => void }) {
 }
 
 /** SignInSummary says how people get in, with the way to change it. */
-function SignInSummary({ sso, password, owner }: { sso: boolean; password: boolean; owner: boolean }) {
+function SignInSummary({ sso, password, owner, mail }: { sso: boolean; password: boolean; owner: boolean; mail: boolean }) {
+  const test = useMutation({ mutationFn: () => api.post<{ sent_to: string }>('/auth/email/test', {}) });
   const methods = [sso && 'single sign-on', password && 'email and password'].filter(Boolean).join(' or ');
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200/80 bg-white/70 p-4 text-sm shadow-card dark:border-white/[0.06] dark:bg-slate-900/40">
@@ -167,11 +183,14 @@ function SignInSummary({ sso, password, owner }: { sso: boolean; password: boole
       <div className="min-w-0 flex-1">
         <p className="font-medium">{methods ? `People sign in with ${methods}.` : 'No sign-in method is on.'}</p>
         <p className="text-xs text-slate-500">
-          {password && 'Add someone and send them their password link. '}
+          {password && (mail ? 'Add someone and the Hub emails them their password link. ' : 'Add someone and send them their password link (email is not set up, so you pass it on). ')}
           {sso && 'Anyone from an allowed domain can sign in with SSO and starts as a viewer; add them first to give another role. '}
           {!sso && 'Single sign-on (Google, Microsoft, Okta, Keycloak) is not set up.'}
         </p>
+        {test.data && <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-300" role="status">Test email sent to {test.data.sent_to}.</p>}
+        <ErrorNote error={test.error} />
       </div>
+      {owner && mail && <Button size="sm" variant="secondary" disabled={test.isPending} onClick={() => test.mutate()}>{test.isPending ? 'Sending…' : 'Send test email'}</Button>}
       {owner && <Link to="/sign-in" className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium text-brand-600 hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-500/10"><KeyRound className="h-4 w-4" aria-hidden />Sign-in &amp; SSO</Link>}
     </div>
   );
@@ -195,6 +214,7 @@ export default function Users() {
   const isOwner = me.data?.role === 'owner';
   const password = !!cfg.data?.password;
   const sso = !!cfg.data?.sso;
+  const mail = !!cfg.data?.email;
   const close = () => setDialog(undefined);
   return (
     <>
@@ -203,7 +223,7 @@ export default function Users() {
         description="Who can use the Hub, what they can do, and which repositories they see."
         actions={<Button onClick={() => setDialog({ kind: 'add' })}><UserPlus className="h-4 w-4" aria-hidden />Add user</Button>}
       />
-      {cfg.data && <SignInSummary sso={sso} password={password} owner={isOwner} />}
+      {cfg.data && <SignInSummary sso={sso} password={password} owner={isOwner} mail={mail} />}
       {users.isLoading && <Spinner />}
       <ErrorNote error={users.error ?? update.error ?? remove.error} />
       <Card>
@@ -218,7 +238,7 @@ export default function Users() {
                   <span className="font-medium">{u.name || u.email}</span>
                   {self && <span className="ml-1.5 text-xs text-slate-400">(you)</span>}
                   <p className="text-xs text-slate-500">{u.email}</p>
-                  {u.disabled && <Badge tone="red">disabled</Badge>}
+                  {u.disabled && <Badge tone="red">Disabled</Badge>}
                 </Td>
                 <Td>
                   <Select aria-label={`Role for ${u.email}`} value={u.role} disabled={self || ownerOnly} onChange={(e) => update.mutate({ id: u.id, role: e.target.value as Role })} className="w-28">
@@ -226,7 +246,7 @@ export default function Users() {
                   </Select>
                 </Td>
                 <Td><Badge tone={st.tone}>{st.text}</Badge></Td>
-                <Td>{u.last_login_at ? relTime(u.last_login_at) : <span className="text-slate-400">never</span>}</Td>
+                <Td>{u.last_login_at ? relTime(u.last_login_at) : <span className="text-slate-400">Never</span>}</Td>
                 <Td>
                   <div className="flex flex-wrap justify-end gap-1">
                     <Button size="sm" variant="secondary" onClick={() => setDialog({ kind: 'access', user: u })}>Repositories</Button>
@@ -252,10 +272,10 @@ export default function Users() {
           })}
         </Table>
       </Card>
-      {dialog?.kind === 'add' && <AddUser onClose={close} canOwner={isOwner} password={password} sso={sso} />}
+      {dialog?.kind === 'add' && <AddUser onClose={close} canOwner={isOwner} password={password} sso={sso} mail={mail} />}
       {dialog?.kind === 'access' && <RepoAccess user={dialog.user} onClose={close} />}
       {dialog?.kind === 'edit' && <EditName user={dialog.user} onClose={close} />}
-      {dialog?.kind === 'reset' && <ResetLink user={dialog.user} onClose={close} />}
+      {dialog?.kind === 'reset' && <ResetLink user={dialog.user} onClose={close} mail={mail} />}
     </>
   );
 }

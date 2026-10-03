@@ -34,6 +34,36 @@ describe('Users', () => {
     expect(JSON.parse(String(post.init?.body))).toEqual({ email: 'cy@acme.com', name: '', role: 'editor', invite: true });
   });
 
+  it('emails the link when email is set up, and says when sending failed', async () => {
+    const { calls } = mockApi({
+      'GET /me': owner,
+      'GET /auth/config': { mode: 'local', sso: false, password: true, email: true },
+      'GET /users': { items: people, next_cursor: null },
+      'POST /users': { user: { ...people[1], id: 'u3', email: 'cy@acme.com' }, invite: { path: '/invite/t1', expires_at: '2026-10-09T00:00:00Z', emailed: true } },
+      'POST /users/u2/invite': { path: '/invite/t2', expires_at: '2026-10-09T00:00:00Z', emailed: false, email_error: 'email: recipient refused: 550 no such user' },
+      'POST /auth/email/test': { sent_to: 'ann@acme.com' },
+    });
+    renderAt('/users', <Route path="/users" element={<Users />} />);
+    expect(await screen.findByText(/the Hub emails them their password link/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Send test email' }));
+    expect(await screen.findByText('Test email sent to ann@acme.com.')).toBeInTheDocument();
+    expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/auth/email/test'))).toBe(true);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Add user' }));
+    expect(screen.getByLabelText('Email them a link to set a password')).toBeChecked();
+    await userEvent.type(screen.getByLabelText('Email'), 'cy@acme.com');
+    await userEvent.click(screen.getByRole('button', { name: 'Add user' }));
+    expect(await screen.findByText('Emailed to cy@acme.com.')).toBeInTheDocument();
+    expect(screen.getByLabelText('password link')).toHaveValue(`${window.location.origin}/invite/t1`);
+    await userEvent.click(screen.getByRole('button', { name: 'Done' }));
+
+    await userEvent.click(screen.getByRole('button', { name: 'Password link for bo@acme.com' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Email link' }));
+    expect(await screen.findByText(/The email could not be sent/)).toBeInTheDocument();
+    expect(screen.getByText(/550 no such user/)).toBeInTheDocument();
+    expect(screen.getByLabelText('password link')).toHaveValue(`${window.location.origin}/invite/t2`);
+  });
+
   it('removes a user after confirming', async () => {
     vi.stubGlobal('confirm', () => true);
     const { calls } = mockApi({

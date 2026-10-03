@@ -29,6 +29,8 @@ type authHandlers struct {
 	requireSealed bool
 	// publicURL is the Hub's external URL (the single sign-on callback is under it); empty: from the request.
 	publicURL string
+	// mailer sends invite and password links (nil: the admin passes the link on).
+	mailer Mailer
 	// loginLimit throttles password attempts per client IP.
 	mu         sync.Mutex
 	loginLimit map[string]*rate.Limiter
@@ -64,6 +66,7 @@ func (h *authHandlers) routes(r chi.Router) {
 		r.Use(requireRole(auth.RoleOwner))
 		r.Get("/auth/settings", h.getSignIn)
 		r.Put("/auth/settings", h.putSignIn)
+		r.Post("/auth/email/test", h.testEmail)
 	})
 }
 
@@ -82,7 +85,7 @@ func safeReturn(p string) string {
 
 // config tells the login page which sign-in methods exist (public).
 func (h *authHandlers) config(w http.ResponseWriter, r *http.Request) {
-	WriteJSON(w, http.StatusOK, map[string]any{"mode": h.svc.Config().Mode, "sso": h.svc.OIDC() != nil, "password": h.svc.PasswordEnabled(r.Context())})
+	WriteJSON(w, http.StatusOK, map[string]any{"mode": h.svc.Config().Mode, "sso": h.svc.OIDC() != nil, "password": h.svc.PasswordEnabled(r.Context()), "email": h.mailer != nil})
 }
 
 func (h *authHandlers) login(w http.ResponseWriter, r *http.Request) {
@@ -405,7 +408,9 @@ func (h *authHandlers) createUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		_ = h.svc.Audit(r.Context(), p, "user.invite", "user", u.ID, nil, clientIP(r))
-		out["invite"] = map[string]any{"path": invitePath(token), "expires_at": exp}
+		inv := map[string]any{"path": invitePath(token), "expires_at": exp}
+		h.emailLink(r, p, u, token, exp, inv)
+		out["invite"] = inv
 	}
 	WriteJSON(w, http.StatusCreated, out)
 }
@@ -423,7 +428,11 @@ func (h *authHandlers) createInvite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = h.svc.Audit(r.Context(), p, "user.invite", "user", id, nil, clientIP(r))
-	WriteJSON(w, http.StatusCreated, map[string]any{"path": invitePath(token), "expires_at": exp})
+	out := map[string]any{"path": invitePath(token), "expires_at": exp}
+	if u, err := h.svc.GetUser(r.Context(), id); err == nil {
+		h.emailLink(r, p, u, token, exp, out)
+	}
+	WriteJSON(w, http.StatusCreated, out)
 }
 
 func (h *authHandlers) deleteUser(w http.ResponseWriter, r *http.Request) {
@@ -495,15 +504,7 @@ func writeInviteErr(w http.ResponseWriter, r *http.Request, err error) {
 
 // callbackURL is the single sign-on redirect URL to register with the identity provider.
 func (h *authHandlers) callbackURL(r *http.Request) string {
-	base := strings.TrimRight(h.publicURL, "/")
-	if base == "" {
-		scheme := "http"
-		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
-			scheme = "https"
-		}
-		base = scheme + "://" + r.Host
-	}
-	return base + "/api/v1/auth/callback"
+	return h.baseURL(r) + "/api/v1/auth/callback"
 }
 
 func (h *authHandlers) getSignIn(w http.ResponseWriter, r *http.Request) {

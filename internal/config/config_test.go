@@ -153,3 +153,15 @@ func TestLoad_UnreadablePath_Errors(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, strings.Contains(err.Error(), "read config"))
 }
+
+func TestValidateEmail(t *testing.T) {
+	c := Default()
+	t.Setenv("DTH_SMTP_URL", "smtp://u:p@smtp.example.com:587")
+	err := c.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "email.from")
+	c.Email.From = "DocTheRepo <docs@example.com>"
+	require.NoError(t, c.Validate())
+	t.Setenv("DTH_SMTP_URL", "")
+	require.Equal(t, "", c.Email.SMTPURL())
+}
