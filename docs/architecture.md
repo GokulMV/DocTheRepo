@@ -121,6 +121,11 @@ Two caches keep repeated questions cheap:
   cites is removed or anything in a repository or space it cites changes. Pushes to other repositories
   don't expire it. Only answers with citations are cached. Follow-up questions in a thread depend on the
   conversation, so they always go to the model.
+  When the wording differs more than that, the question's embedding (computed for retrieval anyway, so
+  no extra call) is compared with the cached answers' questions from the same scope and embedding model.
+  At a cosine similarity of 0.95 or more (`ask.similar_answer`, `DTH_ASK_SIMILAR_ANSWER`; 0 turns it off)
+  the stored answer is reused, with the same freshness rules. A question that names a file or identifier
+  (`refund.go`, `PayRetry`, `retry_payment`) only reuses an answer to a question naming the same ones.
 - **Prompt cache** (Claude on the Claude API, Bedrock and Vertex). Each request marks the system prompt and
   the last message as cache breakpoints. The next turn of a thread, or the next file of a docs job, then
   reads the repeated prefix at about a tenth of the input price. Prefixes below the model's minimum length

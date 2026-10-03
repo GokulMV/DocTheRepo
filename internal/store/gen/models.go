@@ -1232,13 +1232,17 @@ func (ns NullUserRole) Value() (driver.Value, error) {
 }
 
 type AnswerCache struct {
-	Key       string          `json:"key"`
-	Answer    string          `json:"answer"`
-	Citations json.RawMessage `json:"citations"`
-	CreatedAt time.Time       `json:"created_at"`
-	Hits      int64           `json:"hits"`
-	ChunkIds  []string        `json:"chunk_ids"`
-	Scopes    []string        `json:"scopes"`
+	Key        string          `json:"key"`
+	Answer     string          `json:"answer"`
+	Citations  json.RawMessage `json:"citations"`
+	CreatedAt  time.Time       `json:"created_at"`
+	Hits       int64           `json:"hits"`
+	ChunkIds   []string        `json:"chunk_ids"`
+	Scopes     []string        `json:"scopes"`
+	Question   string          `json:"question"`
+	ScopeKey   string          `json:"scope_key"`
+	EmbedModel string          `json:"embed_model"`
+	Embedding  []float32       `json:"embedding"`
 }
 
 type ApiToken struct {

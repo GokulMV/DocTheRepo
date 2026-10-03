@@ -138,6 +138,39 @@ func (q *QA) PutAnswer(ctx context.Context, key string, a rag.Answer) error {
 	return q.s.Q.PutCachedAnswer(ctx, gen.PutCachedAnswerParams{Key: key, Answer: a.Text, Citations: b, ChunkIds: ids})
 }
 
+// similarCandidates bounds how many fresh answers per scope a lookup compares.
+const similarCandidates = 300
+
+// SimilarAnswer finds a fresh cached answer whose question means the same (rag.SemanticCache).
+func (q *QA) SimilarAnswer(ctx context.Context, scopeKey, model string, vec []float32, minSim float64, accept func(string) bool) (rag.Answer, bool, error) {
+	rows, err := q.s.Q.SimilarAnswerCandidates(ctx, gen.SimilarAnswerCandidatesParams{ScopeKey: scopeKey, EmbedModel: model, Lim: similarCandidates})
+	if err != nil {
+		return rag.Answer{}, false, err
+	}
+	best, bestSim := -1, minSim
+	for i, r := range rows {
+		if s := rag.Cosine(vec, r.Embedding); s >= bestSim && (accept == nil || accept(r.Question)) {
+			best, bestSim = i, s
+		}
+	}
+	if best < 0 {
+		return rag.Answer{}, false, nil
+	}
+	r := rows[best]
+	_ = q.s.Q.HitCachedAnswer(ctx, r.Key)
+	a := rag.Answer{Text: r.Answer}
+	_ = json.Unmarshal(r.Citations, &a.Citations)
+	return a, true, nil
+}
+
+// PutAnswerMeaning caches an answer with its question's embedding, so rewordings can find it.
+func (q *QA) PutAnswerMeaning(ctx context.Context, key, question, scopeKey, model string, vec []float32, a rag.Answer) error {
+	if err := q.PutAnswer(ctx, key, a); err != nil {
+		return err
+	}
+	return q.s.Q.SetAnswerMeaning(ctx, gen.SetAnswerMeaningParams{Key: key, Question: question, ScopeKey: scopeKey, EmbedModel: model, Embedding: vec})
+}
+
 // GCCache drops expired answers.
 func (q *QA) GCCache(ctx context.Context) error {
 	_, err := q.s.Q.GCAnswerCache(ctx)

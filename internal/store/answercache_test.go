@@ -52,3 +52,43 @@ func TestAnswerCacheFreshness(t *testing.T) {
 	write(store.ChunkWrite{Drop: []string{"pay"}})
 	assert.False(t, hit(), "a cited chunk that is gone expires it")
 }
+
+// A reworded question finds the cached answer by meaning, within its scope and while its sources hold.
+func TestSimilarAnswer(t *testing.T) {
+	st, _, _, shopID := fixture(t)
+	ctx := context.Background()
+	cs, qa := store.NewChunks(st), store.NewQA(st)
+	_, err := cs.Apply(ctx, store.ChunkWrite{Upserts: []ports.Chunk{{ID: "pay", RepoID: shopID, Scope: "acme/shop", Source: ports.SourceCode,
+		Path: "pay.go", Symbol: "pay", Language: "go", Content: "1", ContentHash: "1"}}})
+	require.NoError(t, err)
+	shop := rag.ScopeKey(rag.Scope{RepoIDs: []string{shopID}})
+	vec := []float32{1, 0, 0.2}
+	time.Sleep(5 * time.Millisecond)
+	require.NoError(t, qa.PutAnswerMeaning(ctx, "k1", "How do payment retries work?", shop, "embed-1", vec,
+		rag.Answer{Text: "Payments retry [1].", Citations: []rag.Citation{{N: 1, ChunkID: "pay"}}}))
+	all := func(string) bool { return true }
+
+	a, ok, err := qa.SimilarAnswer(ctx, shop, "embed-1", []float32{0.98, 0.02, 0.21}, 0.95, all)
+	require.NoError(t, err)
+	require.True(t, ok, "a close rewording hits")
+	assert.Equal(t, "Payments retry [1].", a.Text)
+	require.Len(t, a.Citations, 1)
+
+	_, ok, _ = qa.SimilarAnswer(ctx, shop, "embed-1", []float32{0, 1, 0}, 0.95, all)
+	assert.False(t, ok, "a different meaning misses")
+	_, ok, _ = qa.SimilarAnswer(ctx, rag.ScopeKey(rag.Scope{All: true}), "embed-1", vec, 0.95, all)
+	assert.False(t, ok, "another scope misses")
+	_, ok, _ = qa.SimilarAnswer(ctx, shop, "embed-2", vec, 0.95, all)
+	assert.False(t, ok, "another embedding model misses")
+	var asked string
+	_, ok, _ = qa.SimilarAnswer(ctx, shop, "embed-1", vec, 0.95, func(q string) bool { asked = q; return false })
+	assert.False(t, ok, "the caller can refuse a candidate")
+	assert.Equal(t, "How do payment retries work?", asked)
+
+	time.Sleep(5 * time.Millisecond)
+	_, err = cs.Apply(ctx, store.ChunkWrite{Upserts: []ports.Chunk{{ID: "pay", RepoID: shopID, Scope: "acme/shop", Source: ports.SourceCode,
+		Path: "pay.go", Symbol: "pay", Language: "go", Content: "2", ContentHash: "2"}}})
+	require.NoError(t, err)
+	_, ok, _ = qa.SimilarAnswer(ctx, shop, "embed-1", vec, 0.95, all)
+	assert.False(t, ok, "a change in what it cites expires it")
+}

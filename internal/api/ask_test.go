@@ -37,6 +37,7 @@ type askEnv struct {
 	fg           *fakegw.Env
 	repoA, repoB string
 	svc          *auth.Service
+	eng          *rag.Engine
 }
 
 func newAskEnv(t *testing.T) *askEnv {
@@ -71,7 +72,7 @@ func newAskEnv(t *testing.T) *askEnv {
 	srv := httptest.NewServer(api.NewRouter(api.Deps{Log: slog.New(slog.DiscardHandler), Metrics: observability.NewMetrics(), Auth: svc,
 		V1: []func(chi.Router){api.AskRoutes(eng, qa, svc)}}))
 	t.Cleanup(srv.Close)
-	return &askEnv{srv: srv, st: st, fg: fg, repoA: repoA, repoB: repoB, svc: svc}
+	return &askEnv{srv: srv, st: st, fg: fg, repoA: repoA, repoB: repoB, svc: svc, eng: eng}
 }
 
 func (e *askEnv) login(t *testing.T, email string) *client {
@@ -212,4 +213,33 @@ func TestAsk_SSEAndErrors(t *testing.T) {
 	anon := newClient(t, e.srv.URL)
 	code, _, _ = anon.do("POST", "/api/v1/ask", map[string]any{"question": "x"})
 	assert.Equal(t, http.StatusUnauthorized, code)
+}
+
+// A reworded question reuses the cached answer by meaning; one naming other code does not.
+func TestAsk_SimilarQuestionReusesAnswer(t *testing.T) {
+	e := newAskEnv(t)
+	e.eng.SimilarAnswer = rag.DefaultSimilarAnswer
+	owner := e.login(t, "owner@acme.com")
+	code, out, _ := owner.do("POST", "/api/v1/ask", map[string]any{"question": "How do refunds work?"})
+	require.Equal(t, http.StatusOK, code, out)
+	require.Equal(t, false, out["cached"])
+	calls := len(e.fg.Model.Reqs)
+
+	e.fg.Emb.Same = map[string]string{
+		"What happens when an order gets its money back?": "How do refunds work?",
+		"What does refund.go do when money goes back?":     "How do refunds work?",
+	}
+	code, out, _ = owner.do("POST", "/api/v1/ask", map[string]any{"question": "What happens when an order gets its money back?"})
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Equal(t, true, out["cached"], "same meaning, other words")
+	assert.Len(t, e.fg.Model.Reqs, calls, "no model call")
+
+	code, out, _ = owner.do("POST", "/api/v1/ask", map[string]any{"question": "What does refund.go do when money goes back?"})
+	require.Equal(t, http.StatusOK, code, out)
+	assert.Equal(t, false, out["cached"], "a question naming a file is answered on its own")
+
+	viewer := e.login(t, "viewer@acme.com")
+	code, out, _ = viewer.do("POST", "/api/v1/ask", map[string]any{"question": "What happens when an order gets its money back?"})
+	require.Equal(t, http.StatusOK, code, out)
+	assert.NotEqual(t, true, out["cached"], "another scope never shares an answer")
 }

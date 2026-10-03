@@ -218,6 +218,8 @@ type Embedder struct {
 	mu    sync.Mutex
 	dims  int
 	Texts int
+	// Same maps a text to another whose vector it gets, so tests can make two wordings mean the same.
+	Same map[string]string
 }
 
 func (e *Embedder) setDims(d int) {
@@ -240,9 +242,13 @@ func (e *Embedder) Embed(_ context.Context, _ string, texts []string) (ports.Emb
 		d = Dims
 	}
 	e.Texts += len(texts)
+	same := e.Same
 	e.mu.Unlock()
 	r := ports.EmbedResponse{Dimensions: d, Usage: ports.TokenUsage{InputTokens: int64(len(texts) * 10), Reported: true}}
 	for _, t := range texts {
+		if s, ok := same[t]; ok {
+			t = s
+		}
 		r.Vectors = append(r.Vectors, Vector(t, d))
 	}
 	return r, nil

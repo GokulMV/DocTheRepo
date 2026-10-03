@@ -218,6 +218,15 @@ func (q *Queries) GetThread(ctx context.Context, arg GetThreadParams) (QaThread,
 	return i, err
 }
 
+const hitCachedAnswer = `-- name: HitCachedAnswer :exec
+UPDATE answer_cache SET hits = hits + 1 WHERE key = $1
+`
+
+func (q *Queries) HitCachedAnswer(ctx context.Context, key string) error {
+	_, err := q.db.Exec(ctx, hitCachedAnswer, key)
+	return err
+}
+
 const insertMessage = `-- name: InsertMessage :exec
 INSERT INTO qa_messages (id, thread_id, role, content, citations, provider, model, input_tokens, output_tokens, cost_usd, cached, investigated)
 VALUES ($1, $2, $3, $4, $5, $6, $7,
@@ -481,6 +490,31 @@ func (q *Queries) SearchChunksFTS(ctx context.Context, arg SearchChunksFTSParams
 	return items, nil
 }
 
+const setAnswerMeaning = `-- name: SetAnswerMeaning :exec
+UPDATE answer_cache SET question = $1, scope_key = $2, embed_model = $3,
+    embedding = $4::real[]
+WHERE key = $5
+`
+
+type SetAnswerMeaningParams struct {
+	Question   string    `json:"question"`
+	ScopeKey   string    `json:"scope_key"`
+	EmbedModel string    `json:"embed_model"`
+	Embedding  []float32 `json:"embedding"`
+	Key        string    `json:"key"`
+}
+
+func (q *Queries) SetAnswerMeaning(ctx context.Context, arg SetAnswerMeaningParams) error {
+	_, err := q.db.Exec(ctx, setAnswerMeaning,
+		arg.Question,
+		arg.ScopeKey,
+		arg.EmbedModel,
+		arg.Embedding,
+		arg.Key,
+	)
+	return err
+}
+
 const setFeedback = `-- name: SetFeedback :execrows
 UPDATE qa_messages m SET feedback = $1, feedback_comment = $2
 FROM qa_threads t
@@ -505,6 +539,59 @@ func (q *Queries) SetFeedback(ctx context.Context, arg SetFeedbackParams) (int64
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const similarAnswerCandidates = `-- name: SimilarAnswerCandidates :many
+SELECT a.key, a.question, a.embedding, a.answer, a.citations
+FROM answer_cache a
+WHERE a.scope_key = $1 AND a.embed_model = $2 AND a.embedding IS NOT NULL
+  AND a.created_at > now() - interval '7 days'
+  AND (SELECT count(*) FROM chunks c WHERE c.chunk_id = ANY(a.chunk_ids) AND c.deleted_at IS NULL) = cardinality(a.chunk_ids)
+  AND NOT EXISTS (SELECT 1 FROM chunks c WHERE c.scope = ANY(a.scopes) AND c.updated_at > a.created_at)
+ORDER BY a.created_at DESC
+LIMIT $3
+`
+
+type SimilarAnswerCandidatesParams struct {
+	ScopeKey   string `json:"scope_key"`
+	EmbedModel string `json:"embed_model"`
+	Lim        int32  `json:"lim"`
+}
+
+type SimilarAnswerCandidatesRow struct {
+	Key       string          `json:"key"`
+	Question  string          `json:"question"`
+	Embedding []float32       `json:"embedding"`
+	Answer    string          `json:"answer"`
+	Citations json.RawMessage `json:"citations"`
+}
+
+// Fresh answers asked in the same scope with the same embedding model, newest first (same freshness rules
+// as GetCachedAnswer); the Hub compares the embeddings.
+func (q *Queries) SimilarAnswerCandidates(ctx context.Context, arg SimilarAnswerCandidatesParams) ([]SimilarAnswerCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, similarAnswerCandidates, arg.ScopeKey, arg.EmbedModel, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SimilarAnswerCandidatesRow{}
+	for rows.Next() {
+		var i SimilarAnswerCandidatesRow
+		if err := rows.Scan(
+			&i.Key,
+			&i.Question,
+			&i.Embedding,
+			&i.Answer,
+			&i.Citations,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const symbolNeighbors = `-- name: SymbolNeighbors :many
