@@ -31,6 +31,8 @@ type authHandlers struct {
 	publicURL string
 	// mailer sends invite and password links (nil: the admin passes the link on).
 	mailer Mailer
+	// environment is the deployment's name for the UI banner ("" or production: no banner).
+	environment string
 	// loginLimit throttles password attempts per client IP.
 	mu         sync.Mutex
 	loginLimit map[string]*rate.Limiter
@@ -85,7 +87,7 @@ func safeReturn(p string) string {
 
 // config tells the login page which sign-in methods exist (public).
 func (h *authHandlers) config(w http.ResponseWriter, r *http.Request) {
-	WriteJSON(w, http.StatusOK, map[string]any{"mode": h.svc.Config().Mode, "sso": h.svc.OIDC() != nil, "password": h.svc.PasswordEnabled(r.Context()), "email": h.mailer != nil})
+	WriteJSON(w, http.StatusOK, map[string]any{"mode": h.svc.Config().Mode, "sso": h.svc.OIDC() != nil, "password": h.svc.PasswordEnabled(r.Context()), "email": h.mailer != nil, "environment": h.environment})
 }
 
 func (h *authHandlers) login(w http.ResponseWriter, r *http.Request) {

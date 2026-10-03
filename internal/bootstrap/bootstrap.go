@@ -47,8 +47,8 @@ type Options struct {
 
 // Result summarises Up.
 type Result struct {
-	URL           string
-	OwnerEmail    string
+	URL        string
+	OwnerEmail string
 	// SetupLink is a one-time link for the owner to choose their password (first run only). The
 	// generated bootstrap password is never shown or stored, and stops working once the link is used.
 	SetupLink string

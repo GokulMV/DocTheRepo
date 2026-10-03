@@ -1,0 +1,117 @@
+# Deploy DocTheRepo Hub to nonlive, then promote the same image to production.
+#
+# Copy this file to .github/workflows/ in your infrastructure repository, with deploy/environments/ next to it.
+# It assumes Kubernetes + Helm with the chart vendored at charts/dth (copy deploy/helm/dth from the release you
+# run); the same shape works for the Terraform modules (replace the helm step with
+# `terraform apply -var-file=deploy/environments/<env>/terraform.tfvars -var image=<repo>@<digest>`).
+#
+# Set up once, in the repository's Settings → Environments:
+#   nonlive     variables: DEPLOY_ROLE_ARN, AWS_REGION, EKS_CLUSTER, HUB_URL; no reviewers
+#   production  its own values of the same variables (another account or cluster), plus "Required reviewers"
+#               (who may promote) and "Deployment branches: main"
+# The cloud login uses GitHub's OIDC token, trusted per environment by each cloud role, so the nonlive job can
+# never reach production. Application secrets stay in the cloud secret manager; values files only name them.
+name: deploy-hub
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "Hub image to deploy (tag or @sha256 digest), e.g. ghcr.io/gokulmv/doctherepo-hub:v1.8.0"
+        required: true
+  push:
+    branches: [main]
+    paths: ["deploy/environments/**"]   # a settings change is deployed like a release
+
+permissions:
+  contents: read
+  id-token: write     # OIDC login to the cloud
+
+concurrency:
+  group: deploy-hub
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      repo: ${{ steps.pin.outputs.repo }}
+      digest: ${{ steps.pin.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pin the image to a digest (production gets exactly what nonlive tested)
+        id: pin
+        env:
+          REQUESTED: ${{ inputs.image || vars.HUB_IMAGE }}
+        run: |
+          set -euo pipefail
+          test -n "$REQUESTED" || { echo "set the HUB_IMAGE repository variable or pass the image input"; exit 1; }
+          repo="${REQUESTED%@*}"
+          case "${repo##*/}" in *:*) repo="${repo%:*}" ;; esac   # drop the tag, keep a registry port
+          digest=$(docker buildx imagetools inspect "$REQUESTED" --format '{{json .Manifest}}' | jq -r .digest)
+          echo "repo=$repo" >> "$GITHUB_OUTPUT"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+  nonlive:
+    needs: resolve
+    runs-on: ubuntu-latest
+    environment:
+      name: nonlive
+      url: ${{ vars.HUB_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cloud login (GitHub OIDC, no stored cloud keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+        # Google Cloud instead: google-github-actions/auth@v2 (workload_identity_provider, service_account),
+        # then google-github-actions/get-gke-credentials@v2.
+      - run: aws eks update-kubeconfig --name "${{ vars.EKS_CLUSTER }}" --region "${{ vars.AWS_REGION }}"
+      - name: Deploy
+        run: |
+          helm upgrade --install dth charts/dth --namespace dth --create-namespace \
+            -f deploy/environments/nonlive/values.yaml \
+            --set-file settings.inline=deploy/environments/nonlive/settings.yaml \
+            --set image.repository="$REPO" --set image.digest="$DIGEST" \
+            --wait --timeout 10m
+        env:
+          REPO: ${{ needs.resolve.outputs.repo }}
+          DIGEST: ${{ needs.resolve.outputs.digest }}
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          curl -fsS "${{ vars.HUB_URL }}/readyz"
+          curl -fsS "${{ vars.HUB_URL }}/api/v1/auth/config" | jq -e '.environment == "nonlive"'
+
+  production:
+    needs: [resolve, nonlive]
+    runs-on: ubuntu-latest
+    environment:
+      name: production     # waits for a required reviewer
+      url: ${{ vars.HUB_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cloud login (GitHub OIDC, no stored cloud keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+        # Google Cloud instead: google-github-actions/auth@v2 (workload_identity_provider, service_account),
+        # then google-github-actions/get-gke-credentials@v2.
+      - run: aws eks update-kubeconfig --name "${{ vars.EKS_CLUSTER }}" --region "${{ vars.AWS_REGION }}"
+      - name: Deploy the same image
+        run: |
+          helm upgrade --install dth charts/dth --namespace dth --create-namespace \
+            -f deploy/environments/production/values.yaml \
+            --set-file settings.inline=deploy/environments/production/settings.yaml \
+            --set image.repository="$REPO" --set image.digest="$DIGEST" \
+            --wait --timeout 10m --atomic
+        env:
+          REPO: ${{ needs.resolve.outputs.repo }}
+          DIGEST: ${{ needs.resolve.outputs.digest }}
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          curl -fsS "${{ vars.HUB_URL }}/readyz"
+          curl -fsS "${{ vars.HUB_URL }}/api/v1/auth/config" | jq -e '.environment == "production"'

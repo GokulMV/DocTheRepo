@@ -1,0 +1,33 @@
+# Settings applied when the production Hub starts.
+version: 1
+
+auth:
+  password: false
+
+users:
+  - { email: platform-lead@acme.com, role: owner }
+  - { email: sre-oncall@acme.com, role: admin }
+
+providers:
+  - name: anthropic
+    kind: anthropic
+    api_key: ${awssm:production/dth/anthropic#api_key}
+
+routes:
+  docgen:      { provider: anthropic, model: claude-sonnet-5-5 }
+  docgen_fast: { provider: anthropic, model: claude-haiku-4-5 }
+  qa:          { provider: anthropic, model: claude-sonnet-5-5 }
+
+connectors:
+  - name: github
+    type: github
+    mode: webhook
+    credentials: ${awssm:production/dth/github#token}
+    webhook_secret: ${awssm:production/dth/github#webhook_secret}
+
+repos:
+  - { full_name: acme/payments, connector: github, tracked_branch: main, push_mode: pr_auto_merge }
+
+spend:
+  limits:
+    - { scope: global, window: day, max_tokens: 3000000 }

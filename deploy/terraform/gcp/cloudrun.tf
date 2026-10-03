@@ -2,6 +2,7 @@ locals {
   common_env = merge(
     {
       DTH_PUBLIC_URL       = local.public_url
+      DTH_ENVIRONMENT      = var.environment
       DTH_LISTEN           = "0.0.0.0:8080"
       DTH_METRICS_LISTEN   = "0.0.0.0:9090"
       DTH_SECRETS_PROVIDER = "gcpkms"

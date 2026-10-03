@@ -4,11 +4,15 @@
 image:
   repository: ghcr.io/gokulmv/doctherepo-hub
   tag: "" # defaults to the chart appVersion
+  # A digest (sha256:…) pins the exact image and wins over tag: promote to production what nonlive tested.
+  digest: ""
   pullPolicy: IfNotPresent
 imagePullSecrets: []
 
 # Public URL users and webhooks reach (https in production; secure cookies follow the scheme).
 publicURL: https://docs-hub.example.com
+# Name of this deployment, e.g. nonlive or production. Anything but production shows a banner in the UI.
+environment: production
 
 database:
   # Name of an existing Secret with the PostgreSQL URL (sslmode=require recommended) under `key`.

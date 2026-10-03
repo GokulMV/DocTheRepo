@@ -89,3 +89,18 @@ describe('ErrorBoundary', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 });
+
+describe('environment banner', () => {
+  it('names a nonlive deployment on every page, and stays out of production', async () => {
+    mockApi({ 'GET /me': me('admin'), 'GET /auth/config': { mode: 'local', sso: false, password: true, environment: 'nonlive' } });
+    const { unmount } = renderAt('/ask', <Route element={<Shell />}><Route path="/ask" element={<p>ask page</p>} /></Route>);
+    expect(await screen.findByText(/Nonlive environment: not production/)).toBeInTheDocument();
+    expect(document.title).toBe('[nonlive] DocTheRepo');
+    unmount();
+    vi.unstubAllGlobals();
+    mockApi({ 'GET /me': me('admin'), 'GET /auth/config': { mode: 'local', sso: false, password: true, environment: 'production' } });
+    renderAt('/ask', <Route element={<Shell />}><Route path="/ask" element={<p>ask page</p>} /></Route>);
+    expect(await screen.findByText('ask page')).toBeInTheDocument();
+    expect(screen.queryByText(/environment: not production/)).not.toBeInTheDocument();
+  });
+});

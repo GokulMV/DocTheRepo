@@ -1,0 +1,20 @@
+# Helm values for the production Hub.
+environment: production
+publicURL: https://docs-hub.acme.example
+database:
+  existingSecret: dth-db
+secrets:
+  provider: awskms
+  kmsKeyId: arn:aws:kms:eu-west-1:222222222222:key/production-key-id
+auth:
+  mode: oidc
+  oidc:
+    issuer: https://acme.okta.com
+    clientId: 0oa-production-app
+    existingSecret: dth-oidc
+    allowedDomains: [acme.com]
+email:
+  from: "DocTheRepo <docs@acme.example>"
+  existingSecret: dth-smtp
+api:
+  replicas: 3

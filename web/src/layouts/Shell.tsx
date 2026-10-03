@@ -3,7 +3,7 @@ import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-route
 import { useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, Ellipsis, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Pin, PinOff, Plus, Search, Sun, Trash2 } from 'lucide-react';
 import { api, ApiError } from '@/api/client';
-import { keys, useMe, useThreads } from '@/api/hooks';
+import { keys, useAuthConfig, useMe, useThreads } from '@/api/hooks';
 import { CommandPalette } from '@/components/CommandPalette';
 import { atLeast, type Role } from '@/api/types';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -380,6 +380,7 @@ export function Shell() {
       </aside>
       <CommandPalette open={search} onOpenChange={setSearch} role={user.role} />
       <main className="min-w-0 flex-1">
+        <EnvironmentBanner />
         <div className="mx-auto max-w-[1600px] px-6 py-8 lg:px-10">
           {/* Reset on navigation (not remounted): a failed page does not block the next, and switching never flashes. */}
           <ErrorBoundary resetKey={loc.pathname}>
@@ -389,6 +390,24 @@ export function Shell() {
           </ErrorBoundary>
         </div>
       </main>
+    </div>
+  );
+}
+
+/** isProduction: production deployments (and ones that set no name) show no banner. */
+export const isProduction = (env?: string) => !env || ['production', 'prod', 'live'].includes(env.toLowerCase());
+
+/** EnvironmentBanner names a non-production deployment on every page, so nonlive is never mistaken for production. */
+function EnvironmentBanner() {
+  const cfg = useAuthConfig();
+  const env = cfg.data?.environment;
+  useEffect(() => {
+    if (env) document.title = isProduction(env) ? 'DocTheRepo' : `[${env}] DocTheRepo`;
+  }, [env]);
+  if (isProduction(env)) return null;
+  return (
+    <div role="status" className="border-b border-amber-300 bg-amber-100 px-6 py-1.5 text-center text-xs font-medium text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/15 dark:text-amber-200">
+      {env!.charAt(0).toUpperCase() + env!.slice(1)} environment: not production. Changes here do not affect production.
     </div>
   );
 }

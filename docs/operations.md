@@ -31,6 +31,7 @@ Unknown keys fail at start.
 |---|---|
 | `DTH_DATABASE_URL` | PostgreSQL URL (`?sslmode=require` in the cloud) |
 | `DTH_PUBLIC_URL` | The address people use; webhooks and the SSO callback are under it |
+| `DTH_ENVIRONMENT` | This deployment's name, e.g. `nonlive` or `production`; anything but production shows a banner ([environments.md](environments.md)) |
 | `DTH_ROLES` | `api`, `worker`, `scheduler` |
 | `DTH_LISTEN`, `DTH_METRICS_LISTEN` | API listener (default `127.0.0.1:8080`); `/metrics` and `/healthz` listener (default `127.0.0.1:9090`) |
 | `DTH_SECRETS_PROVIDER` | `localfile` (with `DTH_LOCAL_KEY_FILE`), `awskms` or `gcpkms` (with `DTH_KMS_KEY_ID`) |

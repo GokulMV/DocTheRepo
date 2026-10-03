@@ -50,6 +50,8 @@ type Deps struct {
 	V1 []func(r chi.Router)
 	// UI serves the web app for every path the API does not own (nil: API only).
 	UI http.Handler
+	// Environment names the deployment (nonlive, production, …) for the UI banner.
+	Environment string
 	// Mailer emails invite and password links (nil: off).
 	Mailer Mailer
 	// Settings is the secret-reference policy for /settings/apply (nil: the settings endpoints are off).
@@ -83,7 +85,7 @@ func NewRouter(d Deps) http.Handler {
 		if d.OIDC != nil && d.Auth.OIDC() == nil {
 			d.Auth.UseConfigOIDC(d.OIDC) // the caller did not run LoadSignIn (tests)
 		}
-		ah := &authHandlers{svc: d.Auth, secure: d.SecureCookies, publicURL: d.PublicURL, sealKeys: d.SealKeys, requireSealed: d.RequireSealed, mailer: d.Mailer}
+		ah := &authHandlers{svc: d.Auth, secure: d.SecureCookies, publicURL: d.PublicURL, sealKeys: d.SealKeys, requireSealed: d.RequireSealed, mailer: d.Mailer, environment: d.Environment}
 		r.Route("/api/v1", func(r chi.Router) {
 			r.Get("/openapi.json", openapiHandler)
 			r.Group(func(r chi.Router) {

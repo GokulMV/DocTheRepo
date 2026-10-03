@@ -230,3 +230,40 @@ func TestInitWizard(t *testing.T) {
 	root.SetArgs([]string{"init", "-o", out})
 	assert.ErrorContains(t, root.Execute(), "exists")
 }
+
+// One CLI, two hubs: profiles keep nonlive and production apart, and switching is explicit.
+func TestCLIProfiles(t *testing.T) {
+	t.Setenv("DTH_CLI_CONFIG", filepath.Join(t.TempDir(), "cli.json"))
+	t.Setenv("DTH_PROFILE", "")
+	nonlive, prod := newFakeHub(t), newFakeHub(t)
+	out, err := runCLI(t, "login", "--profile", "nonlive", "--server", nonlive.URL, "--token", "dth_pat_ok")
+	require.NoError(t, err, out)
+	assert.Contains(t, out, "Signed in to nonlive ("+nonlive.URL+")")
+	_, err = runCLI(t, "login", "--profile", "production", "--server", prod.URL, "--token", "dth_pat_ok")
+	require.NoError(t, err)
+
+	cfg := loadConfig()
+	assert.Equal(t, "nonlive", cfg.Current, "the first profile becomes current")
+	out, _ = runCLI(t, "profile")
+	assert.Contains(t, out, "* nonlive")
+	assert.Contains(t, out, "  production")
+
+	out, err = runCLI(t, "status")
+	require.NoError(t, err)
+	assert.Contains(t, out, "Hub:    "+nonlive.URL)
+	out, err = runCLI(t, "status", "--profile", "production")
+	require.NoError(t, err)
+	assert.Contains(t, out, "Hub:    "+prod.URL)
+
+	out, err = runCLI(t, "profile", "use", "production")
+	require.NoError(t, err)
+	assert.Contains(t, out, "Now using production")
+	out, _ = runCLI(t, "status")
+	assert.Contains(t, out, "Hub:    "+prod.URL)
+
+	_, err = runCLI(t, "status", "--profile", "staging")
+	assert.ErrorContains(t, err, `no profile "staging"`)
+	_, err = runCLI(t, "profile", "remove", "production")
+	require.NoError(t, err)
+	assert.Empty(t, loadConfig().Current)
+}

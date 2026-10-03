@@ -51,7 +51,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: hub
-          image: "{{ $.Values.image.repository }}:{{ default $.Chart.AppVersion $.Values.image.tag }}"
+          image: {{ if $.Values.image.digest }}"{{ $.Values.image.repository }}@{{ $.Values.image.digest }}"{{ else }}"{{ $.Values.image.repository }}:{{ default $.Chart.AppVersion $.Values.image.tag }}"{{ end }}
           imagePullPolicy: {{ $.Values.image.pullPolicy }}
           env:
             - name: DTH_ROLES

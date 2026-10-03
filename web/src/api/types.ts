@@ -38,6 +38,8 @@ export interface AuthConfig {
   password: boolean;
   /** Invite and password links are emailed (SMTP is set up). */
   email?: boolean;
+  /** The deployment's name (nonlive, production, …); empty when not set. */
+  environment?: string;
 }
 
 export interface Token {

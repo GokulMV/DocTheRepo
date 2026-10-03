@@ -1,0 +1,18 @@
+# Helm values for the nonlive Hub. Same chart and image as production; only these values differ.
+environment: nonlive                     # shows the "Nonlive environment" banner in the UI
+publicURL: https://docs-hub.nonlive.acme.example
+database:
+  existingSecret: dth-db                 # its own database: never share one between environments
+secrets:
+  provider: awskms
+  kmsKeyId: arn:aws:kms:eu-west-1:111111111111:key/nonlive-key-id   # its own key, in the nonlive account
+auth:
+  mode: oidc
+  oidc:
+    issuer: https://acme.okta.com
+    clientId: 0oa-nonlive-app             # its own SSO app: callback https://docs-hub.nonlive…/api/v1/auth/callback
+    existingSecret: dth-oidc
+    allowedDomains: [acme.com]
+email:
+  from: "DocTheRepo (nonlive) <docs-nonlive@acme.example>"
+  existingSecret: dth-smtp

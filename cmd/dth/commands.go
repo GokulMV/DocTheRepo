@@ -27,6 +27,7 @@ type app struct {
 	out, errOut io.Writer
 	server      string
 	token       string
+	profile     string
 	asJSON      bool
 	// runner overrides docker for `up`/`down` in tests.
 	runner func(ctx context.Context, dir, name string, args ...string) ([]byte, error)
@@ -60,22 +61,34 @@ func newRoot(out, errOut io.Writer) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Version:       version,
-		PersistentPreRun: func(*cobra.Command, []string) {
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+			if a.profile == "" {
+				a.profile = os.Getenv("DTH_PROFILE")
+			}
+			var p cliProfile
+			if cmd.Name() != "login" && cmd.Name() != "profile" && (cmd.Parent() == nil || cmd.Parent().Name() != "profile") {
+				var err error
+				if p, err = cfg.resolve(a.profile); err != nil {
+					return err
+				}
+			}
 			if a.server == "" {
-				a.server = firstNonEmpty(os.Getenv("DTH_SERVER"), cfg.Server, "http://localhost:8080")
+				a.server = firstNonEmpty(os.Getenv("DTH_SERVER"), p.Server, "http://localhost:8080")
 			}
 			if a.token == "" {
-				a.token = firstNonEmpty(os.Getenv("DTH_TOKEN"), cfg.Token)
+				a.token = firstNonEmpty(os.Getenv("DTH_TOKEN"), p.Token)
 			}
+			return nil
 		},
 	}
 	root.SetOut(out)
 	root.SetErr(errOut)
 	root.PersistentFlags().StringVar(&a.server, "server", "", "hub URL (env DTH_SERVER; default: saved by dth login, else http://localhost:8080)")
 	root.PersistentFlags().StringVar(&a.token, "token", "", "personal access token (env DTH_TOKEN; default: saved by dth login)")
+	root.PersistentFlags().StringVar(&a.profile, "profile", "", "named hub to use, e.g. nonlive or production (env DTH_PROFILE; default: the current profile, see dth profile)")
 	root.PersistentFlags().BoolVar(&a.asJSON, "json", false, "print raw JSON")
 	root.AddCommand(a.upCmd(), a.downCmd(), a.loginCmd(), a.statusCmd(), a.askCmd(), a.reposCmd(), a.importCmd(), a.dryRunCmd(),
-		a.jobsCmd(), a.retryCmd(), a.usageCmd(), a.tokenCmd(), a.reindexCmd(), a.adapterTestCmd(), a.migrateCmd(), a.engineCmd(), a.mcpCmd(), a.applyCmd(), a.settingsCmd(), a.initCmd())
+		a.jobsCmd(), a.retryCmd(), a.usageCmd(), a.tokenCmd(), a.reindexCmd(), a.adapterTestCmd(), a.migrateCmd(), a.engineCmd(), a.mcpCmd(), a.applyCmd(), a.settingsCmd(), a.initCmd(), a.profileCmd())
 	return root
 }
 
@@ -107,7 +120,7 @@ func (a *app) upCmd() *cobra.Command {
 				fmt.Fprintf(a.out, "\nOwner account: %s\nChoose your password with this one-time link (it works once and expires in 7 days):\n  %s\n", res.OwnerEmail, res.SetupLink)
 			}
 			if res.Token != "" {
-				if err := saveConfig(cliConfig{Server: res.URL, Token: res.Token}); err != nil {
+				if err := saveConfig(loadConfig().withProfile(a.profile, res.URL, res.Token)); err != nil {
 					return err
 				}
 				fmt.Fprintln(a.out, "\nThe CLI is signed in (token saved to "+configPath()+").")
@@ -179,10 +192,14 @@ func (a *app) loginCmd() *cobra.Command {
 			if err := a.client().call(cmd.Context(), "GET", "/me", nil, &me); err != nil {
 				return err
 			}
-			if err := saveConfig(cliConfig{Server: a.server, Token: a.token}); err != nil {
+			if err := saveConfig(loadConfig().withProfile(a.profile, a.server, a.token)); err != nil {
 				return err
 			}
-			fmt.Fprintf(a.out, "Signed in to %s as %v (%v).\n", a.server, me["email"], me["role"])
+			where := a.server
+			if a.profile != "" {
+				where = a.profile + " (" + a.server + ")"
+			}
+			fmt.Fprintf(a.out, "Signed in to %s as %v (%v).\n", where, me["email"], me["role"])
 			return nil
 		},
 	}
