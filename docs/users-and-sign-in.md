@@ -28,13 +28,15 @@ sign-on works, and you can't remove single sign-on while passwords are off.
 ### Adding someone
 
 1. **Users & access → Add user.** Enter their email, name and role.
-2. With passwords on, keep "Create a link for them to set a password" ticked. The Hub shows a one-time
-   link. Send it to them however you normally would (the Hub doesn't send email). They open it, choose a
-   password of at least 12 characters, and are signed in. The link works once and expires after 7 days.
+2. With passwords on, keep the password link ticked. With [email](#email) set up, the Hub emails them a
+   one-time link; otherwise it shows the link for you to send however you normally would. They open it,
+   choose a password of at least 12 characters, and are signed in. The link works once and expires after
+   7 days. The link is shown either way, so you can still pass it on if the email does not arrive.
 3. With single sign-on on, they can also sign in with it using the same email address. The role you chose
    applies from their first sign-in.
 
-**Forgotten password.** Use the link icon on their row to create a new link. When they use it, the old
+**Forgotten password.** Use the link icon on their row to create a new link (emailed when email is set
+up). When they use it, the old
 password stops working and they are signed out everywhere. An admin can't do this for an owner; only an
 owner can.
 
@@ -44,6 +46,33 @@ recorded. Nobody can remove themselves, and the last owner can't be removed, dem
 
 With single sign-on, anyone your identity provider admits from an allowed email domain can sign in. They
 start as a viewer. To give someone another role from the start, add them first.
+
+### Email
+
+The Hub can email invite and password links through any SMTP service: Google Workspace, Microsoft 365,
+Amazon SES, SendGrid, Mailgun, Postmark or your own mail server. Set two variables and restart:
+
+| Variable | Example |
+|---|---|
+| `DTH_SMTP_URL` | `smtp://user:password@smtp.example.com:587` (STARTTLS, required), `smtps://user:password@smtp.example.com:465` (TLS from the start), or `smtp://relay.internal:25?starttls=off` for a trusted relay inside your network |
+| `DTH_EMAIL_FROM` | `DocTheRepo <docs@example.com>`: an address your provider lets you send from |
+
+Percent-encode special characters in the user name and password (`@` → `%40`, `:` → `%3A`). The URL is
+read from the environment only, since it holds a password (`email.smtp_url_env` in `dth.yaml` names
+another variable; `email.from` sets the sender). Helm: `email.from` plus `email.existingSecret` holding
+the URL. Compose: put both variables in `.env`.
+
+| Provider | Host and port | User / password |
+|---|---|---|
+| Amazon SES | `email-smtp.<region>.amazonaws.com:587` | SMTP credentials made in the SES console (not your AWS keys) |
+| SendGrid | `smtp.sendgrid.net:587` | `apikey` / your API key |
+| Mailgun | `smtp.mailgun.org:587` | The domain's SMTP login |
+| Postmark | `smtp.postmarkapp.com:587` | Server API token as both |
+| Google Workspace | `smtp-relay.gmail.com:587` (SMTP relay) or `smtp.gmail.com:587` | Relay: allow the Hub's IP in the admin console; `smtp.gmail.com`: an app password |
+| Microsoft 365 | `smtp.office365.com:587` | A mailbox with SMTP AUTH turned on |
+
+An owner can check it with **Users & access → Send test email**, which sends one to their own address.
+When a message is refused, the error is shown next to the link, so the admin can pass the link on.
 
 ### Setting up single sign-on
 

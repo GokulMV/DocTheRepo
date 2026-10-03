@@ -79,7 +79,7 @@ type authEnv struct {
 	cfg config.AuthConfig
 }
 
-func newAuthEnv(t *testing.T, mode string, allRead bool) *authEnv {
+func newAuthEnv(t *testing.T, mode string, allRead bool, opts ...func(*api.Deps)) *authEnv {
 	t.Helper()
 	st := storetest.New(t)
 	cfg := config.Default().Auth
@@ -102,6 +102,9 @@ func newAuthEnv(t *testing.T, mode string, allRead bool) *authEnv {
 	}
 	e.svc = auth.New(st, cfg)
 	d.Auth = e.svc
+	for _, o := range opts {
+		o(&d)
+	}
 	srv.Config.Handler = api.NewRouter(d)
 	srv.Start()
 	t.Cleanup(srv.Close)

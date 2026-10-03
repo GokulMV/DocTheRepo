@@ -36,6 +36,8 @@ Unknown keys fail at start.
 | `DTH_SECRETS_PROVIDER` | `localfile` (with `DTH_LOCAL_KEY_FILE`), `awskms` or `gcpkms` (with `DTH_KMS_KEY_ID`) |
 | `DTH_AUTH_MODE` | `local` (passwords on by default) or `oidc` (with `DTH_OIDC_*`); sign-in can also be set in the UI or the settings file |
 | `DTH_SETTINGS_FILE`, `DTH_SETTINGS` | Settings applied on start ([settings-file.md](settings-file.md#applied-when-the-hub-starts)) |
+| `DTH_SMTP_URL`, `DTH_EMAIL_FROM` | Email invite and password links ([users-and-sign-in.md](users-and-sign-in.md#email)); without them admins copy the link |
+| `DTH_DOCS_MODE` | Docs generation cost mode: `thorough`, `balanced` (default) or `economy` ([docs-generation.md](docs-generation.md#what-it-costs-and-how-to-spend-less)) |
 | `DTH_ASK_AGENT_STEPS` | How far Ask may look when search finds too little (default 4, 0 = off) |
 | `DTH_VECTOR_BACKEND` | `pgvector` (default) or `qdrant` (`DTH_QDRANT_URL`) |
 | `DTH_LOG_LEVEL`, `DTH_LOG_FORMAT` | `info`/`debug`; `json` (default) or `text` |

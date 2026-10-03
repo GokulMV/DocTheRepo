@@ -36,6 +36,8 @@ export interface AuthConfig {
   mode: 'local' | 'oidc';
   sso: boolean;
   password: boolean;
+  /** Invite and password links are emailed (SMTP is set up). */
+  email?: boolean;
 }
 
 export interface Token {
