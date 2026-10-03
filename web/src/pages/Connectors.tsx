@@ -10,6 +10,7 @@ import { relTime } from '@/lib/format';
 import { seal } from '@/lib/seal';
 import { SealedBadge, SealedHint } from '@/components/Sealed';
 import { KNOWLEDGE, knowledgeSpec, SOURCES, sourceSpec } from './signalSources';
+import { nameOf, sentence } from '@/lib/labels';
 
 function randomSecret() {
   const b = new Uint8Array(24);
@@ -164,7 +165,7 @@ function ExistingGitHubApp({ base }: { base: string }) {
         <Field label="Installed on several accounts: which one?">
           <Select value={account} onChange={(e) => setAccount(e.target.value)}>
             <option value="">Choose…</option>
-            {choices.map((c) => <option key={c} value={c}>{c}</option>)}
+            {choices.map((c) => <option key={c} value={c}>{sentence(c)}</option>)}
           </Select>
         </Field>
       )}
@@ -371,7 +372,7 @@ function AddSignal({ onCreated }: { onCreated: (c: { id: string; type: string; s
           <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder={spec.label} /></Field>
           {spec.modes.length > 1 && (
             <Field label="How events arrive">
-              <Select value={mode || spec.modes[0]} onChange={(e) => setMode(e.target.value)}>{spec.modes.map((m) => <option key={m} value={m}>{m}</option>)}</Select>
+              <Select value={mode || spec.modes[0]} onChange={(e) => setMode(e.target.value)}>{spec.modes.map((m) => <option key={m} value={m}>{m === 'both' ? 'Webhook and polling' : m === 'poll' ? 'Polling' : 'Webhook'}</option>)}</Select>
             </Field>
           )}
           {spec.config?.map((c) => (
@@ -563,8 +564,8 @@ export default function Connectors() {
                   <span className="font-medium">{c.name}</span>{!c.enabled && <Badge tone="amber">disabled</Badge>}
                   {c.has_credentials && <div className="mt-1"><SealedBadge meta={c.credentials_meta} label="Credentials sealed" /></div>}
                 </Td>
-                <Td>{c.type}</Td>
-                <Td>{c.mode}</Td>
+                <Td>{nameOf(c.type)}</Td>
+                <Td>{nameOf(c.mode)}</Td>
                 <Td><Badge tone={statusTone(c.health)}>{c.health}</Badge>{c.last_error && <p className="max-w-xs truncate text-xs text-red-600" title={c.last_error}>{c.last_error}</p>}</Td>
                 <Td>{relTime(c.last_sync_at)}{c.mode !== 'webhook' && sourceSpec(c.type) && <p className="text-xs text-slate-500">polled every {c.poll_seconds}s</p>}{knowledgeSpec(c.type) && <p className="text-xs text-slate-500">synced every {Math.round(c.poll_seconds / 60)} min</p>}</Td>
                 <Td>

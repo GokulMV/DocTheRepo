@@ -94,10 +94,10 @@ export default function Account() {
           <Field label="What is it for?"><Input required value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. laptop CLI" className="w-56" /></Field>
           <Field label="Expires">
             <Select value={days} onChange={(e) => setDays(Number(e.target.value))} className="w-40">
-              <option value={30}>in 30 days</option>
-              <option value={90}>in 90 days</option>
-              <option value={365}>in a year</option>
-              <option value={0}>never</option>
+              <option value={30}>In 30 days</option>
+              <option value={90}>In 90 days</option>
+              <option value={365}>In a year</option>
+              <option value={0}>Never</option>
             </Select>
           </Field>
           <Button type="submit" disabled={create.isPending || !name.trim()}>{create.isPending ? 'Creating…' : 'Create token'}</Button>

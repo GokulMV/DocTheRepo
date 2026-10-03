@@ -8,6 +8,7 @@ import { Badge, Button, Card, Dialog, DialogFooter, Empty, ErrorNote, Field, Inp
 import { CHAT_FEATURES, PROVIDER_KINDS, providerKind } from './providerKinds';
 import { SealedBadge, SealedHint } from '@/components/Sealed';
 import { seal } from '@/lib/seal';
+import { capFirst, featureLabel, nameOf, sentence } from '@/lib/labels';
 
 const FEATURE_HELP: Record<string, string> = {
   docgen: 'Writes documentation for changed code',
@@ -107,7 +108,7 @@ function AddProvider({ kinds, routed }: { kinds: string[]; routed: string[] }) {
           <div className="space-y-3 text-sm">
             <p className="flex items-center gap-2 font-medium text-emerald-700 dark:text-emerald-400"><CheckCircle2 className="h-5 w-5" aria-hidden />{done.name} is ready</p>
             {done.features.length > 0 ? (
-              <p className="text-slate-600 dark:text-slate-400">It now handles: {done.features.join(', ')}. You can change any of them under Feature routing.</p>
+              <p className="text-slate-600 dark:text-slate-400">It now handles: {done.features.map(featureLabel).join(', ')}. You can change any of them under Feature routing.</p>
             ) : (
               <p className="text-slate-600 dark:text-slate-400">Choose which features use it under Feature routing below.</p>
             )}
@@ -148,7 +149,7 @@ function AddProvider({ kinds, routed }: { kinds: string[]; routed: string[] }) {
               </Field>
             ))}
             <div className="rounded-lg border border-slate-200 p-3 dark:border-white/10">
-              <Toggle label={spec?.features ? `Use it for ${spec.features.join(', ')}` : 'Use it for everything (writing docs, answering, explaining errors)'} checked={useForAll} onChange={setUseForAll} />
+              <Toggle label={spec?.features ? `Use it for ${spec.features.map(featureLabel).join(', ')}` : 'Use it for everything (writing docs, answering, explaining errors)'} checked={useForAll} onChange={setUseForAll} />
               {useForAll && (
                 <div className="mt-3 grid gap-3 sm:grid-cols-2">
                   <Field label="Model" hint={spec?.defaultModel ? 'Prefilled with a good default; change it if you like.' : 'As named by the provider.'}>
@@ -219,8 +220,8 @@ function ProviderRow({ p }: { p: Provider }) {
   const toggle = useInvalidating(() => api.patch(`/providers/${p.id}`, { enabled: !p.enabled }), keys.providers);
   return (
     <tr>
-      <Td><span className="font-medium">{p.name}</span> {!p.enabled && <Badge tone="amber">disabled</Badge>}</Td>
-      <Td>{p.kind}</Td>
+      <Td><span className="font-medium">{capFirst(p.name)}</span> {!p.enabled && <Badge tone="amber">disabled</Badge>}</Td>
+      <Td>{nameOf(p.kind)}</Td>
       <Td>
         <div className="flex flex-wrap items-center gap-1.5">
           {p.has_key ? <SealedBadge meta={p.key_meta} /> : <Badge>no key</Badge>}
@@ -229,7 +230,7 @@ function ProviderRow({ p }: { p: Provider }) {
       </Td>
       <Td>
         <div className="flex items-center gap-1">
-          <Input aria-label="Model to test" className="h-8 w-40 text-xs" placeholder="model" value={model} onChange={(e) => setModel(e.target.value)} />
+          <Input aria-label="Model to test" className="h-8 w-40 text-xs" placeholder="Model" value={model} onChange={(e) => setModel(e.target.value)} />
           <Button size="sm" variant="secondary" disabled={test.isPending} onClick={async () => setResult(await test.mutateAsync(model))}>Test</Button>
         </div>
         {result && <p className={result.ok ? 'text-xs text-emerald-700' : 'text-xs text-red-700'}>{result.ok ? `ok (${result.latency_ms} ms)` : result.error}</p>}
@@ -271,29 +272,29 @@ function RouteRow({ feature, route, providers }: { feature: string; route?: Rout
   };
   return (
     <tr>
-      <Td><span className="font-medium">{feature}</span><p className="text-xs text-slate-500">{FEATURE_HELP[feature]}</p></Td>
+      <Td><span className="font-medium">{featureLabel(feature)}</span> <code className="text-[11px] text-slate-400">{feature}</code><p className="text-xs text-slate-500">{FEATURE_HELP[feature]}</p></Td>
       <Td>
-        <Select className="w-44" aria-label={`${feature} provider`} value={v.providerId} onChange={(e) => set({ providerId: e.target.value })}>
-          <option value="">— not routed —</option>
-          {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        <Select className="w-44" aria-label={`${featureLabel(feature)}: provider`} value={v.providerId} onChange={(e) => set({ providerId: e.target.value })}>
+          <option value="">— Not routed —</option>
+          {providers.map((p) => <option key={p.id} value={p.id}>{capFirst(p.name)}</option>)}
         </Select>
       </Td>
-      <Td><Input className="w-56" aria-label={`${feature} model`} value={v.model} onChange={(e) => set({ model: e.target.value })} placeholder={providerKind(providers.find((p) => p.id === v.providerId)?.kind ?? '')?.defaultModel ?? 'model name'} /></Td>
+      <Td><Input className="w-56" aria-label={`${featureLabel(feature)}: model`} value={v.model} onChange={(e) => set({ model: e.target.value })} placeholder={providerKind(providers.find((p) => p.id === v.providerId)?.kind ?? '')?.defaultModel ?? 'Model name'} /></Td>
       <Td>
         {feature !== 'embedding' && (
-          <Select className="w-28" aria-label={`${feature} effort`} value={v.effort} onChange={(e) => set({ effort: e.target.value })}>
-            <option value="">default</option>
-            {['low', 'medium', 'high', 'xhigh', 'max'].map((x) => <option key={x}>{x}</option>)}
+          <Select className="w-28" aria-label={`${featureLabel(feature)}: effort`} value={v.effort} onChange={(e) => set({ effort: e.target.value })}>
+            <option value="">Default</option>
+            {['low', 'medium', 'high', 'xhigh', 'max'].map((x) => <option key={x} value={x}>{x === 'xhigh' ? 'Extra high' : sentence(x)}</option>)}
           </Select>
         )}
       </Td>
       <Td>
         <div className="flex gap-1">
-          <Select className="w-32" aria-label={`${feature} fallback`} value={v.fallbackId} onChange={(e) => set({ fallbackId: e.target.value })}>
-            <option value="">none</option>
-            {providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          <Select className="w-32" aria-label={`${featureLabel(feature)}: fallback provider`} value={v.fallbackId} onChange={(e) => set({ fallbackId: e.target.value })}>
+            <option value="">None</option>
+            {providers.map((p) => <option key={p.id} value={p.id}>{capFirst(p.name)}</option>)}
           </Select>
-          {v.fallbackId && <Input className="w-40" aria-label={`${feature} fallback model`} value={v.fallbackModel} onChange={(e) => set({ fallbackModel: e.target.value })} placeholder="model" />}
+          {v.fallbackId && <Input className="w-40" aria-label={`${featureLabel(feature)}: fallback model`} value={v.fallbackModel} onChange={(e) => set({ fallbackModel: e.target.value })} placeholder="Model" />}
         </div>
       </Td>
       <Td>

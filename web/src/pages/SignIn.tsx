@@ -223,7 +223,7 @@ function SSOCard({ state, callback, onSaved }: { state: SignInState; callback: s
             {preset.steps.map((s) => (
               <li key={s.text}>
                 {s.text}
-                {s.href && <a href={s.href} target="_blank" rel="noreferrer" className="ml-1 inline-flex items-center gap-0.5 text-brand-600 hover:underline dark:text-brand-300">open<ExternalLink className="h-3 w-3" aria-hidden /></a>}
+                {s.href && <a href={s.href} target="_blank" rel="noreferrer" className="ml-1 inline-flex items-center gap-0.5 text-brand-600 hover:underline dark:text-brand-300">Open<ExternalLink className="h-3 w-3" aria-hidden /></a>}
               </li>
             ))}
           </ol>
@@ -251,7 +251,7 @@ function SSOCard({ state, callback, onSaved }: { state: SignInState; callback: s
             <summary className="cursor-pointer text-slate-500">Groups (optional)</summary>
             <div className="mt-2">
               <Field label="Groups claim" htmlFor="sso-groups" hint={preset.groupsHint ?? 'The ID-token claim that lists the person’s groups. Groups can then be given repositories.'}>
-                <Input id="sso-groups" value={groups} onChange={(e) => { setDone(false); setGroups(e.target.value); }} placeholder="groups" />
+                <Input id="sso-groups" value={groups} onChange={(e) => { setDone(false); setGroups(e.target.value); }} placeholder="For example: groups" />
               </Field>
             </div>
           </details>

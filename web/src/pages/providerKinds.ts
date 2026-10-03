@@ -60,7 +60,7 @@ export const PROVIDER_KINDS: ProviderKind[] = [
     ],
     baseURL: 'hidden',
     extras: [{ key: 'organization', label: 'Organization ID (optional)', placeholder: 'org-…', hint: 'Only if your key belongs to several organizations.' }],
-    modelPlaceholder: 'the model name from your OpenAI account, e.g. gpt-5',
+    modelPlaceholder: 'The model name from your OpenAI account, e.g. gpt-5',
     embeddings: { placeholder: 'text-embedding-3-small', default: 'text-embedding-3-small' },
   },
   {
@@ -79,10 +79,10 @@ export const PROVIDER_KINDS: ProviderKind[] = [
     extras: [
       { key: 'deployment', label: 'Chat deployment name', required: true, placeholder: 'gpt-4o' },
       { key: 'embedding_deployment', label: 'Embedding deployment name (optional)', placeholder: 'text-embedding-3-small' },
-      { key: 'api_version', label: 'API version (optional)', placeholder: 'leave empty for the default' },
+      { key: 'api_version', label: 'API version (optional)', placeholder: 'Leave empty for the default' },
     ],
-    modelPlaceholder: 'same as the chat deployment name',
-    embeddings: { placeholder: 'same as the embedding deployment name' },
+    modelPlaceholder: 'Same as the chat deployment name',
+    embeddings: { placeholder: 'Same as the embedding deployment name' },
   },
   {
     kind: 'bedrock',
@@ -95,7 +95,7 @@ export const PROVIDER_KINDS: ProviderKind[] = [
       { key: 'region', label: 'Region', required: true, placeholder: 'us-east-1' },
       { key: 'profile', label: 'AWS profile (optional)', placeholder: 'default' },
     ],
-    modelPlaceholder: 'a Bedrock model or inference-profile ID from the Bedrock console',
+    modelPlaceholder: 'A Bedrock model or inference-profile ID from the Bedrock console',
     embeddings: { placeholder: 'amazon.titan-embed-text-v2:0' },
   },
   {
@@ -109,7 +109,7 @@ export const PROVIDER_KINDS: ProviderKind[] = [
       { key: 'project', label: 'Project ID', required: true, placeholder: 'my-project' },
       { key: 'region', label: 'Region', required: true, placeholder: 'us-east5' },
     ],
-    modelPlaceholder: 'a model ID from Vertex AI Model Garden',
+    modelPlaceholder: 'A model ID from Vertex AI Model Garden',
     embeddings: { placeholder: 'text-embedding-005' },
   },
   {
@@ -131,8 +131,8 @@ export const PROVIDER_KINDS: ProviderKind[] = [
     keyLabel: 'API key (if the server needs one)',
     baseURL: 'required',
     baseURLPlaceholder: 'https://llm.internal.example/v1',
-    modelPlaceholder: 'the model name the server exposes',
-    embeddings: { placeholder: 'the embedding model the server exposes' },
+    modelPlaceholder: 'The model name the server exposes',
+    embeddings: { placeholder: 'The embedding model the server exposes' },
   },
   {
     kind: 'external_cli',
@@ -141,7 +141,7 @@ export const PROVIDER_KINDS: ProviderKind[] = [
     key: 'optional',
     baseURL: 'hidden',
     extras: [{ key: 'command_template', label: 'Command template', required: true, placeholder: 'opencode run --model {model} …' }],
-    modelPlaceholder: 'the model the agent should use',
+    modelPlaceholder: 'The model the agent should use',
     features: ['docgen'],
   },
   {

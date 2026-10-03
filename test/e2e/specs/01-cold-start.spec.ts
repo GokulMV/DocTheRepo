@@ -57,15 +57,15 @@ test('cold start: connect, push, docs PR merged, cited answer', async ({ page })
   await add.getByLabel('Display name').fill('Team LLM');
   await add.getByRole('button', { name: 'Add provider' }).click();
   await expect(add.getByText('Team LLM is ready')).toBeVisible();
-  await expect(add.getByText(/It now handles: docgen, qa, decode, triage, suggest, decide, embedding/)).toBeVisible();
+  await expect(add.getByText(/It now handles: Docs generation, Ask \(Q&A\), Error explanations, Change triage, Known-issue suggestions, Decisions, Embeddings/)).toBeVisible();
   await add.getByRole('button', { name: 'Done' }).click();
   await expect(page.getByRole('cell', { name: 'Team LLM' }).first()).toBeVisible();
   await page.getByLabel('Model to test').fill('stub');
   await page.getByRole('button', { name: 'Test' }).click();
   await expect(page.getByText(/ok|reachable|\d+ ms/i).first()).toBeVisible();
-  for (const feature of ['docgen', 'qa', 'triage', 'embedding']) {
-    const row = page.getByRole('row').filter({ has: page.getByLabel(`${feature} provider`) });
-    await expect(row.getByLabel(`${feature} provider`)).toHaveValue(/.+/);
+  for (const feature of ['Docs generation', 'Ask (Q&A)', 'Change triage', 'Embeddings']) {
+    const row = page.getByRole('row').filter({ has: page.getByLabel(`${feature}: provider`) });
+    await expect(row.getByLabel(`${feature}: provider`)).toHaveValue(/.+/);
     await expect(row.getByRole('status')).toHaveText('Active');
   }
 
@@ -130,5 +130,5 @@ func HandleChargeback(paymentID string, amountMinor int64) error {
   await page.goto('/setup');
   await expect(page.getByText('Everything is set up. This page stays as a health check.')).toBeVisible();
   await page.goto('/activity');
-  await expect(page.getByRole('cell', { name: /code_push/ }).first()).toBeVisible();
+  await expect(page.getByRole('cell', { name: /Docs update/ }).first()).toBeVisible();
 });

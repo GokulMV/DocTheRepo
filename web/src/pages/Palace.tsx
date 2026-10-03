@@ -5,6 +5,7 @@ import { useEntities, useGraph, useOverview } from '@/api/hooks';
 import type { Entity } from '@/api/types';
 import { GraphView, type GEdge, type GNode, type LayoutName } from '@/components/GraphView';
 import { COUNTED_KINDS, kindMeta, KINDS, OVERVIEW_KINDS } from '@/components/palaceKinds';
+import { capFirst } from '@/lib/labels';
 import { Badge, Button, Card, Empty, ErrorNote, Input, PageHeader, Select, Spinner, cx } from '@/components/ui';
 
 const LAYOUTS: [LayoutName, string][] = [['force', 'Force'], ['concentric', 'Concentric'], ['hierarchy', 'Hierarchy'], ['circle', 'Circle'], ['grid', 'Grid']];
@@ -120,10 +121,10 @@ function Summary({ nodes, edges, endpoints, onSelect }: {
               <KindDot kind={n.kind} />{n.name}
             </button>
             <p className="mt-0.5 text-slate-600 dark:text-slate-400">
-              {eps > 0 && <>exposes <b className="font-medium text-slate-800 dark:text-slate-200">{eps} endpoint{eps === 1 ? '' : 's'}</b>{parts.length ? '; ' : '.'}</>}
+              {eps > 0 && <>Exposes <b className="font-medium text-slate-800 dark:text-slate-200">{eps} endpoint{eps === 1 ? '' : 's'}</b>{parts.length ? '; ' : '.'}</>}
               {parts.map((pt, i) => (
                 <span key={pt.verb}>
-                  {pt.verb} {pt.names.slice(0, 3).join(', ')}{pt.names.length > 3 ? ` and ${pt.names.length - 3} more` : ''}{i < parts.length - 1 ? '; ' : '.'}
+                  {i === 0 && !eps ? capFirst(pt.verb) : pt.verb} {pt.names.slice(0, 3).join(', ')}{pt.names.length > 3 ? ` and ${pt.names.length - 3} more` : ''}{i < parts.length - 1 ? '; ' : '.'}
                 </span>
               ))}
               {!eps && !parts.length && <span className="text-slate-400">No links found in its code yet.</span>}

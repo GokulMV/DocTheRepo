@@ -5,6 +5,7 @@ import { atLeast, type Job } from '@/api/types';
 import { Badge, Button, Card, Dialog, ErrorNote, PageHeader, Select, Spinner, Table, Td, statusTone } from '@/components/ui';
 import { relTime } from '@/lib/format';
 import { JobProgressBar } from '@/components/JobProgressBar';
+import { capFirst, featureLabel, jobLabel, sentence } from '@/lib/labels';
 
 const STATUSES = ['', 'queued', 'processing', 'done', 'failed', 'aborted', 'spend_blocked', 'pending_approval', 'needs_human', 'dead'];
 const TYPES = ['', 'code_push', 'import_docs', 'reindex', 'pr_review'];
@@ -14,7 +15,7 @@ function JobDetail({ job, onClose }: { job: Job; onClose: () => void }) {
   const retry = useInvalidating((override: boolean) => api.post<{ job_id: string }>(`/jobs/${job.job_id}/retry`, { override_ceiling: override }), ['jobs']);
   const retryable = ['failed', 'dead', 'aborted', 'spend_blocked', 'needs_human'].includes(job.status);
   return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title={`${job.type} · ${job.status}`} description={`Job ${job.job_id} · correlation ${job.correlation_id}`}>
+    <Dialog open onOpenChange={(o) => !o && onClose()} title={`${jobLabel(job.type)} · ${sentence(job.status)}`} description={`Job ${job.job_id} · correlation ${job.correlation_id}`}>
       {job.error && <p className="mb-2 text-sm text-red-700">{job.error}</p>}
       <pre className="max-h-96 overflow-auto rounded bg-slate-100 p-2 text-xs dark:bg-slate-800">{JSON.stringify(job.result ?? job.payload, null, 2)}</pre>
       {atLeast(me.data?.role, 'admin') && retryable && (
@@ -32,6 +33,15 @@ function JobDetail({ job, onClose }: { job: Job; onClose: () => void }) {
   );
 }
 
+// What a reference to something since removed reads as.
+const GONE: Record<string, string> = { repo: 'a removed repository', connector: 'a removed connector', llm_provider: 'a removed provider', user: 'a removed user', issue: 'an issue', auth_settings: 'sign-in settings' };
+
+/** actionLabel words an action without its own entry: "user.invite" → "User invite", "decode_issue:done" → "Error explanation done". */
+const actionLabel = (a: string) => {
+  const [what, how] = a.split(':');
+  return how !== undefined ? `${jobLabel(what)} ${sentence(how).toLowerCase()}` : sentence(a.replace(/\./g, ' '));
+};
+
 // Plain words for the feed; the raw action stays in the tooltip.
 const ACTIONS: Record<string, string> = {
   'auth.login': 'signed in', 'auth.logout': 'signed out', 'repo.create': 'repository tracked', 'repo.update': 'repository settings changed',
@@ -40,7 +50,9 @@ const ACTIONS: Record<string, string> = {
   'github.connect.app': 'GitHub App created', 'github.connect.installed': 'GitHub App installed', 'github.connect.existing': 'existing GitHub App connected',
   'token.create': 'access token created', 'token.revoke': 'access token revoked', 'spend.set': 'spend limits saved', 'settings.apply': 'settings file applied',
   'code_push:done': 'docs updated', 'code_push:aborted': 'nothing to document', 'code_push:failed': 'docs update failed', 'code_push:spend_blocked': 'blocked by spend limit',
-  'import_docs:done': 'docs imported', 'docs_pr:opened': 'docs PR opened', 'docs_pr:merged': 'docs PR merged', 'docs_pr:closed': 'docs PR closed',
+  'import_docs:done': 'docs imported', 'decode_issue:done': 'error explained', 'user.create': 'user added', 'user.update': 'user changed',
+  'user.invite': 'password link created', 'user.delete': 'user removed', 'user.repo_access': 'repository access changed', 'auth.settings': 'sign-in settings changed',
+  'auth.password_set': 'password set', 'docs_pr:opened': 'docs PR opened', 'docs_pr:merged': 'docs PR merged', 'docs_pr:closed': 'docs PR closed',
 };
 
 /** useNames resolves "repo:<id>"-style references in the feed to names. */
@@ -54,12 +66,14 @@ function useNames(): (text: string) => string {
   const names = new Map<string, string>();
   for (const r of repos.data ?? []) names.set(`repo:${r.id}`, r.full_name);
   for (const c of conns.data ?? []) names.set(`connector:${c.id}`, `connector ${c.name}`);
+  names.set('auth_settings:1', 'sign-in settings');
   for (const p of provs.data?.items ?? []) names.set(`llm_provider:${p.id}`, `provider ${p.name}`);
   for (const u of users.data?.items ?? []) names.set(`user:${u.id}`, u.name || u.email);
   return (text) =>
     text
-      .replace(/\b(repo|connector|llm_provider|user):[0-9a-f-]{36}\b/g, (m) => names.get(m) ?? m)
-      .replace(/\bmodel_route:([a-z_]+)/g, 'route for $1');
+      .replace(/\b(repo|connector|llm_provider|user|issue|auth_settings):[0-9a-f-]{1,36}\b/g, (m) => names.get(m) ?? GONE[m.split(':')[0]] ?? m)
+      .replace(/\bmodel_route:([a-z_]+)/g, (_m, f: string) => `route for ${featureLabel(f)}`)
+      .replace(/\bspend_limits:/g, 'spend limits');
 }
 
 export default function Activity() {
@@ -80,10 +94,10 @@ export default function Activity() {
           title="Feed"
           actions={
             <Select aria-label="Feed type" value={types} onChange={(e) => setTypes(e.target.value)} className="w-36">
-              <option value="">everything</option>
-              <option value="job">jobs</option>
-              <option value="pr">docs PRs</option>
-              <option value="audit">admin actions</option>
+              <option value="">Everything</option>
+              <option value="job">Jobs</option>
+              <option value="pr">Docs PRs</option>
+              <option value="audit">Admin actions</option>
             </Select>
           }
         >
@@ -93,8 +107,8 @@ export default function Activity() {
             {feed.data?.items.map((a) => (
               <li key={a.kind + a.ref_id + a.at} className="flex items-baseline justify-between gap-3 py-2">
                 <span>
-                  <span title={a.action}><Badge tone={a.kind === 'audit' ? 'blue' : statusTone(a.action.split(':')[1] ?? '')}>{ACTIONS[a.action] ?? a.action}</Badge></span>
-                  {a.detail && <span title={a.detail} className="mt-1 line-clamp-2 break-all text-slate-500">{name(a.detail)}</span>}
+                  <span title={`Event ${a.action}`}><Badge tone={a.kind === 'audit' ? 'blue' : statusTone(a.action.split(':')[1] ?? '')}>{ACTIONS[a.action] ?? actionLabel(a.action)}</Badge></span>
+                  {a.detail && <span title={capFirst(name(a.detail))} className="mt-1 line-clamp-2 break-all text-slate-500">{capFirst(name(a.detail))}</span>}
                 </span>
                 <span className="shrink-0 text-xs text-slate-400">{relTime(a.at)}</span>
               </li>
@@ -107,10 +121,10 @@ export default function Activity() {
           actions={
             <>
               <Select aria-label="Job type" value={type} onChange={(e) => setType(e.target.value)} className="w-36">
-                {TYPES.map((t) => <option key={t} value={t}>{t || 'all types'}</option>)}
+                {TYPES.map((t) => <option key={t} value={t}>{t ? jobLabel(t) : 'All types'}</option>)}
               </Select>
               <Select aria-label="Job status" value={status} onChange={(e) => setStatus(e.target.value)} className="w-40">
-                {STATUSES.map((s) => <option key={s} value={s}>{s || 'all statuses'}</option>)}
+                {STATUSES.map((s) => <option key={s} value={s}>{s ? sentence(s) : 'All statuses'}</option>)}
               </Select>
             </>
           }
@@ -121,8 +135,8 @@ export default function Activity() {
             {jobs.data?.items.map((j) => (
               <tr key={j.job_id} className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800" onClick={() => setOpen(j)}>
                 <Td>
-                  <span className="block">{repoName(j.repo_id) ?? j.type}</span>
-                  <span className="block text-[11px] text-slate-500">{j.type}</span>
+                  <span className="block">{repoName(j.repo_id) ?? jobLabel(j.type)}</span>
+                  <span className="block text-[11px] text-slate-500">{jobLabel(j.type)}</span>
                 </Td>
                 <Td><Badge tone={statusTone(j.status)}>{j.status}</Badge><JobProgressBar job={j} /></Td>
                 <Td>{j.attempts}/{j.max_attempts}</Td>

@@ -5,6 +5,7 @@ import { keys, useConnectors, useInvalidating, useMe, useRepos } from '@/api/hoo
 import { atLeast, type PushMode, type Repo } from '@/api/types';
 import { Badge, Button, Card, Dialog, DialogFooter, Empty, ErrorNote, Field, Input, PageHeader, Select, Spinner, Table, Td, Toggle } from '@/components/ui';
 import { shortSha } from '@/lib/format';
+import { capFirst, pushModeLabel } from '@/lib/labels';
 
 const MODES: { id: PushMode; label: string }[] = [
   { id: 'pr_auto_merge', label: 'Pull request + auto-merge (default)' },
@@ -36,7 +37,7 @@ function AddRepo({ onAdded }: { onAdded: (fullName: string, webhook?: string) =>
           <Field label="Git connector">
             <Select value={connectorId} onChange={(e) => setConnectorId(e.target.value)}>
               {git.map((c) => (
-                <option key={c.id} value={c.id}>{c.name} ({c.type})</option>
+                <option key={c.id} value={c.id}>{capFirst(c.name)} ({c.type === 'github' ? 'GitHub' : c.type === 'gitlab' ? 'GitLab' : c.type})</option>
               ))}
             </Select>
           </Field>
@@ -187,7 +188,7 @@ export default function Repos() {
                 </Td>
                 <Td>{r.tracked_branch || r.default_branch}</Td>
                 <Td className="font-mono text-xs">{r.docs_path}</Td>
-                <Td>{r.push.mode.replaceAll('_', ' ')}</Td>
+                <Td>{pushModeLabel(r.push.mode)}</Td>
                 <Td className="font-mono text-xs">{r.last_processed_sha ? shortSha(r.last_processed_sha) : <span className="font-sans text-slate-400">not yet</span>}</Td>
                 <Td>{atLeast(me.data?.role, 'editor') && <Button size="sm" variant="secondary" onClick={() => setDry(r)}>Dry run</Button>}</Td>
                 <Td>

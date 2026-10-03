@@ -90,7 +90,7 @@ describe('Setup', () => {
     // GitHub is connected; a model is added but not yet used for docs; no repositories yet.
     expect(await screen.findByText('A few steps to docs and answers. 1 of 4 done.')).toBeInTheDocument();
     expect(screen.getByText('Connected: GitHub')).toBeInTheDocument();
-    expect(screen.getByText('Used for: qa')).toBeInTheDocument();
+    expect(screen.getByText('Used for: Ask (Q&A)')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Add a model/ })).toHaveAttribute('href', '/providers');
   });
 

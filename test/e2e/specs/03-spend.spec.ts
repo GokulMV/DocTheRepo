@@ -36,7 +36,7 @@ def shipping_cost_cents(weight_grams: int, express: bool = False) -> int:
     });
     await page.goto('/activity');
     await page.getByLabel('Job status').selectOption('spend_blocked');
-    const blocked = page.getByRole('row').filter({ hasText: 'code_push' }).filter({ hasText: 'spend_blocked' }).first();
+    const blocked = page.getByRole('row').filter({ hasText: 'Docs update' }).filter({ hasText: 'Spend blocked' }).first();
     await expect(async () => {
       await page.reload();
       await page.getByLabel('Job status').selectOption('spend_blocked');
@@ -49,7 +49,7 @@ def shipping_cost_cents(weight_grams: int, express: bool = False) -> int:
 
     // The job explains itself; an admin runs it once above the ceiling.
     await blocked.click();
-    const dialog = page.getByRole('dialog', { name: 'code_push · spend_blocked' });
+    const dialog = page.getByRole('dialog', { name: 'Docs update · Spend blocked' });
     await expect(dialog.getByText(/spend|ceiling|limit/i).first()).toBeVisible();
     page.once('dialog', (d) => d.accept());
     await dialog.getByRole('button', { name: 'Retry above ceiling' }).click();

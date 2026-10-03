@@ -41,7 +41,7 @@ describe('Palace overview', () => {
     expect(screen.getByText('How to read this map.')).toBeInTheDocument();
     const summary = screen.getByText('What the map shows').closest('section, div')!.parentElement!;
     expect(summary).toHaveTextContent('acme/checkout');
-    expect(summary).toHaveTextContent('exposes 2 endpoints; publishes to orders.created.');
+    expect(summary).toHaveTextContent('Exposes 2 endpoints; publishes to orders.created.');
     const symbols = screen.getByRole('button', { name: /Symbols\s*40/ });
     expect(symbols).toHaveAttribute('aria-pressed', 'false');
     await userEvent.click(symbols);
