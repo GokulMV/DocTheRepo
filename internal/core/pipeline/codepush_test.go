@@ -190,6 +190,11 @@ func TestCodePush_SpendBlockedWritesNothing(t *testing.T) {
 	assert.False(t, landed)
 	rc, _ := h.p.Repos.Get(context.Background(), h.repoID)
 	assert.Empty(t, rc.LastProcessedSHA, "a blocked push is retried later, not skipped")
+	// The architecture still follows the code: the graph is written before any model call.
+	var n int
+	require.NoError(t, h.st.Pool.QueryRow(context.Background(),
+		"SELECT count(*) FROM entities WHERE repo_id = $1 AND kind = 'symbol' AND key LIKE '%main.go#Hello' AND deleted_at IS NULL", h.repoID).Scan(&n))
+	assert.Equal(t, 1, n, "the pushed function is in the graph")
 }
 
 func TestCodePush_DryRunForceAndNoRoutes(t *testing.T) {

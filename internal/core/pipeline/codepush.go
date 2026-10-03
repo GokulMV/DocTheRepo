@@ -209,6 +209,11 @@ func (p *Pipeline) CodePush(ctx context.Context, job ports.Job) (ports.Outcome, 
 			return ports.Outcome{}, err
 		}
 	}
+	if !pl.DryRun {
+		if err := p.updateGraph(ctx, repo, head, proceed); err != nil {
+			return ports.Outcome{}, err
+		}
+	}
 	if err := p.generate(ctx, host, repo, head, meta, job.ID, proceed, pl.DryRun, &res); err != nil {
 		return p.spendOutcome(err, res)
 	}
@@ -1002,29 +1007,6 @@ func (p *Pipeline) persist(ctx context.Context, repo ports.RepoConfig, head stri
 	}
 	res.Embedded = n
 
-	for _, fw := range work {
-		var g palace.Graph
-		if !fw.removed() {
-			g = extractGraph(repo, head, fw)
-		}
-		if fw.fc.PreviousPath != "" && fw.fc.PreviousPath != fw.fc.Path {
-			if err := p.Graph.ReplaceSource(ctx, repo.ID, fw.fc.PreviousPath, palace.Graph{}); err != nil {
-				return err
-			}
-		}
-		if err := p.Graph.ReplaceSource(ctx, repo.ID, fw.fc.Path, g); err != nil {
-			return err
-		}
-	}
-	if repo.ServiceName != "" {
-		var g palace.Graph
-		r := g.AddEntity(palace.Entity{Ref: palace.RepoRef(repo.FullName), Name: repo.FullName, Repo: repo.FullName})
-		s := g.AddEntity(palace.Entity{Ref: palace.ServiceRef(repo.ServiceName), Name: repo.ServiceName})
-		g.AddEdge(r, palace.EdgeDeployedAs, s, palace.Evidence{Commit: head})
-		if err := p.Graph.ReplaceSource(ctx, repo.ID, ".dth/service", g); err != nil {
-			return err
-		}
-	}
 	for docPath, d := range ds.written {
 		if strings.HasSuffix(docPath, "/README.md") && len(d.sections) == 0 {
 			continue
@@ -1037,6 +1019,37 @@ func (p *Pipeline) persist(ctx context.Context, repo ports.RepoConfig, head stri
 	for _, docPath := range ds.deleted {
 		if err := p.Docs.RemoveFile(ctx, repo.ID, docPath); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// updateGraph writes what the changed code declares (endpoints, topics, datastores, calls, dependencies)
+// to the knowledge graph, which the Architecture view and Palace read. It runs as soon as the code is
+// parsed, before any model call, so the architecture follows every push even when docs cannot be
+// written (spend limit, model error, docs PR blocked). Writing a file's graph again is harmless.
+func (p *Pipeline) updateGraph(ctx context.Context, repo ports.RepoConfig, head string, work []*fileWork) error {
+	for _, fw := range work {
+		var g palace.Graph
+		if !fw.removed() {
+			g = extractGraph(repo, head, fw)
+		}
+		if fw.fc.PreviousPath != "" && fw.fc.PreviousPath != fw.fc.Path {
+			if err := p.Graph.ReplaceSource(ctx, repo.ID, fw.fc.PreviousPath, palace.Graph{}); err != nil {
+				return fmt.Errorf("update graph: %w", err)
+			}
+		}
+		if err := p.Graph.ReplaceSource(ctx, repo.ID, fw.fc.Path, g); err != nil {
+			return fmt.Errorf("update graph: %w", err)
+		}
+	}
+	if repo.ServiceName != "" {
+		var g palace.Graph
+		r := g.AddEntity(palace.Entity{Ref: palace.RepoRef(repo.FullName), Name: repo.FullName, Repo: repo.FullName})
+		s := g.AddEntity(palace.Entity{Ref: palace.ServiceRef(repo.ServiceName), Name: repo.ServiceName})
+		g.AddEdge(r, palace.EdgeDeployedAs, s, palace.Evidence{Commit: head})
+		if err := p.Graph.ReplaceSource(ctx, repo.ID, ".dth/service", g); err != nil {
+			return fmt.Errorf("update graph: %w", err)
 		}
 	}
 	return nil
