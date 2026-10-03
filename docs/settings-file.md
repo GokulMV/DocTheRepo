@@ -15,6 +15,7 @@ Secret values are **references** to where the secret lives, so the file is safe 
 dth apply -f hub.yaml --dry-run     # show what would change
 dth apply -f hub.yaml               # apply it
 dth settings export > hub.yaml      # start from what the Hub has now
+dth settings check -f hub.yaml --require-owner [--resolve]   # validate offline, before deploying
 ```
 
 The UI has the same: **Administration → Settings file**. Paste or load a file, then click **Preview changes**
