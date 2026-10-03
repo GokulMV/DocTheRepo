@@ -131,31 +131,33 @@ func (q *Queries) InsertProvider(ctx context.Context, arg InsertProviderParams) 
 
 const insertUsageEvent = `-- name: InsertUsageEvent :exec
 INSERT INTO usage_events (id, at, feature, provider_id, provider_kind, model, input_tokens, output_tokens, cost_usd, latency_ms,
-                          cached, estimated, repo_id, user_id, job_id, issue_id, outcome)
+                          cached, estimated, repo_id, user_id, job_id, issue_id, outcome, cache_read_tokens, cache_write_tokens)
 VALUES ($1, $2, $3, $4, $5, $6,
         $7, $8, $9, $10,
         $11, $12, $13, $14, $15,
-        $16, $17)
+        $16, $17, $18, $19)
 `
 
 type InsertUsageEventParams struct {
-	ID           string          `json:"id"`
-	At           time.Time       `json:"at"`
-	Feature      LlmFeature      `json:"feature"`
-	ProviderID   *string         `json:"provider_id"`
-	ProviderKind LlmProviderKind `json:"provider_kind"`
-	Model        string          `json:"model"`
-	InputTokens  int64           `json:"input_tokens"`
-	OutputTokens int64           `json:"output_tokens"`
-	CostUsd      float64         `json:"cost_usd"`
-	LatencyMs    int32           `json:"latency_ms"`
-	Cached       bool            `json:"cached"`
-	Estimated    bool            `json:"estimated"`
-	RepoID       *string         `json:"repo_id"`
-	UserID       *string         `json:"user_id"`
-	JobID        *string         `json:"job_id"`
-	IssueID      *string         `json:"issue_id"`
-	Outcome      UsageOutcome    `json:"outcome"`
+	ID               string          `json:"id"`
+	At               time.Time       `json:"at"`
+	Feature          LlmFeature      `json:"feature"`
+	ProviderID       *string         `json:"provider_id"`
+	ProviderKind     LlmProviderKind `json:"provider_kind"`
+	Model            string          `json:"model"`
+	InputTokens      int64           `json:"input_tokens"`
+	OutputTokens     int64           `json:"output_tokens"`
+	CostUsd          float64         `json:"cost_usd"`
+	LatencyMs        int32           `json:"latency_ms"`
+	Cached           bool            `json:"cached"`
+	Estimated        bool            `json:"estimated"`
+	RepoID           *string         `json:"repo_id"`
+	UserID           *string         `json:"user_id"`
+	JobID            *string         `json:"job_id"`
+	IssueID          *string         `json:"issue_id"`
+	Outcome          UsageOutcome    `json:"outcome"`
+	CacheReadTokens  int64           `json:"cache_read_tokens"`
+	CacheWriteTokens int64           `json:"cache_write_tokens"`
 }
 
 func (q *Queries) InsertUsageEvent(ctx context.Context, arg InsertUsageEventParams) error {
@@ -177,12 +179,14 @@ func (q *Queries) InsertUsageEvent(ctx context.Context, arg InsertUsageEventPara
 		arg.JobID,
 		arg.IssueID,
 		arg.Outcome,
+		arg.CacheReadTokens,
+		arg.CacheWriteTokens,
 	)
 	return err
 }
 
 const listCostTable = `-- name: ListCostTable :many
-SELECT provider_kind, model, input_per_mtok_usd, output_per_mtok_usd, embed_per_mtok_usd, updated_by, updated_at, source, verified_at FROM cost_table ORDER BY provider_kind, model
+SELECT provider_kind, model, input_per_mtok_usd, output_per_mtok_usd, embed_per_mtok_usd, updated_by, updated_at, source, verified_at, cache_read_per_mtok_usd, cache_write_per_mtok_usd FROM cost_table ORDER BY provider_kind, model
 `
 
 func (q *Queries) ListCostTable(ctx context.Context) ([]CostTable, error) {
@@ -204,6 +208,8 @@ func (q *Queries) ListCostTable(ctx context.Context) ([]CostTable, error) {
 			&i.UpdatedAt,
 			&i.Source,
 			&i.VerifiedAt,
+			&i.CacheReadPerMtokUsd,
+			&i.CacheWritePerMtokUsd,
 		); err != nil {
 			return nil, err
 		}

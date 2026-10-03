@@ -1,10 +1,10 @@
 -- name: InsertUsageEvent :exec
 INSERT INTO usage_events (id, at, feature, provider_id, provider_kind, model, input_tokens, output_tokens, cost_usd, latency_ms,
-                          cached, estimated, repo_id, user_id, job_id, issue_id, outcome)
+                          cached, estimated, repo_id, user_id, job_id, issue_id, outcome, cache_read_tokens, cache_write_tokens)
 VALUES (sqlc.arg(id), sqlc.arg(at), sqlc.arg(feature), sqlc.narg(provider_id), sqlc.arg(provider_kind), sqlc.arg(model),
         sqlc.arg(input_tokens), sqlc.arg(output_tokens), sqlc.arg(cost_usd), sqlc.arg(latency_ms),
         sqlc.arg(cached), sqlc.arg(estimated), sqlc.narg(repo_id), sqlc.narg(user_id), sqlc.narg(job_id),
-        sqlc.narg(issue_id), sqlc.arg(outcome));
+        sqlc.narg(issue_id), sqlc.arg(outcome), sqlc.arg(cache_read_tokens), sqlc.arg(cache_write_tokens));
 
 -- name: SpentSince :one
 -- Sums consumption for a spend limit's window.

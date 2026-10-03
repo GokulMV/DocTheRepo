@@ -69,6 +69,9 @@ type Price struct {
 	InputPerMTok  float64
 	OutputPerMTok float64
 	EmbedPerMTok  float64
+	// CacheReadPerMTok and CacheWritePerMTok price prompt-cache tokens (nil: as plain input).
+	CacheReadPerMTok  *float64
+	CacheWritePerMTok *float64
 }
 
 // Request describes a paid call about to be made.
@@ -147,6 +150,30 @@ func (g *Guard) Cost(providerKind, model, feature string, in, out int64) (float6
 		return float64(in+out) * p.EmbedPerMTok / 1e6, true
 	}
 	return float64(in)*p.InputPerMTok/1e6 + float64(out)*p.OutputPerMTok/1e6, true
+}
+
+// CostUsage prices actual usage, with prompt-cache reads and writes at their own prices. in is all
+// input, cache tokens included.
+func (g *Guard) CostUsage(providerKind, model, feature string, in, out, cacheRead, cacheWrite int64) (float64, bool) {
+	p, ok := g.prices[PriceKey(providerKind, model)]
+	if !ok {
+		return 0, false
+	}
+	if feature == "embedding" || (cacheRead == 0 && cacheWrite == 0) {
+		return g.Cost(providerKind, model, feature, in, out)
+	}
+	rate := func(r *float64) float64 {
+		if r == nil {
+			return p.InputPerMTok
+		}
+		return *r
+	}
+	plain := in - cacheRead - cacheWrite
+	if plain < 0 {
+		plain = 0
+	}
+	return (float64(plain)*p.InputPerMTok + float64(cacheRead)*rate(p.CacheReadPerMTok) +
+		float64(cacheWrite)*rate(p.CacheWritePerMTok) + float64(out)*p.OutputPerMTok) / 1e6, true
 }
 
 // Applicable returns the limits that count a request.
@@ -295,7 +322,7 @@ func (e *Enforcer) Record(ctx context.Context, u ports.UsageRecord) error {
 		u.At = e.now()
 	}
 	if u.CostUSD == 0 {
-		if c, ok := e.Guard().Cost(u.ProviderKind, u.Model, u.Feature, u.InputTokens, u.OutputTokens); ok {
+		if c, ok := e.Guard().CostUsage(u.ProviderKind, u.Model, u.Feature, u.InputTokens, u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens); ok {
 			u.CostUSD = c
 		}
 	}

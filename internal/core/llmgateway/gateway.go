@@ -223,6 +223,7 @@ func (g *Gateway) record(ctx context.Context, r Route, model string, meta CallMe
 	return g.enforcer.Record(ctx, ports.UsageRecord{
 		At: g.now(), Feature: r.Feature, ProviderID: r.ProviderID, ProviderKind: r.ProviderKind, Model: model,
 		InputTokens: u.InputTokens + u.CacheReadTokens + u.CacheWriteTokens, OutputTokens: u.OutputTokens,
+		CacheReadTokens: u.CacheReadTokens, CacheWriteTokens: u.CacheWriteTokens,
 		LatencyMS: latency.Milliseconds(), Estimated: estimated, RepoID: meta.RepoID, UserID: meta.UserID,
 		JobID: meta.JobID, IssueID: meta.IssueID, Outcome: outcome,
 	})

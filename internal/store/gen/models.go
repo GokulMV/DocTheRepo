@@ -1340,15 +1340,17 @@ type ConnectorCursor struct {
 }
 
 type CostTable struct {
-	ProviderKind     LlmProviderKind `json:"provider_kind"`
-	Model            string          `json:"model"`
-	InputPerMtokUsd  float64         `json:"input_per_mtok_usd"`
-	OutputPerMtokUsd float64         `json:"output_per_mtok_usd"`
-	EmbedPerMtokUsd  float64         `json:"embed_per_mtok_usd"`
-	UpdatedBy        *string         `json:"updated_by"`
-	UpdatedAt        time.Time       `json:"updated_at"`
-	Source           string          `json:"source"`
-	VerifiedAt       *time.Time      `json:"verified_at"`
+	ProviderKind         LlmProviderKind `json:"provider_kind"`
+	Model                string          `json:"model"`
+	InputPerMtokUsd      float64         `json:"input_per_mtok_usd"`
+	OutputPerMtokUsd     float64         `json:"output_per_mtok_usd"`
+	EmbedPerMtokUsd      float64         `json:"embed_per_mtok_usd"`
+	UpdatedBy            *string         `json:"updated_by"`
+	UpdatedAt            time.Time       `json:"updated_at"`
+	Source               string          `json:"source"`
+	VerifiedAt           *time.Time      `json:"verified_at"`
+	CacheReadPerMtokUsd  *float64        `json:"cache_read_per_mtok_usd"`
+	CacheWritePerMtokUsd *float64        `json:"cache_write_per_mtok_usd"`
 }
 
 type Decode struct {
@@ -1766,23 +1768,25 @@ type SpendLimit struct {
 }
 
 type UsageEvent struct {
-	ID           string          `json:"id"`
-	At           time.Time       `json:"at"`
-	Feature      LlmFeature      `json:"feature"`
-	ProviderKind LlmProviderKind `json:"provider_kind"`
-	Model        string          `json:"model"`
-	InputTokens  int64           `json:"input_tokens"`
-	OutputTokens int64           `json:"output_tokens"`
-	CostUsd      float64         `json:"cost_usd"`
-	LatencyMs    int32           `json:"latency_ms"`
-	Cached       bool            `json:"cached"`
-	Estimated    bool            `json:"estimated"`
-	RepoID       *string         `json:"repo_id"`
-	UserID       *string         `json:"user_id"`
-	JobID        *string         `json:"job_id"`
-	IssueID      *string         `json:"issue_id"`
-	Outcome      UsageOutcome    `json:"outcome"`
-	ProviderID   *string         `json:"provider_id"`
+	ID               string          `json:"id"`
+	At               time.Time       `json:"at"`
+	Feature          LlmFeature      `json:"feature"`
+	ProviderKind     LlmProviderKind `json:"provider_kind"`
+	Model            string          `json:"model"`
+	InputTokens      int64           `json:"input_tokens"`
+	OutputTokens     int64           `json:"output_tokens"`
+	CostUsd          float64         `json:"cost_usd"`
+	LatencyMs        int32           `json:"latency_ms"`
+	Cached           bool            `json:"cached"`
+	Estimated        bool            `json:"estimated"`
+	RepoID           *string         `json:"repo_id"`
+	UserID           *string         `json:"user_id"`
+	JobID            *string         `json:"job_id"`
+	IssueID          *string         `json:"issue_id"`
+	Outcome          UsageOutcome    `json:"outcome"`
+	ProviderID       *string         `json:"provider_id"`
+	CacheReadTokens  int64           `json:"cache_read_tokens"`
+	CacheWriteTokens int64           `json:"cache_write_tokens"`
 }
 
 type UsageRollupsHourly struct {
