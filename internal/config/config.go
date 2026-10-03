@@ -73,6 +73,10 @@ type AskConfig struct {
 	// files) when one round of retrieval finds too little (DTH_ASK_AGENT_STEPS; 0 turns it off). Answers
 	// found that way are cached like any other.
 	AgentSteps int `yaml:"agent_steps"`
+	// SimilarAnswer is how alike (embedding cosine similarity) a reworded question must be to reuse a
+	// cached answer (DTH_ASK_SIMILAR_ANSWER; default 0.95, 0 turns it off). Questions naming different
+	// files or identifiers never share an answer.
+	SimilarAnswer float64 `yaml:"similar_answer"`
 }
 
 // SettingsConfig is the policy for settings files pasted into the UI (Administration → Settings file).
@@ -257,7 +261,7 @@ func Default() Config {
 		Retention: RetentionConfig{EventDays: 30, ChunkGCDays: 14},
 		Grammars:  GrammarsConfig{LoadDir: "./grammars"},
 		Decide:    DecideConfig{GateThreshold: 0.9},
-		Ask:       AskConfig{AgentSteps: 4},
+		Ask:       AskConfig{AgentSteps: 4, SimilarAnswer: 0.95},
 	}
 }
 
@@ -345,6 +349,13 @@ func applyEnv(cfg *Config) error {
 		}
 		cfg.Ask.AgentSteps = n
 	}
+	if v, ok := os.LookupEnv("DTH_ASK_SIMILAR_ANSWER"); ok {
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return fmt.Errorf("DTH_ASK_SIMILAR_ANSWER: want 0 (off) or a similarity from 0.8 to 1, got %q", v)
+		}
+		cfg.Ask.SimilarAnswer = f
+	}
 	if v, ok := os.LookupEnv("DTH_PR_SWEEP_INTERVAL"); ok {
 		d, err := time.ParseDuration(v)
 		if err != nil || d <= 0 {
@@ -419,6 +430,9 @@ func (c Config) Validate() error {
 	}
 	if c.Email.SMTPURL() != "" && strings.TrimSpace(c.Email.From) == "" {
 		add("email.from: required when %s is set (e.g. \"DocTheRepo <docs@example.com>\")", c.Email.SMTPURLEnv)
+	}
+	if s := c.Ask.SimilarAnswer; s != 0 && (s < 0.8 || s > 1) {
+		add("ask.similar_answer: want 0 (off) or a similarity from 0.8 to 1, got %g", s)
 	}
 	if c.Database.URLEnv == "" {
 		add("database.url_env: required")

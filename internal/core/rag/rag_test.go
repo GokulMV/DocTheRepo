@@ -91,3 +91,16 @@ func TestIsOverviewQuestion(t *testing.T) {
 		assert.Equal(t, want, IsOverviewQuestion(q), q)
 	}
 }
+
+func TestSemanticHelpers(t *testing.T) {
+	assert.InDelta(t, 1.0, Cosine([]float32{1, 2}, []float32{2, 4}), 1e-9)
+	assert.InDelta(t, 0.0, Cosine([]float32{1, 0}, []float32{0, 1}), 1e-9)
+	assert.Equal(t, 0.0, Cosine([]float32{1}, []float32{1, 2}), "different sizes never match")
+	assert.Equal(t, []string{"payretry", "src/pay.go"}, Identifiers("How does PayRetry in src/pay.go work?"))
+	assert.Empty(t, Identifiers("How do payment retries work?"), "plain words and a capitalized first word are not identifiers")
+	assert.True(t, sameIdentifiers("explain PayRetry", "how does payretry work"))
+	assert.False(t, sameIdentifiers("how does PayRetry work", "how does CartRetry work"))
+	assert.False(t, sameIdentifiers("what calls retry_payment", "what calls the retry"))
+	assert.Equal(t, ScopeKey(Scope{RepoIDs: []string{"b", "a"}}), ScopeKey(Scope{RepoIDs: []string{"a", "b"}}))
+	assert.NotEqual(t, ScopeKey(Scope{All: true}), ScopeKey(Scope{RepoIDs: []string{"a"}}))
+}

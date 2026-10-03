@@ -88,6 +88,9 @@ type Engine struct {
 	Observe func(stage string, d time.Duration)
 	// AgentSteps is how many steps the agent may take when retrieval finds too little (0: off).
 	AgentSteps int
+	// SimilarAnswer is the embedding similarity at which a reworded question reuses a cached answer
+	// (0: off). It needs a SemanticCache store and an embedding route.
+	SimilarAnswer float64
 }
 
 // Query is one question.
@@ -228,8 +231,29 @@ func (e *Engine) Ask(ctx context.Context, q Query) (Answer, error) {
 			return a, nil
 		}
 	}
+	// Not asked in these words before: maybe in others. The question's embedding is needed for retrieval
+	// anyway, so the lookup costs no extra call.
+	var qvec []float32
+	var embedModel string
+	sc, semantic := e.Store.(SemanticCache)
+	if key != "" && semantic && e.SimilarAnswer > 0 && e.Index != nil {
+		if vs, ert, err := e.GW.Embed(ctx, meta, []string{question}); err == nil && len(vs) == 1 {
+			qvec, embedModel = vs[0], ert.Model
+			same := func(earlier string) bool { return sameIdentifiers(question, earlier) }
+			if a, ok, err := sc.SimilarAnswer(ctx, ScopeKey(q.Scope), embedModel, qvec, e.SimilarAnswer, same); err == nil && ok {
+				a.Cached = true
+				if e.Savings != nil {
+					_ = e.Savings.Record(ctx, "answer_cache_hit", spendguard.EstimateTokens(a.Text)*4, 0, key[:16])
+				}
+				if q.OnDelta != nil {
+					q.OnDelta(a.Text)
+				}
+				return a, nil
+			}
+		}
+	}
 
-	chunks, err := e.retrieve(ctx, meta, question, q.Scope)
+	chunks, err := e.retrieve(ctx, meta, question, q.Scope, qvec)
 	if err != nil {
 		return Answer{}, err
 	}
@@ -287,7 +311,12 @@ func (e *Engine) Ask(ctx context.Context, q Query) (Answer, error) {
 		a.CostUSD, _ = e.Cost(rt.ProviderKind, a.Model, llmgateway.FeatureQA, a.Usage.InputTokens, a.Usage.OutputTokens)
 	}
 	if key != "" && len(a.Citations) > 0 {
-		_ = e.Store.PutAnswer(ctx, key, Answer{Text: a.Text, Citations: a.Citations, Model: a.Model, Provider: a.Provider})
+		keep := Answer{Text: a.Text, Citations: a.Citations, Model: a.Model, Provider: a.Provider}
+		if qvec != nil {
+			_ = sc.PutAnswerMeaning(ctx, key, question, ScopeKey(q.Scope), embedModel, qvec, keep)
+		} else {
+			_ = e.Store.PutAnswer(ctx, key, keep)
+		}
 	}
 	return a, nil
 }
@@ -334,7 +363,8 @@ func (e *Engine) answer(ctx context.Context, meta llmgateway.CallMeta, rt llmgat
 }
 
 // retrieve runs hybrid search, fusion, and graph expansion; every read is ACL-scoped in SQL.
-func (e *Engine) retrieve(ctx context.Context, meta llmgateway.CallMeta, question string, s Scope) ([]ports.Chunk, error) {
+// retrieve finds sources for question; qvec, when set, is its embedding already computed.
+func (e *Engine) retrieve(ctx context.Context, meta llmgateway.CallMeta, question string, s Scope, qvec []float32) ([]ports.Chunk, error) {
 	start := time.Now()
 	lap := start
 	stage := func(name string) {
@@ -351,7 +381,10 @@ func (e *Engine) retrieve(ctx context.Context, meta llmgateway.CallMeta, questio
 	}()
 	var vec []ports.VectorHit
 	if e.Index != nil {
-		vs, _, err := e.GW.Embed(ctx, meta, []string{question})
+		vs, err := [][]float32{qvec}, error(nil)
+		if qvec == nil {
+			vs, _, err = e.GW.Embed(ctx, meta, []string{question})
+		}
 		stage("embed")
 		switch {
 		case errors.Is(err, llmgateway.ErrNoRoute):

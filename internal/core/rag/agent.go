@@ -110,7 +110,7 @@ func (e *Engine) investigate(ctx context.Context, meta llmgateway.CallMeta, q Qu
 		}
 		switch st.Action {
 		case "search":
-			cs, err := e.retrieve(ctx, meta, input, q.Scope)
+			cs, err := e.retrieve(ctx, meta, input, q.Scope, nil)
 			if err != nil {
 				log = append(log, fmt.Sprintf("search %q: failed", input))
 				continue

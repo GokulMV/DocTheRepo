@@ -43,6 +43,26 @@ VALUES (sqlc.arg(key), sqlc.arg(answer), sqlc.arg(citations), sqlc.arg(chunk_ids
 ON CONFLICT (key) DO UPDATE SET answer = EXCLUDED.answer, citations = EXCLUDED.citations, chunk_ids = EXCLUDED.chunk_ids,
     scopes = EXCLUDED.scopes, created_at = now(), hits = 0;
 
+-- name: SimilarAnswerCandidates :many
+-- Fresh answers asked in the same scope with the same embedding model, newest first (same freshness rules
+-- as GetCachedAnswer); the Hub compares the embeddings.
+SELECT a.key, a.question, a.embedding, a.answer, a.citations
+FROM answer_cache a
+WHERE a.scope_key = sqlc.arg(scope_key) AND a.embed_model = sqlc.arg(embed_model) AND a.embedding IS NOT NULL
+  AND a.created_at > now() - interval '7 days'
+  AND (SELECT count(*) FROM chunks c WHERE c.chunk_id = ANY(a.chunk_ids) AND c.deleted_at IS NULL) = cardinality(a.chunk_ids)
+  AND NOT EXISTS (SELECT 1 FROM chunks c WHERE c.scope = ANY(a.scopes) AND c.updated_at > a.created_at)
+ORDER BY a.created_at DESC
+LIMIT sqlc.arg(lim);
+
+-- name: HitCachedAnswer :exec
+UPDATE answer_cache SET hits = hits + 1 WHERE key = sqlc.arg(key);
+
+-- name: SetAnswerMeaning :exec
+UPDATE answer_cache SET question = sqlc.arg(question), scope_key = sqlc.arg(scope_key), embed_model = sqlc.arg(embed_model),
+    embedding = sqlc.arg(embedding)::real[]
+WHERE key = sqlc.arg(key);
+
 -- name: GCAnswerCache :execrows
 DELETE FROM answer_cache WHERE created_at < now() - interval '7 days';
 

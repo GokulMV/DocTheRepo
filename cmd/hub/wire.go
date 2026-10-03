@@ -213,7 +213,7 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 			return a.enforcer.Guard().Cost(kind, model, feature, in, out)
 		},
 		Observe:    func(stage string, d time.Duration) { m.Retrieval.WithLabelValues(stage).Observe(d.Seconds()) },
-		AgentSteps: cfg.Ask.AgentSteps}
+		AgentSteps: cfg.Ask.AgentSteps, SimilarAnswer: cfg.Ask.SimilarAnswer}
 	indexer := &pipeline.Indexer{GW: gw, Index: a.index}
 	a.decoder = &decode.Decoder{Store: store.NewDecodes(st, a.chunks), GW: gw, Index: a.index, Savings: store.NewSavings(st),
 		Embed: func(ctx context.Context, meta llmgateway.CallMeta, cs []ports.Chunk) error {
