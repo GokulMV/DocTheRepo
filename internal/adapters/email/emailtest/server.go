@@ -102,7 +102,7 @@ func (s *Server) serve(c net.Conn) {
 				say("530 authentication required")
 				continue
 			}
-			cur.From = strings.Trim(strings.Fields(line[len("MAIL FROM:"):]+" ")[0], "<>")
+			cur.From = strings.Trim(strings.Fields(line[len("MAIL FROM:"):] + " ")[0], "<>")
 			say("250 ok")
 		case strings.HasPrefix(cmd, "RCPT TO:"):
 			if s.Reject != "" {
