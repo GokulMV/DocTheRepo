@@ -557,8 +557,8 @@ func sourceType(s ports.ChunkSource) string {
 	switch s {
 	case ports.SourceCode:
 		return "code"
-	case ports.SourceConfluence, ports.SourceJira:
-		return "confluence"
+	case ports.SourceConfluence, ports.SourceJira, ports.SourceNotion:
+		return "confluence" // a team page with its own link
 	case ports.SourceIssueDecode:
 		return "issue"
 	default:
@@ -574,13 +574,17 @@ func Sources(include []string) ([]ports.ChunkSource, error) {
 		case "code":
 			out = append(out, ports.SourceCode)
 		case "docs":
-			out = append(out, ports.SourceGeneratedDoc, ports.SourceImportedDoc)
+			out = append(out, ports.SourceGeneratedDoc, ports.SourceImportedDoc, ports.SourceUpload)
 		case "confluence":
 			out = append(out, ports.SourceConfluence, ports.SourceJira)
+		case "notion":
+			out = append(out, ports.SourceNotion)
+		case "knowledge":
+			out = append(out, ports.SharedSources...)
 		case "issues":
 			out = append(out, ports.SourceIssueDecode)
 		default:
-			return nil, fmt.Errorf("unknown include %q (code, docs, confluence, issues)", i)
+			return nil, fmt.Errorf("unknown include %q (code, docs, confluence, notion, knowledge, issues)", i)
 		}
 	}
 	return out, nil

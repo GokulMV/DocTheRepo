@@ -40,15 +40,23 @@ func KnowledgePath(d ports.KnowledgeDoc) string {
 type KnowledgeApplied = ports.KnowledgeApplied
 
 func entityKind(src ports.ChunkSource) string {
-	if src == ports.SourceJira {
+	switch src {
+	case ports.SourceJira:
 		return palace.KindJiraIssue
+	case ports.SourceNotion:
+		return palace.KindNotionPage
+	case ports.SourceUpload:
+		return palace.KindDocument
 	}
 	return palace.KindConfluencePage
 }
 
 func shelfType(src ports.ChunkSource) gen.ShelfItemType {
-	if src == ports.SourceJira {
+	switch src {
+	case ports.SourceJira:
 		return gen.ShelfItemTypeJiraIssue
+	case ports.SourceNotion, ports.SourceUpload:
+		return gen.ShelfItemType("knowledge_doc")
 	}
 	return gen.ShelfItemTypeConfluencePage
 }
@@ -122,16 +130,21 @@ func (k *Knowledge) Apply(ctx context.Context, connectorID string, docs []ports.
 			if labels == nil {
 				labels = []string{}
 			}
+			body := "" // only uploads are shown by the Hub; synced pages link to their own site
+			if d.Source == ports.SourceUpload {
+				body = md
+			}
 			err = tx.QueryRow(ctx, `INSERT INTO knowledge_docs (id, connector_id, source, external_id, space, title, url, labels, status, done,
-					path, summary, content_hash, upstream_updated_at, synced_at)
-				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now())
+					path, summary, content_hash, upstream_updated_at, synced_at, body, uploaded_by)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now(), $15, $16)
 				ON CONFLICT (source, external_id) DO UPDATE SET connector_id = EXCLUDED.connector_id, space = EXCLUDED.space,
 					title = EXCLUDED.title, url = EXCLUDED.url, labels = EXCLUDED.labels, status = EXCLUDED.status, done = EXCLUDED.done,
 					path = EXCLUDED.path, summary = EXCLUDED.summary, content_hash = EXCLUDED.content_hash,
-					upstream_updated_at = EXCLUDED.upstream_updated_at, synced_at = now()
+					upstream_updated_at = EXCLUDED.upstream_updated_at, synced_at = now(), body = EXCLUDED.body,
+					uploaded_by = coalesce(EXCLUDED.uploaded_by, knowledge_docs.uploaded_by)
 				RETURNING id`,
 				ports.NewID(), connectorID, string(d.Source), d.ExternalID, d.Space, d.Title, d.URL, labels, d.Status, d.Done,
-				p, summarize(md), hash, updated).Scan(&docID)
+				p, summarize(md), hash, updated, body, strPtr(d.UploadedBy)).Scan(&docID)
 			if err != nil {
 				return fmt.Errorf("upsert knowledge doc %s: %w", d.ExternalID, err)
 			}
@@ -258,29 +271,104 @@ func (k *Knowledge) RemoveMissing(ctx context.Context, connectorID, space string
 		return 0, err
 	}
 	for _, g := range gs {
-		src := ports.ChunkSource(g.source)
-		err := k.s.InTx(ctx, func(q *gen.Queries, tx pgx.Tx) error {
-			if _, err := q.SoftDeleteSharedPath(ctx, gen.SoftDeleteSharedPathParams{Source: gen.ChunkSource(src), Path: g.path}); err != nil {
-				return err
-			}
-			if err := q.RetireSharedSourceEdges(ctx, g.path); err != nil {
-				return err
-			}
-			if err := q.RetireEntity(ctx, gen.RetireEntityParams{Kind: entityKind(src), Key: g.ext}); err != nil {
-				return err
-			}
-			if err := q.DeleteShelfItemsFor(ctx, gen.DeleteShelfItemsForParams{ItemType: shelfType(src), ItemID: g.id}); err != nil {
-				return err
-			}
-			if _, err := tx.Exec(ctx, `DELETE FROM knowledge_docs WHERE id = $1`, g.id); err != nil {
-				return err
-			}
-			_, err := q.BumpIndexVersion(ctx)
-			return err
-		})
-		if err != nil {
+		if err := k.removeDoc(ctx, g.id, ports.ChunkSource(g.source), g.ext, g.path); err != nil {
 			return 0, err
 		}
 	}
 	return len(gs), nil
+}
+
+// removeDoc deletes one document: chunks soft-deleted, links and entity retired, Library placements and
+// the row dropped.
+func (k *Knowledge) removeDoc(ctx context.Context, id string, src ports.ChunkSource, ext, path string) error {
+	return k.s.InTx(ctx, func(q *gen.Queries, tx pgx.Tx) error {
+		if _, err := q.SoftDeleteSharedPath(ctx, gen.SoftDeleteSharedPathParams{Source: gen.ChunkSource(src), Path: path}); err != nil {
+			return err
+		}
+		if err := q.RetireSharedSourceEdges(ctx, path); err != nil {
+			return err
+		}
+		if err := q.RetireEntity(ctx, gen.RetireEntityParams{Kind: entityKind(src), Key: ext}); err != nil {
+			return err
+		}
+		if err := q.DeleteShelfItemsFor(ctx, gen.DeleteShelfItemsForParams{ItemType: shelfType(src), ItemID: id}); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM knowledge_docs WHERE id = $1`, id); err != nil {
+			return err
+		}
+		_, err := q.BumpIndexVersion(ctx)
+		return err
+	})
+}
+
+// UploadConnectorName names the internal connector that holds uploaded documents.
+const UploadConnectorName = "Uploaded documents"
+
+// UploadConnector returns the internal connector uploaded documents belong to, creating it on first use.
+func (k *Knowledge) UploadConnector(ctx context.Context) (string, error) {
+	var id string
+	err := k.s.Pool.QueryRow(ctx, `SELECT id FROM connectors WHERE type = 'upload' ORDER BY created_at LIMIT 1`).Scan(&id)
+	if err == nil || !IsNoRows(err) {
+		return id, err
+	}
+	err = k.s.Pool.QueryRow(ctx, `INSERT INTO connectors (id, type, name, mode) VALUES ($1, 'upload', $2, 'poll')
+		ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id`, ports.NewID(), UploadConnectorName).Scan(&id)
+	return id, err
+}
+
+// Upload is an uploaded document as the Library lists it (Body only when one is read).
+type Upload struct {
+	ID         string    `json:"id"` // the external ID, stable for a collection + file name
+	Collection string    `json:"collection"`
+	Title      string    `json:"title"`
+	Summary    string    `json:"summary"`
+	UploadedBy string    `json:"uploaded_by,omitempty"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	Body       string    `json:"body,omitempty"`
+}
+
+// Uploads lists uploaded documents, newest first.
+func (k *Knowledge) Uploads(ctx context.Context) ([]Upload, error) {
+	rows, err := k.s.Pool.Query(ctx, `SELECT k.external_id, k.space, k.title, k.summary, coalesce(u.email, ''), k.synced_at
+		FROM knowledge_docs k LEFT JOIN users u ON u.id = k.uploaded_by
+		WHERE k.source = 'upload' ORDER BY k.synced_at DESC LIMIT 1000`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []Upload{}
+	for rows.Next() {
+		var u Upload
+		if err := rows.Scan(&u.ID, &u.Collection, &u.Title, &u.Summary, &u.UploadedBy, &u.UpdatedAt); err != nil {
+			return nil, err
+		}
+		out = append(out, u)
+	}
+	return out, rows.Err()
+}
+
+// GetUpload reads one uploaded document with its Markdown.
+func (k *Knowledge) GetUpload(ctx context.Context, id string) (Upload, error) {
+	var u Upload
+	err := k.s.Pool.QueryRow(ctx, `SELECT k.external_id, k.space, k.title, k.summary, coalesce(u.email, ''), k.synced_at, k.body
+		FROM knowledge_docs k LEFT JOIN users u ON u.id = k.uploaded_by
+		WHERE k.source = 'upload' AND k.external_id = $1`, id).Scan(&u.ID, &u.Collection, &u.Title, &u.Summary, &u.UploadedBy, &u.UpdatedAt, &u.Body)
+	if IsNoRows(err) {
+		return u, ports.ErrNotFound
+	}
+	return u, err
+}
+
+// DeleteUpload removes an uploaded document from search and the Library.
+func (k *Knowledge) DeleteUpload(ctx context.Context, id string) error {
+	var docID, path string
+	err := k.s.Pool.QueryRow(ctx, `SELECT id, path FROM knowledge_docs WHERE source = 'upload' AND external_id = $1`, id).Scan(&docID, &path)
+	if IsNoRows(err) {
+		return ports.ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	return k.removeDoc(ctx, docID, ports.SourceUpload, id, path)
 }

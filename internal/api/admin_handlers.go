@@ -329,7 +329,7 @@ func (h *adminHandlers) importDocs(w http.ResponseWriter, r *http.Request) {
 // --- connectors ---
 
 var connectorTypes = []string{"github", "gitlab", "cloudwatch", "firehose", "gcp", "pubsub", "datadog", "grafana", "alertmanager", "sentry",
-	"pagerduty", "opsgenie", "wiz", "splunk", "generic", "kafka", "sqs", "sns", "eventbridge", "kinesis", "pubsub_bus", "rabbitmq", "confluence", "jira"}
+	"pagerduty", "opsgenie", "wiz", "splunk", "generic", "kafka", "sqs", "sns", "eventbridge", "kinesis", "pubsub_bus", "rabbitmq", "confluence", "jira", "notion"}
 
 func (h *adminHandlers) listConnectors(w http.ResponseWriter, r *http.Request) {
 	cs, err := h.d.Connectors.ListPublic(r.Context())
@@ -589,7 +589,7 @@ func firstN(xs []string, n int) []string {
 // syncConnector enqueues a push for every tracked repo of the connector whose branch moved.
 func (h *adminHandlers) syncConnector(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if cc, err := h.d.Connectors.Get(r.Context(), id); err == nil && (cc.Type == "confluence" || cc.Type == "jira") {
+	if cc, err := h.d.Connectors.Get(r.Context(), id); err == nil && (cc.Type == "confluence" || cc.Type == "jira" || cc.Type == "notion") {
 		job, _, err := h.d.Queue.Enqueue(r.Context(), ports.NewJob{Type: ports.JobKnowledgeSync, SerialKey: "knowledge:" + id,
 			DedupeKey: "knowledge:" + id, CorrelationID: correlationFor(r), Payload: ingest.SyncPayload{ConnectorID: id}, MaxAttempts: 3})
 		if err != nil {

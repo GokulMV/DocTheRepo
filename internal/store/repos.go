@@ -390,7 +390,7 @@ func defaultPollSeconds(connectorType string) int64 {
 	switch connectorType {
 	case "kafka", "sqs", "sns", "eventbridge", "kinesis", "pubsub_bus", "rabbitmq":
 		return 30
-	case "confluence", "jira": // knowledge sources sync every 15 minutes (plan § 8.16)
+	case "confluence", "jira", "notion": // knowledge sources sync every 15 minutes (plan § 8.16)
 		return 900
 	case "wiz": // security issues change slowly; Wiz rate-limits its API per tenant
 		return 300

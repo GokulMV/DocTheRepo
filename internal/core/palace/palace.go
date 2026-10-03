@@ -28,6 +28,8 @@ const (
 	KindKnownIssue     = "known_issue"
 	KindConfluencePage = "confluence_page"
 	KindJiraIssue      = "jira_issue"
+	KindNotionPage     = "notion_page"
+	KindDocument       = "document" // an uploaded document
 	KindTeam           = "team"
 	KindPerson         = "person"
 )

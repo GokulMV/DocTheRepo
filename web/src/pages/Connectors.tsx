@@ -402,7 +402,7 @@ function AddSignal({ onCreated }: { onCreated: (c: { id: string; type: string; s
 
 function AddKnowledge({ onCreated }: { onCreated: (type: string) => void }) {
   const [open, setOpen] = useState(false);
-  const [type, setType] = useState<'confluence' | 'jira'>('confluence');
+  const [type, setType] = useState<'confluence' | 'jira' | 'notion'>('confluence');
   const spec = knowledgeSpec(type)!;
   const [name, setName] = useState('');
   const [config, setConfig] = useState<Record<string, string>>({});
@@ -411,7 +411,7 @@ function AddKnowledge({ onCreated }: { onCreated: (type: string) => void }) {
   return (
     <>
       <Button variant="secondary" onClick={() => setOpen(true)}>Add knowledge source</Button>
-      <Dialog open={open} onOpenChange={setOpen} title="Add a knowledge source" description="Confluence spaces and Jira projects, synced read-only for answers, decodes, the Library, and known issues.">
+      <Dialog open={open} onOpenChange={setOpen} title="Add a knowledge source" description="Confluence spaces, Jira projects and Notion pages, synced read-only for answers, decodes, the Library, and known issues. To add files, use Library → Upload documents.">
         <form
           className="space-y-3"
           onSubmit={async (e) => {
@@ -425,7 +425,7 @@ function AddKnowledge({ onCreated }: { onCreated: (type: string) => void }) {
           }}
         >
           <Field label="Source" hint={spec.help}>
-            <Select value={type} onChange={(e) => { setType(e.target.value as 'confluence' | 'jira'); setConfig({}); }}>
+            <Select value={type} onChange={(e) => { setType(e.target.value as 'confluence' | 'jira' | 'notion'); setConfig({}); }}>
               {KNOWLEDGE.map((k) => <option key={k.type} value={k.type}>{k.label}</option>)}
             </Select>
           </Field>
@@ -435,7 +435,7 @@ function AddKnowledge({ onCreated }: { onCreated: (type: string) => void }) {
               <Input value={config[c.key] ?? ''} required={c.required} placeholder={c.placeholder} onChange={(e) => setConfig({ ...config, [c.key]: e.target.value })} />
             </Field>
           ))}
-          <Field label="API token" hint="Cloud: an API token for the e-mail above · Data Center: a personal access token. Stored encrypted; never shown again.">
+          <Field label={spec.token?.label ?? 'API token'} hint={spec.token?.hint ?? 'Cloud: an API token for the e-mail above · Data Center: a personal access token. Stored encrypted; never shown again.'}>
             <Input type="password" required value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" />
           </Field>
           <ErrorNote error={create.error} />

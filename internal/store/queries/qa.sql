@@ -6,7 +6,7 @@ FROM chunks c,
      (SELECT websearch_to_tsquery('english', sqlc.arg(question)::text) || websearch_to_tsquery('simple', sqlc.arg(question)::text) AS query) q
 WHERE c.deleted_at IS NULL AND c.tsv @@ q.query
   AND (sqlc.arg(all_repos)::boolean OR c.repo_id = ANY(sqlc.arg(repo_ids)::uuid[])
-       OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira')))
+       OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira', 'notion', 'upload')))
   AND (cardinality(sqlc.arg(sources)::text[]) = 0 OR c.source::text = ANY(sqlc.arg(sources)::text[]))
 ORDER BY rank DESC, c.chunk_id
 LIMIT sqlc.arg(lim);
@@ -15,7 +15,7 @@ LIMIT sqlc.arg(lim);
 SELECT * FROM chunks
 WHERE chunk_id = ANY(sqlc.arg(ids)::text[]) AND deleted_at IS NULL
   AND (sqlc.arg(all_repos)::boolean OR repo_id = ANY(sqlc.arg(repo_ids)::uuid[])
-       OR (repo_id IS NULL AND source IN ('confluence', 'jira')));
+       OR (repo_id IS NULL AND source IN ('confluence', 'jira', 'notion', 'upload')));
 
 -- name: SymbolNeighbors :many
 -- One-hop symbol neighbours (callers and callees) of the given symbol entity keys.
@@ -119,7 +119,7 @@ LIMIT sqlc.arg(lim);
 SELECT * FROM chunks c
 WHERE c.deleted_at IS NULL AND (c.path = sqlc.arg(path)::text OR c.path LIKE '%/' || sqlc.arg(path)::text)
   AND (sqlc.arg(all_repos)::boolean OR c.repo_id = ANY(sqlc.arg(repo_ids)::uuid[])
-       OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira')))
+       OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira', 'notion', 'upload')))
   AND (cardinality(sqlc.arg(sources)::text[]) = 0 OR c.source::text = ANY(sqlc.arg(sources)::text[]))
 ORDER BY c.scope, c.path, c.chunk_id
 LIMIT sqlc.arg(lim);
@@ -129,7 +129,7 @@ LIMIT sqlc.arg(lim);
 SELECT c.scope, c.path, count(*)::int AS chunks FROM chunks c
 WHERE c.deleted_at IS NULL AND c.path ILIKE '%' || sqlc.arg(contains)::text || '%'
   AND (sqlc.arg(all_repos)::boolean OR c.repo_id = ANY(sqlc.arg(repo_ids)::uuid[])
-       OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira')))
+       OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira', 'notion', 'upload')))
   AND (cardinality(sqlc.arg(sources)::text[]) = 0 OR c.source::text = ANY(sqlc.arg(sources)::text[]))
 GROUP BY c.scope, c.path
 ORDER BY c.scope, c.path

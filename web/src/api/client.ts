@@ -63,6 +63,15 @@ export async function request<T>(method: string, path: string, body?: unknown, i
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
+/** postForm sends multipart form data (file uploads); the browser sets the boundary. */
+export async function postForm<T>(path: string, form: FormData): Promise<T> {
+  const headers = new Headers();
+  if (csrfToken) headers.set('X-CSRF-Token', csrfToken);
+  const res = await fetch(API + path, { method: 'POST', headers, credentials: 'same-origin', body: form });
+  if (!res.ok) throw await toApiError(res);
+  return (await res.json()) as T;
+}
+
 export const api = {
   get: <T>(path: string) => request<T>('GET', path),
   post: <T>(path: string, body?: unknown) => request<T>('POST', path, body ?? {}),

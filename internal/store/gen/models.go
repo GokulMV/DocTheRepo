@@ -64,6 +64,8 @@ const (
 	ChunkSourceConfluence   ChunkSource = "confluence"
 	ChunkSourceJira         ChunkSource = "jira"
 	ChunkSourceIssueDecode  ChunkSource = "issue_decode"
+	ChunkSourceNotion       ChunkSource = "notion"
+	ChunkSourceUpload       ChunkSource = "upload"
 )
 
 func (e *ChunkSource) Scan(src interface{}) error {
@@ -171,6 +173,8 @@ const (
 	ConnectorTypeRabbitmq     ConnectorType = "rabbitmq"
 	ConnectorTypeConfluence   ConnectorType = "confluence"
 	ConnectorTypeJira         ConnectorType = "jira"
+	ConnectorTypeNotion       ConnectorType = "notion"
+	ConnectorTypeUpload       ConnectorType = "upload"
 )
 
 func (e *ConnectorType) Scan(src interface{}) error {
@@ -627,6 +631,8 @@ const (
 	LlmProviderKindOllama       LlmProviderKind = "ollama"
 	LlmProviderKindExternalCli  LlmProviderKind = "external_cli"
 	LlmProviderKindJev          LlmProviderKind = "jev"
+	LlmProviderKindOpencode     LlmProviderKind = "opencode"
+	LlmProviderKindGithubModels LlmProviderKind = "github_models"
 )
 
 func (e *LlmProviderKind) Scan(src interface{}) error {
@@ -889,6 +895,7 @@ const (
 	ShelfItemTypeConfluencePage ShelfItemType = "confluence_page"
 	ShelfItemTypeKnownIssue     ShelfItemType = "known_issue"
 	ShelfItemTypeJiraIssue      ShelfItemType = "jira_issue"
+	ShelfItemTypeKnowledgeDoc   ShelfItemType = "knowledge_doc"
 )
 
 func (e *ShelfItemType) Scan(src interface{}) error {
@@ -1563,6 +1570,8 @@ type KnowledgeDoc struct {
 	ContentHash       string      `json:"content_hash"`
 	UpstreamUpdatedAt *time.Time  `json:"upstream_updated_at"`
 	SyncedAt          time.Time   `json:"synced_at"`
+	Body              string      `json:"body"`
+	UploadedBy        *string     `json:"uploaded_by"`
 }
 
 type KnownIssue struct {

@@ -103,7 +103,7 @@ WHERE id = sqlc.arg(id);
 -- name: ListConnectorsPublic :many
 SELECT id, type, name, config, mode, extract(epoch FROM poll_interval)::bigint AS poll_seconds, enabled, health, last_error, last_sync_at,
        creds_ciphertext IS NOT NULL AS has_credentials, webhook_secret_ct IS NOT NULL AS has_webhook_secret, created_at
-FROM connectors ORDER BY name;
+FROM connectors WHERE type::text <> 'upload' ORDER BY name; -- the internal holder of uploaded documents is not a connector people manage
 
 -- name: UpdateConnector :execrows
 UPDATE connectors SET name = coalesce(sqlc.narg(name), name), config = coalesce(sqlc.narg(config), config),

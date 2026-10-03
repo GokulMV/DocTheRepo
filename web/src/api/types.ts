@@ -170,6 +170,8 @@ export interface ShelfEntry {
   repo_id?: string;
   pinned: boolean;
   note?: string;
+  /** A team document's origin: confluence, jira, notion, upload. */
+  source?: string;
 }
 
 export type PushMode = 'direct' | 'pr_auto_merge' | 'pr_with_approver';

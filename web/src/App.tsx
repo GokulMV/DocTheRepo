@@ -13,6 +13,7 @@ import Ask from '@/pages/Ask';
 import Docs from '@/pages/Docs';
 import Architecture from '@/pages/Architecture';
 import Library from '@/pages/Library';
+import UploadView from '@/pages/Uploads';
 import Repos from '@/pages/Repos';
 import Connectors from '@/pages/Connectors';
 import Providers from '@/pages/Providers';
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="/architecture" element={<Architecture />} />
           <Route path="/architecture/:repoId" element={<Architecture />} />
           <Route path="/library" element={<Library />} />
+          <Route path="/library/uploads/:id" element={<UploadView />} />
           <Route path="/library/:slug" element={<Library />} />
           <Route path="/inbox" element={<Inbox />} />
           <Route path="/inbox/:id" element={<IssueDetail />} />
