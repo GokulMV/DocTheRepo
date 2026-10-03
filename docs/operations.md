@@ -103,6 +103,27 @@ Two things together make a complete backup. Neither is useful without the other:
 | `localfile` | The key file (`DTH_LOCAL_KEY_FILE`; quickstart: `~/.dth-quickstart/master.key`, `dth up`: the `hubdata` volume). Store a copy offline, apart from the database backup. |
 | `awskms`, `gcpkms` | Nothing to copy, but **never schedule the key for deletion**. Keep deletion protection on. Automatic rotation is safe (old key versions keep decrypting). |
 
+**Rotating the master key** (or moving from a key file to KMS, or between KMS keys). `dth-hub rotate-key`
+re-wraps every stored secret's data key under the new key in one transaction; the secrets themselves are
+never decrypted. Run it where the Hub runs, with the Hub's own environment:
+
+1. Back up the database and the current key.
+2. Stop the Hub (`docker compose stop hub`, or scale the deployments to 0), so nothing saves a secret
+   under the old key meanwhile. If something did, running the command again moves it.
+3. Run one of:
+   ```sh
+   dth-hub rotate-key --dry-run --to-key-file /data/master-2.key   # counts what would move
+   dth-hub rotate-key --to-key-file /data/master-2.key             # a new local key file (created 0600)
+   DTH_NEW_LOCAL_KEY=$(openssl rand -base64 32) dth-hub rotate-key # Kubernetes: a key for a new Secret
+   dth-hub rotate-key --to-awskms arn:aws:kms:…:key/…               # or --to-gcpkms projects/…/cryptoKeys/…
+   ```
+   For example `docker compose run --rm hub /dth-hub rotate-key --to-key-file /data/master-2.key`.
+4. Point the Hub at the new key (`DTH_LOCAL_KEY_FILE`, the `DTH_LOCAL_KEY` Secret, or
+   `DTH_SECRETS_PROVIDER` and `DTH_KMS_KEY_ID`; the command prints which) and start it.
+5. Once it starts cleanly, back up the new key and destroy the old one.
+
+The browser sealing key is separate: rotate it with `POST /api/v1/seal/rotate` ([security.md](security.md)).
+
 **Database backups:**
 - **Managed (RDS, Cloud SQL):** keep automated backups and point-in-time recovery on. The Terraform
   modules enable them (`db_backup_retention_days`, Cloud SQL backups). Take a manual snapshot before every
