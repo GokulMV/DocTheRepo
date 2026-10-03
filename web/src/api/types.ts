@@ -86,6 +86,8 @@ export interface Message {
   model?: string;
   usage?: { input_tokens: number; output_tokens: number; cost_usd: number };
   cached: boolean;
+  /** The first search found too little, so Ask looked further. */
+  investigated?: boolean;
   feedback?: 'up' | 'down';
   created_at: string;
 }

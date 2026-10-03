@@ -219,9 +219,9 @@ func (q *Queries) GetThread(ctx context.Context, arg GetThreadParams) (QaThread,
 }
 
 const insertMessage = `-- name: InsertMessage :exec
-INSERT INTO qa_messages (id, thread_id, role, content, citations, provider, model, input_tokens, output_tokens, cost_usd, cached)
+INSERT INTO qa_messages (id, thread_id, role, content, citations, provider, model, input_tokens, output_tokens, cost_usd, cached, investigated)
 VALUES ($1, $2, $3, $4, $5, $6, $7,
-        $8, $9, $10, $11)
+        $8, $9, $10, $11, $12)
 `
 
 type InsertMessageParams struct {
@@ -236,6 +236,7 @@ type InsertMessageParams struct {
 	OutputTokens int64           `json:"output_tokens"`
 	CostUsd      float64         `json:"cost_usd"`
 	Cached       bool            `json:"cached"`
+	Investigated bool            `json:"investigated"`
 }
 
 func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) error {
@@ -251,6 +252,7 @@ func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) er
 		arg.OutputTokens,
 		arg.CostUsd,
 		arg.Cached,
+		arg.Investigated,
 	)
 	return err
 }
@@ -542,7 +544,7 @@ func (q *Queries) SymbolNeighbors(ctx context.Context, arg SymbolNeighborsParams
 }
 
 const threadMessages = `-- name: ThreadMessages :many
-SELECT id, thread_id, role, content, citations, provider, model, input_tokens, output_tokens, cost_usd, cached, feedback, feedback_comment, created_at FROM qa_messages WHERE thread_id = $1 ORDER BY created_at, (role <> 'user'), id
+SELECT id, thread_id, role, content, citations, provider, model, input_tokens, output_tokens, cost_usd, cached, feedback, feedback_comment, created_at, investigated FROM qa_messages WHERE thread_id = $1 ORDER BY created_at, (role <> 'user'), id
 `
 
 // A question and its answer are saved in one transaction (same created_at): the question comes first.
@@ -570,6 +572,7 @@ func (q *Queries) ThreadMessages(ctx context.Context, threadID string) ([]QaMess
 			&i.Feedback,
 			&i.FeedbackComment,
 			&i.CreatedAt,
+			&i.Investigated,
 		); err != nil {
 			return nil, err
 		}
