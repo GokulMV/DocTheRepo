@@ -200,9 +200,11 @@ type Message struct {
 	Usage     map[string]any  `json:"usage,omitempty"`
 	Cached    bool            `json:"cached"`
 	// Investigated: the first search found too little, so Ask looked further for this answer.
-	Investigated bool      `json:"investigated,omitempty"`
-	Feedback     *string   `json:"feedback,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
+	Investigated bool `json:"investigated,omitempty"`
+	// Sift: how the source picker trimmed this answer's sources (rag.SiftSummary), when it ran.
+	Sift      json.RawMessage `json:"sift,omitempty"`
+	Feedback  *string         `json:"feedback,omitempty"`
+	CreatedAt time.Time       `json:"created_at"`
 }
 
 // CreateThread starts a thread.
@@ -237,7 +239,7 @@ func (q *QA) GetThread(ctx context.Context, userID, id string, withMessages bool
 	}
 	out.Messages = make([]Message, len(rows))
 	for i, m := range rows {
-		msg := Message{ID: m.ID, Role: string(m.Role), Content: m.Content, Citations: m.Citations, Model: m.Model, Cached: m.Cached, Investigated: m.Investigated, CreatedAt: m.CreatedAt}
+		msg := Message{ID: m.ID, Role: string(m.Role), Content: m.Content, Citations: m.Citations, Model: m.Model, Cached: m.Cached, Investigated: m.Investigated, Sift: m.Sift, CreatedAt: m.CreatedAt}
 		if m.Role == gen.QaRoleAssistant {
 			msg.Usage = map[string]any{"input_tokens": m.InputTokens, "output_tokens": m.OutputTokens, "cost_usd": m.CostUsd}
 		}
@@ -279,13 +281,17 @@ func (q *QA) DeleteThread(ctx context.Context, userID, id string) error {
 func (q *QA) AddExchange(ctx context.Context, threadID, question string, a rag.Answer) (string, error) {
 	aid := ports.NewID()
 	cits, _ := json.Marshal(a.Citations)
+	var sift json.RawMessage
+	if a.Sift != nil {
+		sift, _ = json.Marshal(a.Sift)
+	}
 	err := q.s.InTx(ctx, func(tq *gen.Queries, _ pgx.Tx) error {
 		if err := tq.InsertMessage(ctx, gen.InsertMessageParams{ID: ports.NewID(), ThreadID: threadID, Role: gen.QaRoleUser, Content: question, Citations: []byte("[]")}); err != nil {
 			return err
 		}
 		if err := tq.InsertMessage(ctx, gen.InsertMessageParams{ID: aid, ThreadID: threadID, Role: gen.QaRoleAssistant, Content: a.Text, Citations: cits,
 			Provider: a.Provider, Model: a.Model, InputTokens: a.Usage.InputTokens, OutputTokens: a.Usage.OutputTokens, CostUsd: a.CostUSD, Cached: a.Cached,
-			Investigated: a.Investigated}); err != nil {
+			Investigated: a.Investigated, Sift: sift}); err != nil {
 			return err
 		}
 		return tq.TouchThread(ctx, threadID)

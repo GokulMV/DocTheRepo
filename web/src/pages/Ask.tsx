@@ -3,12 +3,12 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { API, ApiError, api, getCSRF, toApiError } from '@/api/client';
 import { keys, useRepos, useThread, useThreads } from '@/api/hooks';
-import type { AskResponse, Citation, Message } from '@/api/types';
+import type { AskResponse, Citation, Message, SiftSummary } from '@/api/types';
 import { Bug, Check, ChevronDown, FolderGit2, GitBranch, History, Network, Send, ShieldCheck, Sparkles, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { Markdown } from '@/components/Markdown';
 import { Badge, Button, ErrorNote, cx } from '@/components/ui';
 import { readSSE } from '@/lib/sse';
-import { usd } from '@/lib/format';
+import { num, usd } from '@/lib/format';
 
 const INCLUDES = [
   { id: 'code', label: 'Code' },
@@ -56,6 +56,40 @@ function NotFoundTips() {
   );
 }
 
+/** siftLabel says in a few words what the source picker did for one answer (empty when nothing to say). */
+export function siftLabel(s: SiftSummary): string {
+  const parts: string[] = [];
+  if (s.kept < s.candidates) parts.push(`Read ${s.kept} of ${s.candidates} sources`);
+  if (s.explored) parts.push(`explored ${s.explored} file${s.explored === 1 ? '' : 's'}`);
+  if (s.tokens_saved > 0) parts.push(`${num(s.tokens_saved)} tokens saved${s.saved_usd > 0 ? ` (${usd(s.saved_usd)})` : ''}`);
+  const text = parts.join(' · ');
+  return text ? text[0].toUpperCase() + text.slice(1) : '';
+}
+
+function siftDetail(s: SiftSummary): string {
+  const lines = [
+    `The source picker judged ${s.candidates} retrieved source${s.candidates === 1 ? '' : 's'} and sent ${s.kept} to the answering model.`,
+    s.tokens_saved > 0 ? `${s.tokens_saved.toLocaleString()} input tokens not sent to the answering model.` : '',
+    s.explored ? `It explored the index and read ${s.explored} file(s) before answering.` : '',
+    `Judge${s.model ? ` (${s.model})` : ''}: ${s.judge_tokens.toLocaleString()} tokens, ${usd(s.cost_usd)}${s.calibrated ? ', calibrated' : ', self-reported probabilities'}.`,
+    `Net saving: ${s.saved_usd >= 0 ? usd(s.saved_usd) : `-${usd(-s.saved_usd)}`}.`,
+  ];
+  return lines.filter(Boolean).join('\n');
+}
+
+/** SiftTotal sums what source picking saved across a conversation. */
+export function SiftTotal({ messages }: { messages: Message[] }) {
+  const sifted = messages.filter((m) => m.sift);
+  const tokens = sifted.reduce((n, m) => n + (m.sift?.tokens_saved ?? 0), 0);
+  if (tokens <= 0) return null;
+  const net = sifted.reduce((n, m) => n + (m.sift?.saved_usd ?? 0), 0);
+  return (
+    <p className="text-xs text-slate-500" title="Ask sends the answering model only the sources a cheaper judge picked. Totals for this conversation.">
+      Source picking saved {num(tokens)} tokens{net > 0 ? ` (${usd(net)})` : ''} in this conversation
+    </p>
+  );
+}
+
 function Feedback({ m }: { m: Message }) {
   const [value, setValue] = useState(m.feedback);
   const send = async (v: 'up' | 'down') => {
@@ -75,6 +109,7 @@ function Feedback({ m }: { m: Message }) {
       </button>
       {m.cached && <Badge>Cached</Badge>}
       {m.investigated && <span title="The first search found too little, so Ask looked further"><Badge tone="blue">Looked further</Badge></span>}
+      {m.sift && siftLabel(m.sift) && <span title={siftDetail(m.sift)}><Badge tone="green">{siftLabel(m.sift)}</Badge></span>}
       {m.usage && m.usage.cost_usd > 0 && <span>{usd(m.usage.cost_usd)}</span>}
     </div>
   );
@@ -301,7 +336,12 @@ export default function Ask() {
                 </button>
               </div>
             )}
-            {threadId && thread.data && <h2 className="pt-2 text-lg font-semibold tracking-tight">{thread.data.title}</h2>}
+            {threadId && thread.data && (
+              <div className="pt-2">
+                <h2 className="text-lg font-semibold tracking-tight">{thread.data.title}</h2>
+                <SiftTotal messages={messages} />
+              </div>
+            )}
             {messages.map((m) => (
               <div key={m.id} className={cx(m.role === 'user' ? 'flex justify-end' : '')}>
                 {m.role === 'user' ? (

@@ -69,6 +69,9 @@ Ask source picking**.
 
 ## See what it did
 
+- **On the Ask page**, each answer the picker trimmed carries a green note such as *Read 3 of 20 sources ·
+  9.4k tokens saved ($0.05)*. Hover it for the judge's model, tokens and cost and the net saving. A
+  conversation's title shows the total saved so far. These are kept with the conversation.
 - The Ask API's `done` event carries `sift`: candidates, kept, tokens not sent to the answering model, the
   judge's tokens and cost, and files explored.
 - **Analytics** shows the judge's usage under *Ask source picking*. The net saving (answering-model input

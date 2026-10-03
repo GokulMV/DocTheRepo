@@ -62,6 +62,24 @@ export interface Citation {
   chunk_id: string;
 }
 
+/** How Ask's source picker trimmed an answer's sources before the answering model read them. */
+export interface SiftSummary {
+  candidates: number;
+  kept: number;
+  /** Answering-model input tokens not sent. */
+  tokens_saved: number;
+  /** Tokens the cheap judge read. */
+  judge_tokens: number;
+  /** The judge's cost. */
+  cost_usd: number;
+  /** Answering-model cost not spent, minus the judge's cost (negative when picking cost more). */
+  saved_usd: number;
+  calibrated: boolean;
+  /** Files read while exploring the index. */
+  explored?: number;
+  model?: string;
+}
+
 export interface AskResponse {
   thread_id: string;
   message_id: string;
@@ -69,6 +87,7 @@ export interface AskResponse {
   citations: Citation[];
   cached: boolean;
   usage: { input_tokens: number; output_tokens: number; cost_usd: number };
+  sift?: SiftSummary;
 }
 
 export interface Thread {
@@ -90,6 +109,8 @@ export interface Message {
   cached: boolean;
   /** The first search found too little, so Ask looked further. */
   investigated?: boolean;
+  /** How the source picker trimmed this answer's sources, when it ran. */
+  sift?: SiftSummary;
   feedback?: 'up' | 'down';
   created_at: string;
 }
