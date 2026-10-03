@@ -28,6 +28,8 @@ const (
 	FeatureTriage     = "triage"
 	FeatureEmbedding  = "embedding"
 	FeatureSuggest    = "suggest"
+	// FeatureSecurity is the security scans' route (attack, verify, fix); scans use qa when it is unset.
+	FeatureSecurity = "security"
 )
 
 // Route is a feature's configured provider and model.

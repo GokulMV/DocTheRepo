@@ -14,6 +14,7 @@ import Docs from '@/pages/Docs';
 import Architecture from '@/pages/Architecture';
 import Library from '@/pages/Library';
 import UploadView from '@/pages/Uploads';
+import Security from '@/pages/Security';
 import Repos from '@/pages/Repos';
 import Connectors from '@/pages/Connectors';
 import Providers from '@/pages/Providers';
@@ -63,6 +64,8 @@ export default function App() {
           <Route path="/architecture/:repoId" element={<Architecture />} />
           <Route path="/library" element={<Library />} />
           <Route path="/library/uploads/:id" element={<UploadView />} />
+          <Route path="/security" element={<Security />} />
+          <Route path="/security/:repoId" element={<Security />} />
           <Route path="/library/:slug" element={<Library />} />
           <Route path="/inbox" element={<Inbox />} />
           <Route path="/inbox/:id" element={<IssueDetail />} />

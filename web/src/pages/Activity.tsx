@@ -8,7 +8,7 @@ import { JobProgressBar } from '@/components/JobProgressBar';
 import { capFirst, featureLabel, jobLabel, sentence } from '@/lib/labels';
 
 const STATUSES = ['', 'queued', 'processing', 'done', 'failed', 'aborted', 'spend_blocked', 'pending_approval', 'needs_human', 'dead'];
-const TYPES = ['', 'code_push', 'import_docs', 'reindex', 'pr_review'];
+const TYPES = ['', 'code_push', 'import_docs', 'reindex', 'pr_review', 'knowledge_sync', 'security_scan', 'security_fix'];
 
 function JobDetail({ job, onClose }: { job: Job; onClose: () => void }) {
   const me = useMe();

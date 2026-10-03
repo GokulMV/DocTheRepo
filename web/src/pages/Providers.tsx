@@ -19,6 +19,7 @@ const FEATURE_HELP: Record<string, string> = {
   decode: 'Explains new errors and alerts',
   suggest: 'Proposes known-issue rules from pasted text',
   decide: 'Typed yes/no decisions behind confidence gates (e.g. skip decoding obvious noise); TypeSafe Jev or any chat model',
+  security: 'Attacks, verifies and fixes code on the Security page (uses the Ask model when unset); a strong model finds more',
 };
 
 type RouteOut = { docs_queued?: number };

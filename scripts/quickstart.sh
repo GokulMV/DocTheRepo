@@ -532,7 +532,7 @@ if [ -n "${ANTHROPIC_API_KEY:-}${OPENAI_API_KEY:-}" ]; then
       pid="$(ensure_provider anthropic Anthropic "$ANTHROPIC_API_KEY")"
       if [ -n "$pid" ]; then
         main="${DTH_ANTHROPIC_MODEL:-claude-sonnet-5-5}"; fast="${DTH_ANTHROPIC_FAST_MODEL:-claude-haiku-4-5-20251001}"
-        for f in docgen qa decode suggest; do route "$f" "$pid" "$main" || warn "could not set route $f"; done
+        for f in docgen qa decode suggest security; do route "$f" "$pid" "$main" || warn "could not set route $f"; done
         route triage "$pid" "$fast" || warn "could not set route triage"
         route docgen_fast "$pid" "$fast" || warn "could not set route docgen_fast"
       else warn "could not create the Anthropic provider"

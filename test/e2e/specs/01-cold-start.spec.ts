@@ -57,7 +57,7 @@ test('cold start: connect, push, docs PR merged, cited answer', async ({ page })
   await add.getByLabel('Display name').fill('Team LLM');
   await add.getByRole('button', { name: 'Add provider' }).click();
   await expect(add.getByText('Team LLM is ready')).toBeVisible();
-  await expect(add.getByText(/It now handles: Docs generation, Docs \(short code\), Ask \(Q&A\), Error explanations, Change triage, Known-issue suggestions, Decisions, Embeddings/)).toBeVisible();
+  await expect(add.getByText(/It now handles: Docs generation, Docs \(short code\), Ask \(Q&A\), Error explanations, Change triage, Known-issue suggestions, Decisions, Security scans, Embeddings/)).toBeVisible();
   await add.getByRole('button', { name: 'Done' }).click();
   await expect(page.getByRole('cell', { name: 'Team LLM' }).first()).toBeVisible();
   await page.getByLabel('Model to test').fill('stub');
