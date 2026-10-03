@@ -14,6 +14,7 @@ export function capFirst(s: string): string {
 /** What each routed feature is called in the UI. */
 export const FEATURE_LABELS: Record<string, string> = {
   docgen: 'Docs generation',
+  docgen_fast: 'Docs (short code)',
   qa: 'Ask (Q&A)',
   decode: 'Error explanations',
   triage: 'Change triage',

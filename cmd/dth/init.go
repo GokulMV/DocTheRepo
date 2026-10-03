@@ -359,9 +359,9 @@ func runWizard(w *wizard) (settings.Document, func(string) string, error) {
 		}
 		doc.Providers = append(doc.Providers, prov)
 		doc.Routes = map[string]settings.Route{}
-		for _, f := range []string{"docgen", "qa", "decode", "suggest", "triage"} {
+		for _, f := range []string{"docgen", "docgen_fast", "qa", "decode", "suggest", "triage"} {
 			md := model
-			if f == "triage" && m.fast != "" {
+			if (f == "triage" || f == "docgen_fast") && m.fast != "" {
 				md = m.fast
 			}
 			doc.Routes[f] = settings.Route{Provider: prov.Name, Model: md}

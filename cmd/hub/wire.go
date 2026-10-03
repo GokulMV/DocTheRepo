@@ -36,6 +36,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/core/aggregate"
 	"github.com/GokulMV/DocTheRepo/internal/core/decode"
 	"github.com/GokulMV/DocTheRepo/internal/core/docgen"
+	"github.com/GokulMV/DocTheRepo/internal/core/docrouter"
 	"github.com/GokulMV/DocTheRepo/internal/core/grammars"
 	"github.com/GokulMV/DocTheRepo/internal/core/library"
 	"github.com/GokulMV/DocTheRepo/internal/core/llmgateway"
@@ -251,7 +252,12 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 	a.pipe = &pipeline.Pipeline{
 		Progress: func(ctx context.Context, jobID string, pr ports.JobProgress) { _ = q.SetProgress(ctx, jobID, pr) }, Repos: repos, Chunks: a.chunks, Graph: store.NewGraph(st), Docs: a.docs, Savings: store.NewSavings(st),
 		Hosts: a.hosts.Host, Lander: &push.Dispatcher{PRs: prs, Lifecycle: a.sweeper}, GW: gw, DocGen: &docgen.Generator{GW: gw},
-		Indexer: indexer, Grammars: reg, Log: log.With("component", "pipeline")}
+		Indexer: indexer, Grammars: reg, Log: log.With("component", "pipeline"),
+		DocCache: store.NewDocCache(st), DocMode: docrouter.ParseMode(cfg.Docs.GenerationMode),
+		ModeSetting: func(ctx context.Context) string {
+			v, _ := store.NewAppSettings(st).Get(ctx, api.DocModeKey)
+			return v
+		}}
 	a.arch = store.NewArchitecture(st)
 	a.sealKeys = store.NewSealKeys(st, box)
 	a.archSync = &ingest.ArchitectureSync{Repos: repos, Hosts: a.hosts.Host, Store: a.arch, Log: log.With("component", "architecture")}
@@ -313,6 +319,10 @@ func (a *app) tasks() []scheduler.Task {
 		{Name: "session_gc", Every: time.Hour, Fn: a.auth.GCSessions},
 		{Name: "answer_cache_gc", Every: time.Hour, Fn: a.qa.GCCache},
 		{Name: "reload_spend_guard", Every: time.Minute, Fn: a.reloadGuard},
+		{Name: "doc_cache_gc", Every: 24 * time.Hour, Fn: func(ctx context.Context) error {
+			_, err := store.NewDocCache(a.st).GC(ctx, time.Now().Add(-180*24*time.Hour))
+			return err
+		}},
 		{Name: "chunk_gc", Every: 24 * time.Hour, Fn: func(ctx context.Context) error {
 			ids, err := a.chunks.GC(ctx, manifest.GCCutoff(time.Now(), a.cfg.Retention.ChunkGCDays))
 			if err != nil || len(ids) == 0 {
@@ -365,7 +375,7 @@ func (a *app) v1Routes() []func(chi.Router) {
 			}
 			return codehost.Build(cc)
 		}, DryRun: a.pipe.CodePush,
-		RegisterWebhook: a.registerWebhook,
+		RegisterWebhook: a.registerWebhook, Settings: store.NewAppSettings(a.st), DefaultDocMode: string(docrouter.ParseMode(a.cfg.Docs.GenerationMode)),
 		GenerateDocs: func(ctx context.Context, repoID, reason string) (string, error) {
 			job, _, err := a.q.Enqueue(ctx, ports.NewJob{Type: ports.JobCodePush, RepoID: repoID, SerialKey: "repo:" + repoID,
 				DedupeKey: "docs-all:" + repoID, Payload: pipeline.CodePushPayload{RepoID: repoID, Full: true, Reason: reason}})

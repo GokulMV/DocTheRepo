@@ -15,6 +15,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/core/chunker"
 	"github.com/GokulMV/DocTheRepo/internal/core/docassembly"
 	"github.com/GokulMV/DocTheRepo/internal/core/docgen"
+	"github.com/GokulMV/DocTheRepo/internal/core/docrouter"
 	"github.com/GokulMV/DocTheRepo/internal/core/llmgateway"
 	"github.com/GokulMV/DocTheRepo/internal/core/manifest"
 	"github.com/GokulMV/DocTheRepo/internal/core/palace"
@@ -59,7 +60,9 @@ type CodePushResult struct {
 	Embedded        int               `json:"embedded"`
 	Landing         *ports.LandResult `json:"landing,omitempty"`
 	EstimatedTokens int64             `json:"estimated_tokens,omitempty"`
-	Notes           []string          `json:"notes,omitempty"`
+	// Router counts how targets got their docs: unchanged (kept), reuse, comment, fast, full.
+	Router map[string]int `json:"router,omitempty"`
+	Notes  []string       `json:"notes,omitempty"`
 }
 
 // fileWork is one changed source file through the pipeline.
@@ -75,6 +78,11 @@ type fileWork struct {
 	// rekey maps old → new chunks for a structurally unchanged rename.
 	rekey   map[string]ports.Chunk
 	targets []docgen.Target
+	// pre holds docs written without a call (reused or from a comment); call is what the model documents,
+	// through feature (docgen or docgen_fast).
+	pre     map[string]string
+	call    []docgen.Target
+	feature string
 	gen     docgen.Result
 }
 
@@ -423,8 +431,13 @@ func (p *Pipeline) chunk(ctx context.Context, repo ports.RepoConfig, head string
 
 var goModuleRE = regexp.MustCompile(`(?m)^module\s+(\S+)`)
 
-// generate builds scoped context and calls docgen per file. All paid calls happen here, before any
-// write, so a spend block leaves nothing half-done.
+// generate decides how each target gets its doc, builds scoped context and calls docgen per file. All
+// paid calls happen here, before any write, so a spend block leaves nothing half-done.
+//
+// Before anything is spent, plain code routes every target (see docrouter): a full run keeps docs of code
+// that has not changed since they were written; code documented before (a retry, a revert, moved code)
+// reuses that doc; tiny code with a doc comment uses the comment; short code goes to the docgen_fast route
+// when one is set; the rest goes to docgen.
 func (p *Pipeline) generate(ctx context.Context, host ports.CodeHost, repo ports.RepoConfig, head string, meta llmgateway.CallMeta, jobID string, work []*fileWork, dryRun bool, res *CodePushResult) error {
 	var todo []*fileWork
 	for _, w := range work {
@@ -446,6 +459,96 @@ func (p *Pipeline) generate(ctx context.Context, host ports.CodeHost, repo ports
 	if err != nil {
 		return err
 	}
+	tiers := map[string]int{}
+	var avoidedReuse, avoidedNoCall int64
+
+	// A full run keeps the doc of code that has not changed since its doc was written.
+	var documented map[string]bool
+	for _, w := range todo {
+		if w.full {
+			if documented, err = p.Docs.DocumentedChunks(ctx, repo.ID); err != nil {
+				return err
+			}
+			break
+		}
+	}
+	if documented != nil {
+		for _, w := range todo {
+			if !w.full {
+				continue
+			}
+			changed := map[string]bool{}
+			for _, c := range append(append([]ports.Chunk{}, w.delta.Added...), w.delta.Changed...) {
+				changed[c.ID] = true
+			}
+			for _, id := range w.delta.Revived {
+				changed[id] = true
+			}
+			keep := w.targets[:0]
+			for _, t := range w.targets {
+				if changed[t.Chunk.ID] || !documented[t.Chunk.ID] {
+					keep = append(keep, t)
+					continue
+				}
+				tiers["unchanged"]++
+				avoidedReuse += spendguard.EstimateTokens(t.Chunk.Content)
+			}
+			w.targets = keep
+		}
+	}
+
+	// Route each remaining target.
+	_, ferr := p.GW.Route(ctx, llmgateway.FeatureDocGenFast)
+	fastRouted := ferr == nil
+	var keys []docrouter.Key
+	for _, w := range todo {
+		for _, t := range w.targets {
+			keys = append(keys, docrouter.KeyOf(t.Chunk))
+		}
+	}
+	cached := map[docrouter.Key]string{}
+	if p.DocCache != nil && len(keys) > 0 {
+		if cached, err = p.DocCache.Get(ctx, keys); err != nil {
+			return err
+		}
+	}
+	mode := p.DocMode
+	if p.ModeSetting != nil {
+		if v := p.ModeSetting(ctx); v != "" {
+			mode = docrouter.ParseMode(v)
+		}
+	}
+	var calls []*fileWork
+	for _, w := range todo {
+		w.pre = map[string]string{}
+		w.call = nil
+		allFast := true
+		for _, t := range w.targets {
+			d := docrouter.Decide(t.Chunk, mode, cached[docrouter.KeyOf(t.Chunk)], fastRouted)
+			tiers[string(d.Tier)]++
+			if d.Body != "" {
+				w.pre[t.Chunk.ID] = d.Body
+				if d.Tier == docrouter.Reuse {
+					avoidedReuse += spendguard.EstimateTokens(t.Chunk.Content)
+				} else {
+					avoidedNoCall += spendguard.EstimateTokens(t.Chunk.Content)
+				}
+				continue
+			}
+			w.call = append(w.call, t)
+			allFast = allFast && d.Tier == docrouter.Fast
+		}
+		w.feature = llmgateway.FeatureDocGen
+		if allFast && len(w.call) > 0 {
+			w.feature = llmgateway.FeatureDocGenFast
+		}
+		res.Documented += len(w.targets)
+		if len(w.call) > 0 {
+			calls = append(calls, w)
+		}
+	}
+	res.Router = tiers
+
 	var repoFiles []string
 	goModule := ""
 	crossCache := map[string]*chunker.FileAnalysis{}
@@ -465,11 +568,11 @@ func (p *Pipeline) generate(ctx context.Context, host ports.CodeHost, repo ports
 	}
 	// Build each file's scoped context first (cheap, and it shares caches), then generate the files in
 	// parallel: a large repository has hundreds of files, and one model call at a time took tens of minutes.
-	contexts := make([]scopedcontext.Context, len(todo))
-	for i, w := range todo {
+	contexts := make([]scopedcontext.Context, len(calls))
+	for i, w := range calls {
 		in := scopedcontext.Input{Files: map[string]*chunker.FileAnalysis{w.fc.Path: w.analysis}, BudgetTokens: budget,
 			CrossFiles: map[string]*chunker.FileAnalysis{}}
-		for _, t := range w.targets {
+		for _, t := range w.call {
 			in.Targets = append(in.Targets, scopedcontext.Target{Chunk: t.Chunk})
 		}
 		if w.analysis != nil && len(w.analysis.Imports) > 0 {
@@ -489,14 +592,24 @@ func (p *Pipeline) generate(ctx context.Context, host ports.CodeHost, repo ports
 		}
 		contexts[i] = scopedcontext.Build(in)
 		res.EstimatedTokens += int64(contexts[i].Tokens)
-		res.Documented += len(w.targets)
 	}
 	if dryRun {
 		return nil
 	}
+	if avoidedReuse > 0 {
+		_ = p.Savings.Record(ctx, "doc_reused", avoidedReuse, 0, jobID)
+	}
+	if avoidedNoCall > 0 {
+		_ = p.Savings.Record(ctx, "doc_no_call", avoidedNoCall, 0, jobID)
+	}
+	for _, w := range todo {
+		if len(w.call) == 0 {
+			w.gen = w.merge(docgen.Result{})
+		}
+	}
 	report := func(done int, item string) {
 		if p.Progress != nil {
-			p.Progress(ctx, jobID, ports.JobProgress{Stage: "documenting", Done: done, Total: len(todo), Item: item})
+			p.Progress(ctx, jobID, ports.JobProgress{Stage: "documenting", Done: done, Total: len(calls), Item: item})
 		}
 	}
 	report(0, "")
@@ -508,14 +621,33 @@ func (p *Pipeline) generate(ctx context.Context, host ports.CodeHost, repo ports
 	g.SetLimit(parallel)
 	var mu sync.Mutex
 	done := 0
-	for i, w := range todo {
+	for i, w := range calls {
 		g.Go(func() error {
 			gen, err := p.DocGen.Generate(gctx, meta, docgen.Request{JobID: jobID, Repo: repo.FullName, CommitSHA: head, DocsPath: repo.DocsPath,
-				SourcePath: w.fc.Path, Targets: w.targets, Context: contexts[i]})
+				SourcePath: w.fc.Path, Targets: w.call, Context: contexts[i], Feature: w.feature})
+			if errors.Is(err, llmgateway.ErrNoRoute) && w.feature == llmgateway.FeatureDocGenFast {
+				// The fast route was removed mid-job: the main model writes these too.
+				gen, err = p.DocGen.Generate(gctx, meta, docgen.Request{JobID: jobID, Repo: repo.FullName, CommitSHA: head, DocsPath: repo.DocsPath,
+					SourcePath: w.fc.Path, Targets: w.call, Context: contexts[i]})
+			}
 			if err != nil {
 				return err
 			}
-			w.gen = gen
+			// Keep what was paid for, at once: a retry of this job (or the same code anywhere) costs nothing.
+			if p.DocCache != nil {
+				bodies := map[docrouter.Key]string{}
+				byID := map[string]ports.Chunk{}
+				for _, t := range w.call {
+					byID[t.Chunk.ID] = t.Chunk
+				}
+				for _, s := range gen.Sections {
+					if c, ok := byID[s.ChunkID]; ok && strings.TrimSpace(s.Body) != "" {
+						bodies[docrouter.KeyOf(c)] = s.Body
+					}
+				}
+				_ = p.DocCache.Put(gctx, w.feature, bodies)
+			}
+			w.gen = w.merge(gen)
 			mu.Lock()
 			done++
 			n := done
@@ -525,6 +657,23 @@ func (p *Pipeline) generate(ctx context.Context, host ports.CodeHost, repo ports
 		})
 	}
 	return g.Wait()
+}
+
+// merge puts generated and no-call docs together, in target order.
+func (w *fileWork) merge(gen docgen.Result) docgen.Result {
+	byID := map[string]string{}
+	for _, s := range gen.Sections {
+		byID[s.ChunkID] = s.Body
+	}
+	out := docgen.Result{Summary: gen.Summary}
+	for _, t := range w.targets {
+		body, ok := w.pre[t.Chunk.ID]
+		if !ok {
+			body = byID[t.Chunk.ID]
+		}
+		out.Sections = append(out.Sections, docassembly.Section{ChunkID: t.Chunk.ID, Symbol: t.Chunk.Symbol, Body: body})
+	}
+	return out
 }
 
 // docSet is the doc files a push writes.

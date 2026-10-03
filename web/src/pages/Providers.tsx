@@ -1,4 +1,4 @@
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, ChevronDown, Cpu, ExternalLink, Plus } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api } from '@/api/client';
@@ -12,6 +12,7 @@ import { capFirst, featureLabel, nameOf, sentence } from '@/lib/labels';
 
 const FEATURE_HELP: Record<string, string> = {
   docgen: 'Writes documentation for changed code',
+  docgen_fast: 'Optional cheaper model for short code (docs generation uses the main model when unset)',
   qa: 'Answers questions in Ask',
   embedding: 'Vectors for search (changing it requires a reindex)',
   triage: 'Classifies changes in files without a parser',
@@ -314,6 +315,36 @@ function RouteRow({ feature, route, providers }: { feature: string; route?: Rout
   );
 }
 
+const DOC_MODES: { mode: string; title: string; text: string }[] = [
+  { mode: 'thorough', title: 'Thorough', text: 'Every piece of code goes to the main docs model. Highest cost.' },
+  { mode: 'balanced', title: 'Balanced', text: 'Tiny code that already has a doc comment uses it; short code goes to the cheaper model when “Docs (short code)” is routed.' },
+  { mode: 'economy', title: 'Economy', text: 'Most commented code uses its comment, and the cheaper model writes almost everything else. Lowest cost.' },
+];
+
+/** DocsCost chooses how much docs generation may spend; the same code is never documented twice in any mode. */
+function DocsCost() {
+  const q = useQuery({ queryKey: ['docs-mode'], queryFn: () => api.get<{ mode: string; source: string }>('/docs/mode') });
+  const save = useInvalidating((mode: string) => api.put('/docs/mode', { mode }), ['docs-mode']);
+  return (
+    <Card title="Docs generation cost" className="mt-6">
+      <p className="text-sm text-slate-600 dark:text-slate-400">
+        Before any model call, the Hub decides how each piece of code gets its doc. In every mode, code that has not changed keeps its doc,
+        and code documented before (a retry, a revert, moved code) reuses it, so neither costs anything.
+      </p>
+      <div role="radiogroup" aria-label="Docs generation mode" className="mt-3 grid gap-2 sm:grid-cols-3">
+        {DOC_MODES.map((m) => (
+          <label key={m.mode} className={cx('flex cursor-pointer gap-2.5 rounded-lg border p-3 text-sm', q.data?.mode === m.mode ? 'border-brand-400 bg-brand-50/50 dark:border-brand-400/50 dark:bg-brand-500/10' : 'border-slate-200 dark:border-white/10')}>
+            <input type="radio" name="docs-mode" className="mt-0.5 accent-brand-600" checked={q.data?.mode === m.mode} disabled={save.isPending} onChange={() => save.mutate(m.mode)} />
+            <span><span className="font-medium">{m.title}</span><span className="mt-0.5 block text-xs text-slate-500">{m.text}</span></span>
+          </label>
+        ))}
+      </div>
+      <p className="mt-2 text-xs text-slate-500">Tip: route “Docs generation” to a strong model and “Docs (short code)” to a fast one (for example Claude Haiku). Each job’s result shows how its code was routed.</p>
+      <ErrorNote error={q.error ?? save.error} />
+    </Card>
+  );
+}
+
 export default function Providers() {
   const providers = useProviders();
   const routes = useRoutes();
@@ -337,6 +368,7 @@ export default function Providers() {
           ))}
         </Table>
       </Card>
+      <DocsCost />
     </>
   );
 }
