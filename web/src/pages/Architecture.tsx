@@ -139,7 +139,7 @@ function RepoArchitecture({ repoId }: { repoId: string }) {
   const [selected, setSelected] = useState<string>();
   const arch = useQuery({ queryKey: ['architecture', repoId], queryFn: () => api.get<Architecture>(`/architecture/repos/${repoId}`) });
   const scan = useMutation({
-    mutationFn: () => api.post<{ found: number; removed: number; checked: number }>(`/architecture/repos/${repoId}/scan`),
+    mutationFn: () => api.post<{ found: number; removed: number; checked: number; failed?: { path: string; error: string }[] }>(`/architecture/repos/${repoId}/scan`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['architecture'] }),
   });
   const a = arch.data;
@@ -164,7 +164,15 @@ function RepoArchitecture({ repoId }: { repoId: string }) {
       />
       {arch.isLoading && <Spinner />}
       <ErrorNote error={arch.error ?? scan.error} />
-      {scan.data && <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">Checked {scan.data.checked} file(s): {scan.data.found} diagram(s) found{scan.data.removed ? `, ${scan.data.removed} removed` : ''}.</p>}
+      {scan.data && <p className="mb-3 text-sm text-slate-600 dark:text-slate-400" role="status">Checked {scan.data.checked} file(s): {scan.data.found} diagram(s) found{scan.data.removed ? `, ${scan.data.removed} removed` : ''}.</p>}
+      {!!scan.data?.failed?.length && (
+        <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50/70 p-3 text-sm dark:border-amber-500/30 dark:bg-amber-500/10" role="alert">
+          <p className="font-medium">{scan.data.failed.length} file(s) could not be read; any copy found earlier is kept. Try again later.</p>
+          <ul className="mt-1 space-y-0.5 text-xs text-amber-800 dark:text-amber-200">
+            {scan.data.failed.map((f) => <li key={f.path} className="break-all"><code>{f.path}</code>: {f.error}</li>)}
+          </ul>
+        </div>
+      )}
       {a && (
         <>
           <div role="tablist" aria-label="Views" className="mb-4 flex flex-wrap gap-1 border-b border-slate-200/80 dark:border-white/[0.06]">
