@@ -25,6 +25,19 @@ There are two methods. Turn on either one or both.
 The Hub refuses a change that would leave no way to sign in. You can't turn passwords off until single
 sign-on works, and you can't remove single sign-on while passwords are off.
 
+### The first owner
+
+No owner password is ever printed to a console or a log:
+
+| Where the Hub runs | How the first owner gets in |
+|---|---|
+| Your machine (`quickstart.sh`, `dth up`) | A one-time link to choose your password, opened in the browser. A random bootstrap password signs the tool in once to create an API token and the link, then is deleted; it stops working when you use the link. |
+| Cloud, with single sign-on (recommended) | List the owners in the settings file (`users: [{email: you@acme.com, role: owner}]`, see [settings-file.md](settings-file.md)); they sign in with SSO. No password exists. |
+| Cloud, passwords only | `dth-hub invite you@acme.com owner` where the Hub runs (`kubectl exec deploy/dth-api -- /dth-hub invite …`) prints a one-time link to the operator's terminal only. The Terraform modules' local mode keeps a generated owner password in Secrets Manager / Secret Manager instead; change it with a link after the first sign-in. |
+
+Avoid putting `DTH_OWNER_PASSWORD` in CI logs, Compose files or Helm values: it is only read while the
+database has no users, and a link is safer.
+
 ### Adding someone
 
 1. **Users & access → Add user.** Enter their email, name and role.

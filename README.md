@@ -62,9 +62,9 @@ To get the latest version later:
 cd DocTheRepo && git pull && ./scripts/quickstart.sh
 ```
 
-Optionally set `ANTHROPIC_API_KEY` and/or `OPENAI_API_KEY` first to configure models automatically. The
-sign-in details are printed and saved in `~/.dth-quickstart/credentials.txt`. Stop with
-`./scripts/quickstart.sh --down`.
+Optionally set `ANTHROPIC_API_KEY` and/or `OPENAI_API_KEY` first to configure models automatically. No
+password is printed or saved: the first run opens a one-time link where you choose the owner password
+(`./scripts/quickstart.sh --reset-password` makes a new one). Stop with `./scripts/quickstart.sh --down`.
 
 Re-running the quickstart (for example after `git pull`) keeps everything: connectors, the GitHub App,
 provider keys, routing, repositories and docs live in the database and `~/.dth-quickstart` (which holds the

@@ -66,6 +66,22 @@ func fakeHub(t *testing.T) (*httptest.Server, *string) {
 		w.WriteHeader(http.StatusCreated)
 		w.Write([]byte(`{"token":"dth_pat_x"}`))
 	})
+	bearer := func(r *http.Request) bool { return r.Header.Get("Authorization") == "Bearer dth_pat_x" }
+	mux.HandleFunc("/api/v1/me", func(w http.ResponseWriter, r *http.Request) {
+		if !bearer(r) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Write([]byte(`{"id":"u1"}`))
+	})
+	mux.HandleFunc("/api/v1/users/u1/invite", func(w http.ResponseWriter, r *http.Request) {
+		if !bearer(r) || r.Method != http.MethodPost {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		w.Write([]byte(`{"path":"/invite/tok1","expires_at":"2026-10-10T00:00:00Z"}`))
+	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return srv, &gotPassword
@@ -83,8 +99,8 @@ func TestUpFirstRunThenIdempotent(t *testing.T) {
 	o := Options{Dir: dir, Port: portOf(srv.URL), OwnerEmail: "me@acme.com", Runner: d.run, WaitTimeout: 10 * time.Second, Image: "dth:dev", Ollama: true}
 	res, err := Up(context.Background(), o)
 	require.NoError(t, err)
-	assert.NotEmpty(t, res.OwnerPassword)
-	assert.Equal(t, res.OwnerPassword, *pw, "the generated password signed in")
+	assert.NotEmpty(t, *pw, "a generated bootstrap password signed in")
+	assert.Equal(t, res.URL+"/invite/tok1", res.SetupLink, "the owner gets a one-time link, not a password")
 	assert.Equal(t, "dth_pat_x", res.Token)
 	assert.Equal(t, "me@acme.com", res.OwnerEmail)
 
@@ -102,7 +118,7 @@ func TestUpFirstRunThenIdempotent(t *testing.T) {
 	dbPass := env["DTH_DB_PASSWORD"]
 	res, err = Up(context.Background(), Options{Dir: dir, Port: portOf(srv.URL), Runner: d.run, Pull: true})
 	require.NoError(t, err)
-	assert.Empty(t, res.OwnerPassword, "re-running does not reset credentials")
+	assert.Empty(t, res.SetupLink, "re-running does not reset credentials")
 	assert.Empty(t, res.Token)
 	assert.Equal(t, "me@acme.com", res.OwnerEmail)
 	env, _ = readEnv(filepath.Join(dir, ".env"))

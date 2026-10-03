@@ -103,8 +103,8 @@ func (a *app) upCmd() *cobra.Command {
 				return err
 			}
 			fmt.Fprintf(a.out, "\nDocTheRepo Hub is ready at %s\n", res.URL)
-			if res.OwnerPassword != "" {
-				fmt.Fprintf(a.out, "\nOwner account (shown once — save it now):\n  email:    %s\n  password: %s\n", res.OwnerEmail, res.OwnerPassword)
+			if res.SetupLink != "" {
+				fmt.Fprintf(a.out, "\nOwner account: %s\nChoose your password with this one-time link (it works once and expires in 7 days):\n  %s\n", res.OwnerEmail, res.SetupLink)
 			}
 			if res.Token != "" {
 				if err := saveConfig(cliConfig{Server: res.URL, Token: res.Token}); err != nil {
@@ -114,7 +114,11 @@ func (a *app) upCmd() *cobra.Command {
 			}
 			fmt.Fprintln(a.out, "\nNext: open the setup checklist to connect GitHub/GitLab, add your LLM provider, and pick repositories.")
 			if !noBrowser {
-				openBrowser(res.URL + "/setup")
+				if res.SetupLink != "" {
+					openBrowser(res.SetupLink)
+				} else {
+					openBrowser(res.URL + "/setup")
+				}
 			}
 			return nil
 		},
