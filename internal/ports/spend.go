@@ -18,8 +18,8 @@ type UsageRecord struct {
 	CacheReadTokens  int64
 	CacheWriteTokens int64
 	CostUSD          float64
-	LatencyMS    int64
-	Cached       bool
+	LatencyMS        int64
+	Cached           bool
 	// Estimated is true when the provider reported no usage and the estimate was recorded instead.
 	Estimated bool
 	RepoID    string
