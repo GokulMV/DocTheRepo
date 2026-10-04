@@ -81,6 +81,9 @@ More ways to run it, from Docker Compose with `dth up` to Kubernetes (Helm) and 
 
 ## Deploying for your team
 
+**New to this? Follow [docs/deploy-guide.md](docs/deploy-guide.md)**: plain steps for one server, AWS, Google
+Cloud, Kubernetes or GitHub Actions, including SSO, model keys and every variable.
+
 ### How a deployment works
 
 ```
@@ -162,7 +165,8 @@ Step-by-step guides: [docs/install.md](docs/install.md). Sign-in details: [docs/
 
 | Topic | |
 |---|---|
-| Install & deploy | [docs/install.md](docs/install.md) |
+| Step-by-step deployment guide (start here) | [docs/deploy-guide.md](docs/deploy-guide.md) |
+| Install & deploy (reference) | [docs/install.md](docs/install.md) |
 | Users, roles, sign-in and SSO | [docs/users-and-sign-in.md](docs/users-and-sign-in.md) |
 | Operations: backups, upgrades, monitoring | [docs/operations.md](docs/operations.md) |
 | Nonlive and production: pipeline, logins, switching | [docs/environments.md](docs/environments.md) |

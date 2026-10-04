@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,4 +40,37 @@ func TestThreadHistoryKeepsInvestigated(t *testing.T) {
 	assert.Equal(t, 9400, sift.TokensSaved)
 	assert.Equal(t, 3, sift.Kept)
 	assert.Empty(t, th.Messages[3].Sift, "no picker, no summary")
+}
+
+// Analytics adds up what the source picker did across answers.
+func TestSiftAnalytics(t *testing.T) {
+	st := storetest.New(t)
+	ctx := context.Background()
+	u, err := st.Q.CreateUser(ctx, gen.CreateUserParams{ID: ports.NewID(), Email: "bo@acme.com", Role: gen.UserRoleViewer})
+	require.NoError(t, err)
+	qa := store.NewQA(st)
+	tid, err := qa.CreateThread(ctx, u.ID, "q", map[string]any{})
+	require.NoError(t, err)
+	add := func(s *rag.SiftSummary) {
+		_, err := qa.AddExchange(ctx, tid, "q", rag.Answer{Text: "a", Citations: []rag.Citation{}, Sift: s})
+		require.NoError(t, err)
+	}
+	add(&rag.SiftSummary{Candidates: 20, Kept: 3, TokensSaved: 9000, JudgeTokens: 2000, CostUSD: 0.002, SavedUSD: 0.04})
+	add(&rag.SiftSummary{Candidates: 12, Kept: 12, JudgeTokens: 1500, CostUSD: 0.001, SavedUSD: -0.001})
+	add(&rag.SiftSummary{Kept: 2, Explored: 2, JudgeTokens: 800, CostUSD: 0.0005, SavedUSD: -0.0005})
+	add(nil)
+
+	rep, err := store.NewBrowse(st).Sift(ctx, time.Now().Add(-time.Hour), time.Now().Add(time.Hour))
+	require.NoError(t, err)
+	assert.Equal(t, int64(4), rep.Answers)
+	assert.Equal(t, int64(3), rep.Picked)
+	assert.Equal(t, int64(1), rep.Trimmed, "only the first read fewer sources than retrieved")
+	assert.Equal(t, int64(32), rep.Candidates)
+	assert.Equal(t, int64(17), rep.Kept)
+	assert.Equal(t, int64(9000), rep.TokensSaved)
+	assert.Equal(t, int64(4300), rep.JudgeTokens)
+	assert.InDelta(t, 0.0385, rep.SavedUSD, 1e-9)
+	assert.Equal(t, int64(2), rep.Explored)
+	require.Len(t, rep.Daily, 1)
+	assert.Equal(t, int64(3), rep.Daily[0].Picked)
 }

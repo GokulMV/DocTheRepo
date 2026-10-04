@@ -58,3 +58,27 @@ ORDER BY p.updated_at DESC LIMIT sqlc.arg(lim);
 -- name: ActivityAudit :many
 SELECT a.id, a.action, a.target_type, a.target_id, a.at FROM audit_log a
 WHERE a.at >= sqlc.arg(since) AND a.at < sqlc.arg(before) ORDER BY a.at DESC LIMIT sqlc.arg(lim);
+
+-- name: SiftTotals :one
+-- What Ask's source picker did over a period, from the summary stored with each answer.
+SELECT count(*)::bigint AS answers,
+       count(sift)::bigint AS picked,
+       count(*) FILTER (WHERE (sift->>'kept')::int < (sift->>'candidates')::int)::bigint AS trimmed,
+       coalesce(sum((sift->>'candidates')::bigint), 0)::bigint AS candidates,
+       coalesce(sum((sift->>'kept')::bigint), 0)::bigint AS kept,
+       coalesce(sum((sift->>'tokens_saved')::bigint), 0)::bigint AS tokens_saved,
+       coalesce(sum((sift->>'judge_tokens')::bigint), 0)::bigint AS judge_tokens,
+       coalesce(sum((sift->>'cost_usd')::float8), 0)::float8 AS judge_cost_usd,
+       coalesce(sum((sift->>'saved_usd')::float8), 0)::float8 AS saved_usd,
+       coalesce(sum((sift->>'explored')::bigint), 0)::bigint AS explored
+FROM qa_messages
+WHERE role = 'assistant' AND created_at >= sqlc.arg(from_t) AND created_at < sqlc.arg(to_t);
+
+-- name: SiftDaily :many
+SELECT date_trunc('day', created_at)::timestamptz AS day,
+       count(*)::bigint AS picked,
+       coalesce(sum((sift->>'tokens_saved')::bigint), 0)::bigint AS tokens_saved,
+       coalesce(sum((sift->>'saved_usd')::float8), 0)::float8 AS saved_usd
+FROM qa_messages
+WHERE role = 'assistant' AND sift IS NOT NULL AND created_at >= sqlc.arg(from_t) AND created_at < sqlc.arg(to_t)
+GROUP BY 1 ORDER BY 1;

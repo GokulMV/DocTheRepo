@@ -199,3 +199,45 @@ func (b *Browse) Activity(ctx context.Context, kinds map[string]bool, since, bef
 	}
 	return out, nil
 }
+
+// SiftReport is what Ask's source picker did over a period (Analytics → Ask source picking).
+type SiftReport struct {
+	Answers     int64     `json:"answers"`      // Ask answers in the period
+	Picked      int64     `json:"picked"`       // answers whose sources the picker judged
+	Trimmed     int64     `json:"trimmed"`      // answers that read fewer sources than retrieved
+	Candidates  int64     `json:"candidates"`   // sources retrieved, over picked answers
+	Kept        int64     `json:"kept"`         // sources sent to the answering model
+	TokensSaved int64     `json:"tokens_saved"` // answering-model input tokens not sent
+	JudgeTokens int64     `json:"judge_tokens"`
+	JudgeCost   float64   `json:"judge_cost_usd"`
+	SavedUSD    float64   `json:"saved_usd"` // net: answering-model cost avoided minus the judge's cost
+	Explored    int64     `json:"explored"`  // files read while exploring the index
+	Daily       []SiftDay `json:"daily"`
+}
+
+// SiftDay is one day of the source picker's savings.
+type SiftDay struct {
+	Day         time.Time `json:"day"`
+	Picked      int64     `json:"picked"`
+	TokensSaved int64     `json:"tokens_saved"`
+	SavedUSD    float64   `json:"saved_usd"`
+}
+
+// Sift summarises the source picker from the summaries stored with Ask answers.
+func (b *Browse) Sift(ctx context.Context, from, to time.Time) (SiftReport, error) {
+	t, err := b.s.Q.SiftTotals(ctx, gen.SiftTotalsParams{FromT: from, ToT: to})
+	if err != nil {
+		return SiftReport{}, err
+	}
+	rep := SiftReport{Answers: t.Answers, Picked: t.Picked, Trimmed: t.Trimmed, Candidates: t.Candidates, Kept: t.Kept,
+		TokensSaved: t.TokensSaved, JudgeTokens: t.JudgeTokens, JudgeCost: t.JudgeCostUsd, SavedUSD: t.SavedUsd, Explored: t.Explored}
+	rows, err := b.s.Q.SiftDaily(ctx, gen.SiftDailyParams{FromT: from, ToT: to})
+	if err != nil {
+		return SiftReport{}, err
+	}
+	rep.Daily = make([]SiftDay, len(rows))
+	for i, r := range rows {
+		rep.Daily[i] = SiftDay{Day: r.Day, Picked: r.Picked, TokensSaved: r.TokensSaved, SavedUSD: r.SavedUsd}
+	}
+	return rep, nil
+}

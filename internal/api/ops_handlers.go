@@ -34,6 +34,7 @@ func OpsRoutes(jobs Jobs, b *store.Browse, svc *auth.Service) func(chi.Router) {
 			r.Get("/activity", h.activity)
 			r.Get("/analytics/usage", h.usage)
 			r.Get("/analytics/savings", h.savings)
+			r.Get("/analytics/sift", h.sift)
 			r.Get("/analytics/pipeline", h.pipeline)
 		})
 		r.Group(func(r chi.Router) {
@@ -262,6 +263,20 @@ func (h *opsHandlers) savings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	WriteJSON(w, http.StatusOK, map[string]any{"by_kind": by, "total": total})
+}
+
+func (h *opsHandlers) sift(w http.ResponseWriter, r *http.Request) {
+	from, to, err := timeRange(r, 30*24*time.Hour)
+	if err != nil {
+		fail(w, r, err)
+		return
+	}
+	rep, err := h.b.Sift(r.Context(), from, to)
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	WriteJSON(w, http.StatusOK, rep)
 }
 
 func (h *opsHandlers) pipeline(w http.ResponseWriter, r *http.Request) {

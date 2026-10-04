@@ -27,3 +27,15 @@ func TestEnvironmentExamplesLoad(t *testing.T) {
 		require.NotEmpty(t, d.Repos, env)
 	}
 }
+
+// The fill-in template in deploy/templates parses, validates and names an owner, before anyone fills it in.
+func TestTemplateChecks(t *testing.T) {
+	p := filepath.Join("..", "..", "deploy", "templates", "hub.yaml")
+	b, err := os.ReadFile(p)
+	require.NoError(t, err)
+	rep, err := Check(context.Background(), []Source{{Name: p, Data: b}}, CheckOptions{RequireOwner: true})
+	require.NoError(t, err)
+	require.Len(t, rep.Owners, 1)
+	require.True(t, rep.SSO)
+	require.Contains(t, rep.References, "${env:DTH_SECRET_OIDC_CLIENT_SECRET}")
+}

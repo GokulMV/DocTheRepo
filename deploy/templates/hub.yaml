@@ -1,0 +1,49 @@
+# DocTheRepo Hub settings: fill in every line marked CHANGE, delete the blocks you don't use.
+# Step-by-step help: docs/deploy-guide.md. This file holds no secrets, only the NAMES of secrets
+# (the ${env:...} parts); you set their values where the Hub runs. It is safe to commit.
+# Check it before deploying:  dth settings check -f hub.yaml --require-owner
+version: 1
+
+# 1. How people sign in: your company's single sign-on (SSO).
+auth:
+  password: false                                   # SSO only. Set true to also allow email + password.
+  sso:
+    provider: google                                # CHANGE: google | microsoft | okta | keycloak | other
+    issuer: https://accounts.google.com             # CHANGE: see the issuer table in the guide
+    client_id: CHANGE-the-client-id-of-your-sso-app
+    client_secret: ${env:DTH_SECRET_OIDC_CLIENT_SECRET}
+    allowed_domains: [yourcompany.com]              # CHANGE: only these email domains can sign in
+
+# 2. Who runs the Hub. Owners can change everything; admins everything except owners and sign-in.
+#    Everyone else from the allowed domains can sign in and ask questions (viewer).
+users:
+  - { email: CHANGE-you@yourcompany.com, role: owner }
+  # - { email: colleague@yourcompany.com, role: admin }
+
+# 3. AI models. You pay the provider directly. Keep the providers you have a key for.
+providers:
+  - name: anthropic
+    kind: anthropic
+    api_key: ${env:DTH_SECRET_ANTHROPIC_API_KEY}
+  - name: openai                                    # used for "search by meaning" (embeddings)
+    kind: openai
+    api_key: ${env:DTH_SECRET_OPENAI_API_KEY}
+
+# Which model does which job. "sift" is a cheap model that picks the sources Ask reads, to lower cost.
+routes:
+  docgen:      { provider: anthropic, model: claude-sonnet-5-5 }
+  docgen_fast: { provider: anthropic, model: claude-haiku-4-5 }
+  qa:          { provider: anthropic, model: claude-sonnet-5-5 }
+  decode:      { provider: anthropic, model: claude-sonnet-5-5 }
+  triage:      { provider: anthropic, model: claude-haiku-4-5 }
+  suggest:     { provider: anthropic, model: claude-sonnet-5-5 }
+  security:    { provider: anthropic, model: claude-sonnet-5-5 }
+  sift:        { provider: anthropic, model: claude-haiku-4-5 }
+  embedding:   { provider: openai, model: text-embedding-3-small }
+
+# 4. A safety limit on AI spend (the Hub stops calling models when it is reached).
+spend:
+  limits:
+    - { scope: global, window: day, max_cost_usd: 50 }    # CHANGE to your daily budget in US dollars
+
+# 5. Code: nothing needed here. After the Hub is running, open Connectors → Connect with GitHub.
