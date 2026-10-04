@@ -114,6 +114,7 @@ var Operations = []op{
 	{"GET", "/api/v1/activity", "Analytics", "Activity feed", "viewer", false, false},
 	{"GET", "/api/v1/analytics/usage", "Analytics", "Token and cost usage series", "viewer", false, false},
 	{"GET", "/api/v1/analytics/savings", "Analytics", "Usage avoided (triage, cache, reuse)", "viewer", false, false},
+	{"GET", "/api/v1/analytics/sift", "Analytics", "What Ask's source picker trimmed and saved (totals and per day)", "viewer", false, false},
 	{"GET", "/api/v1/analytics/pipeline", "Analytics", "Job health and index freshness", "viewer", false, false},
 	{"GET", "/api/v1/analytics/connectors", "Analytics", "Connector health", "admin", false, false},
 	{"GET", "/api/v1/issues", "Inbox", "Issues by last seen (filters: status, source, service, env, severity, kind, q, since)", "viewer", false, false},

@@ -343,6 +343,105 @@ func (q *Queries) SavingsByKind(ctx context.Context, arg SavingsByKindParams) ([
 	return items, nil
 }
 
+const siftDaily = `-- name: SiftDaily :many
+SELECT date_trunc('day', created_at)::timestamptz AS day,
+       count(*)::bigint AS picked,
+       coalesce(sum((sift->>'tokens_saved')::bigint), 0)::bigint AS tokens_saved,
+       coalesce(sum((sift->>'saved_usd')::float8), 0)::float8 AS saved_usd
+FROM qa_messages
+WHERE role = 'assistant' AND sift IS NOT NULL AND created_at >= $1 AND created_at < $2
+GROUP BY 1 ORDER BY 1
+`
+
+type SiftDailyParams struct {
+	FromT time.Time `json:"from_t"`
+	ToT   time.Time `json:"to_t"`
+}
+
+type SiftDailyRow struct {
+	Day         time.Time `json:"day"`
+	Picked      int64     `json:"picked"`
+	TokensSaved int64     `json:"tokens_saved"`
+	SavedUsd    float64   `json:"saved_usd"`
+}
+
+func (q *Queries) SiftDaily(ctx context.Context, arg SiftDailyParams) ([]SiftDailyRow, error) {
+	rows, err := q.db.Query(ctx, siftDaily, arg.FromT, arg.ToT)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SiftDailyRow{}
+	for rows.Next() {
+		var i SiftDailyRow
+		if err := rows.Scan(
+			&i.Day,
+			&i.Picked,
+			&i.TokensSaved,
+			&i.SavedUsd,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const siftTotals = `-- name: SiftTotals :one
+SELECT count(*)::bigint AS answers,
+       count(sift)::bigint AS picked,
+       count(*) FILTER (WHERE (sift->>'kept')::int < (sift->>'candidates')::int)::bigint AS trimmed,
+       coalesce(sum((sift->>'candidates')::bigint), 0)::bigint AS candidates,
+       coalesce(sum((sift->>'kept')::bigint), 0)::bigint AS kept,
+       coalesce(sum((sift->>'tokens_saved')::bigint), 0)::bigint AS tokens_saved,
+       coalesce(sum((sift->>'judge_tokens')::bigint), 0)::bigint AS judge_tokens,
+       coalesce(sum((sift->>'cost_usd')::float8), 0)::float8 AS judge_cost_usd,
+       coalesce(sum((sift->>'saved_usd')::float8), 0)::float8 AS saved_usd,
+       coalesce(sum((sift->>'explored')::bigint), 0)::bigint AS explored
+FROM qa_messages
+WHERE role = 'assistant' AND created_at >= $1 AND created_at < $2
+`
+
+type SiftTotalsParams struct {
+	FromT time.Time `json:"from_t"`
+	ToT   time.Time `json:"to_t"`
+}
+
+type SiftTotalsRow struct {
+	Answers      int64   `json:"answers"`
+	Picked       int64   `json:"picked"`
+	Trimmed      int64   `json:"trimmed"`
+	Candidates   int64   `json:"candidates"`
+	Kept         int64   `json:"kept"`
+	TokensSaved  int64   `json:"tokens_saved"`
+	JudgeTokens  int64   `json:"judge_tokens"`
+	JudgeCostUsd float64 `json:"judge_cost_usd"`
+	SavedUsd     float64 `json:"saved_usd"`
+	Explored     int64   `json:"explored"`
+}
+
+// What Ask's source picker did over a period, from the summary stored with each answer.
+func (q *Queries) SiftTotals(ctx context.Context, arg SiftTotalsParams) (SiftTotalsRow, error) {
+	row := q.db.QueryRow(ctx, siftTotals, arg.FromT, arg.ToT)
+	var i SiftTotalsRow
+	err := row.Scan(
+		&i.Answers,
+		&i.Picked,
+		&i.Trimmed,
+		&i.Candidates,
+		&i.Kept,
+		&i.TokensSaved,
+		&i.JudgeTokens,
+		&i.JudgeCostUsd,
+		&i.SavedUsd,
+		&i.Explored,
+	)
+	return i, err
+}
+
 const usageSeries = `-- name: UsageSeries :many
 SELECT date_trunc($1::text, at)::timestamptz AS t,
        (CASE $2::text

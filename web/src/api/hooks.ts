@@ -161,6 +161,23 @@ export const useSavings = (from: string) =>
     queryFn: () => api.get<{ by_kind: SavingsKind[]; total: SavingsKind }>(`/analytics/savings${qs({ from })}`),
   });
 
+export interface SiftReport {
+  answers: number;
+  picked: number;
+  trimmed: number;
+  candidates: number;
+  kept: number;
+  tokens_saved: number;
+  judge_tokens: number;
+  judge_cost_usd: number;
+  saved_usd: number;
+  explored: number;
+  daily: { day: string; picked: number; tokens_saved: number; saved_usd: number }[];
+}
+
+export const useSift = (from: string) =>
+  useQuery({ queryKey: ['sift', from], queryFn: () => api.get<SiftReport>(`/analytics/sift${qs({ from })}`) });
+
 export const usePipelineStats = () =>
   useQuery({
     queryKey: ['pipeline-stats'],

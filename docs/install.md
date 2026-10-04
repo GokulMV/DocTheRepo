@@ -1,5 +1,8 @@
 # Install and deploy
 
+For plain, step-by-step instructions (SSO, model keys, variables, every target), read
+[deploy-guide.md](deploy-guide.md). This page is the shorter reference.
+
 ## Before you deploy
 
 Run `dth init` first (`make build`, then `./bin/dth init`). It asks:
@@ -34,7 +37,7 @@ use opencode as the doc engine or to give opencode / Claude Code / Cursor the Hu
 ## Local (one command)
 
 Requires Docker. `dth up` writes `~/.dth/compose.yaml`, starts PostgreSQL (pgvector) and the hub, creates
-the owner account (the password is printed once), and signs the CLI in. Re-running it is the health check;
+the owner account, opens a one-time link to choose its password (no password is printed), and signs the CLI in. Re-running it is the health check;
 `dth up --upgrade` pulls newer images.
 
 ```sh
