@@ -30,7 +30,7 @@ are checked before every paid call.
 
 ## Features
 
-| | |
+| Feature | What it does |
 |---|---|
 | **Docs that keep up** | Each push is triaged by syntax tree: cosmetic changes cost nothing, and structural ones regenerate only the affected sections. Docs land directly, as an auto-merged PR, or as a PR for an approver. Hand-written blocks survive regeneration. |
 | **Ask** | Hybrid retrieval (vectors + full text + the knowledge graph) over code, docs, Confluence and Jira, scoped to what the person may read. When search finds too little, the model looks further (searches again, reads files) before answering. Answers stream with citations, repeated questions come from a cache, and history is kept per user. |
@@ -134,7 +134,9 @@ deploy command. Owners can change any of this later in the UI (**Sign-in & SSO**
 
 ### Prerequisites
 
-| | Needed for every team deployment |
+Needed for every team deployment:
+
+| Requirement | Details |
 |---|---|
 | A domain and HTTPS | e.g. `https://docs-hub.acme.com`. SSO providers and GitHub webhooks require https. |
 | An identity provider app (for SSO) | A web OpenID Connect app with the callback `https://<your domain>/api/v1/auth/callback`. `dth init` and **Sign-in & SSO** show the steps per provider. Without SSO, people sign in with passwords you send them links for. |
@@ -201,8 +203,6 @@ Step-by-step guides: [docs/install.md](docs/install.md). Sign-in details: [docs/
 |---|---|
 | [Architecture](docs/architecture.md) | Components, data flow, caches ([diagrams](docs/architecture/)) |
 | [Security model](docs/security.md) | Sealed secrets and how stored keys are protected |
-| [Performance results](docs/perf-results.md) | Load test results |
-| [Status](docs/status.md) | What is built, phase by phase |
 | [Development](docs/development.md) | Building, testing and contributing |
 | [Brand](docs/brand/) | Logo files and usage |
 

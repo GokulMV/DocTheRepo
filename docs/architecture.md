@@ -1,7 +1,6 @@
 # DocTheRepo Hub — architecture (as built, through Phase 14)
 
-This page describes what is implemented today, not the full plan (`docs/plan-doctherepo-hub.md`). Where
-the code differs from the plan, it says so at the end.
+This page describes what is implemented today.
 
 ## 1. Shape
 
@@ -164,7 +163,7 @@ or GCP KMS key.
   E2E against the real hub with mocks (`test/e2e`), k6 load (`test/perf`: push burst, Q&A, signal storm),
   eval sets (`test/eval`: golden Q&A, decision calibration).
 
-## 7. Not built yet / differs from the plan
+## 7. Not built yet
 
 - Milestone 4 hardening (security gates, SBOM, operations and backup runbooks).
 - Docgen's scoped context does not yet include linked Confluence sections (the decode context does use

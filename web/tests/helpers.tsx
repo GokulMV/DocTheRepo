@@ -11,11 +11,23 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { ml_kem768 } from '@noble/post-quantum/ml-kem.js';
 import { vi } from 'vitest';
 
-// The sealing key internal/secrets generated for tests (its private half is test-only).
-export const sealFixtureDir = path.resolve(__dirname, '../../internal/secrets/testdata');
-const sealFixture = JSON.parse(fs.readFileSync(path.join(sealFixtureDir, 'seal_key.json'), 'utf8'));
-export const sealKey = { kid: sealFixture.kid, alg: 'X25519+ML-KEM-768/HKDF-SHA256/AES-256-GCM', x25519: sealFixture.x25519, mlkem768: sealFixture.mlkem768 };
-const sealPriv = Uint8Array.from(Buffer.from(sealFixture.private_hex, 'hex'));
+// A sealing key made fresh for each test run, in the Hub's layout: X25519 private (32) | ML-KEM-768 seed (64).
+// No key is kept in the repository.
+const sealPriv = crypto.getRandomValues(new Uint8Array(96));
+const b64 = (b: Uint8Array) => Buffer.from(b).toString('base64');
+export const sealKey = {
+  kid: 'test-key',
+  alg: 'X25519+ML-KEM-768/HKDF-SHA256/AES-256-GCM',
+  x25519: b64(x25519.getPublicKey(sealPriv.subarray(0, 32))),
+  mlkem768: b64(ml_kem768.keygen(sealPriv.subarray(32)).publicKey),
+};
+
+/** writeSealVector saves this run's key and a value sealed to it, for the Go side to open (CI: seal interop). */
+export function writeSealVector(dir: string, vector: { purpose: string; plaintext: string; sealed: string }) {
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'seal_key.json'), JSON.stringify({ kid: sealKey.kid, private_hex: Buffer.from(sealPriv).toString('hex') }) + '\n');
+  fs.writeFileSync(path.join(dir, 'browser_sealed.json'), JSON.stringify(vector) + '\n');
+}
 
 /** openSealed decodes a sealed value with the test key, independently of the app's code (from the format spec). */
 export function openSealed(v: string, purpose: string): string {

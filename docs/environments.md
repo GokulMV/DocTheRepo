@@ -5,7 +5,7 @@ with separate logins and data, and how people move between the two.
 
 ## The model: same image, separate everything else
 
-| | Nonlive | Production |
+| What | Nonlive | Production |
 |---|---|---|
 | Image | The release under test, pinned by digest | **The same digest**, promoted after nonlive passed |
 | Cloud account or project | Its own (or at least its own namespace and roles) | Its own |
