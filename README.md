@@ -163,28 +163,48 @@ Step-by-step guides: [docs/install.md](docs/install.md). Sign-in details: [docs/
 
 ## Documentation
 
-| Topic | |
+**Deploy and run it**
+
+| Guide | What it covers |
 |---|---|
-| Step-by-step deployment guide (start here) | [docs/deploy-guide.md](docs/deploy-guide.md) |
-| Install & deploy (reference) | [docs/install.md](docs/install.md) |
-| Users, roles, sign-in and SSO | [docs/users-and-sign-in.md](docs/users-and-sign-in.md) |
-| Operations: backups, upgrades, monitoring | [docs/operations.md](docs/operations.md) |
-| Nonlive and production: pipeline, logins, switching | [docs/environments.md](docs/environments.md) |
-| Team documents: Notion and uploaded files | [docs/team-docs.md](docs/team-docs.md) |
-| Security scans (kryptonite) and fixes on request | [docs/security-scans.md](docs/security-scans.md) |
-| How docs are generated, and `.dthignore` | [docs/docs-generation.md](docs/docs-generation.md) |
-| Architecture | [docs/architecture.md](docs/architecture.md) · [diagrams](docs/architecture/) |
-| Connecting GitHub | [docs/github.md](docs/github.md) |
-| Every connector: git hosts, Confluence/Jira, error and alert sources | [docs/connectors.md](docs/connectors.md) |
-| Settings file (YAML/JSON, secret references) | [docs/settings-file.md](docs/settings-file.md) |
-| Architecture tab | [docs/architecture-tab.md](docs/architecture-tab.md) |
-| Confluence & Jira · Wiz & Splunk · Jev | [confluence-jira](docs/confluence-jira.md) · [wiz-splunk](docs/wiz-splunk.md) · [jev](docs/jev.md) |
-| opencode, Claude Code, Cursor (MCP) | [docs/opencode.md](docs/opencode.md) |
-| Security model & sealed secrets | [docs/security.md](docs/security.md) |
-| Performance results | [docs/perf-results.md](docs/perf-results.md) |
-| What is built, phase by phase | [docs/status.md](docs/status.md) |
-| Development | [docs/development.md](docs/development.md) |
-| Brand & logo | [docs/brand/](docs/brand/) |
+| [Deployment guide](docs/deploy-guide.md) (start here) | Step by step: one server, AWS, Google Cloud, Kubernetes or GitHub Actions; SSO, model keys, every variable |
+| [Install reference](docs/install.md) | The short version of each install path |
+| [Settings file](docs/settings-file.md) | Every field of the YAML/JSON settings file, and secret references |
+| [Users and sign-in](docs/users-and-sign-in.md) | Roles, adding people, single sign-on, email, getting back in when locked out |
+| [Nonlive and production](docs/environments.md) | Two environments from one pipeline, logins, switching between them |
+| [Operations](docs/operations.md) | Backups, upgrades, monitoring, every environment variable |
+
+**Use it**
+
+| Guide | What it covers |
+|---|---|
+| [How docs are generated](docs/docs-generation.md) | What gets written, what it costs, and `.dthignore` |
+| [How Ask picks its sources](docs/ask-sources.md) | The cheap judge that trims what the answering model reads |
+| [Architecture tab](docs/architecture-tab.md) | Per-repository architecture diagrams in the Hub |
+| [Security scans](docs/security-scans.md) | Scans powered by kryptonite, and fixes only when you ask |
+| [Team documents](docs/team-docs.md) | Notion pages and uploaded files as sources |
+
+**Connect your tools**
+
+| Guide | What it covers |
+|---|---|
+| [GitHub](docs/github.md) | One-click GitHub App, or an existing app or token |
+| [All connectors](docs/connectors.md) | Git hosts, team docs, error and alert sources |
+| [Confluence and Jira](docs/confluence-jira.md) | Spaces and projects synced read-only, cited in Ask |
+| [Wiz and Splunk](docs/wiz-splunk.md) | Security findings and log alerts in the Inbox |
+| [TypeSafe Jev](docs/jev.md) | Calibrated yes/no decisions that skip paid calls |
+| [opencode, Claude Code, Cursor](docs/opencode.md) | opencode as the docs engine; the Hub as an MCP server |
+
+**How it is built**
+
+| Guide | What it covers |
+|---|---|
+| [Architecture](docs/architecture.md) | Components, data flow, caches ([diagrams](docs/architecture/)) |
+| [Security model](docs/security.md) | Sealed secrets and how stored keys are protected |
+| [Performance results](docs/perf-results.md) | Load test results |
+| [Status](docs/status.md) | What is built, phase by phase |
+| [Development](docs/development.md) | Building, testing and contributing |
+| [Brand](docs/brand/) | Logo files and usage |
 
 ## Contributing
 
