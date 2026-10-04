@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -54,18 +55,23 @@ func TestSealEachValueIsFresh(t *testing.T) {
 	assert.NotEqual(t, a, b, "ephemeral keys and nonces make every seal different")
 }
 
-// TestUnsealsWhatTheBrowserSealed: web/src/lib/seal.ts sealed testdata/browser_sealed.json to
-// testdata/seal_key.json (web/tests/seal.test.ts; regenerate with SEAL_FIXTURE_WRITE=1).
+// TestUnsealsWhatTheBrowserSealed opens a value web/src/lib/seal.ts sealed to a key made for that test run.
+// web/tests/seal.test.ts writes both to $SEAL_VECTOR_DIR; CI runs it first (job seal-interop). No key is
+// kept in the repository, so the test skips when the directory is not given.
 func TestUnsealsWhatTheBrowserSealed(t *testing.T) {
+	dir := os.Getenv("SEAL_VECTOR_DIR")
+	if dir == "" {
+		t.Skip("set SEAL_VECTOR_DIR after running SEAL_VECTOR_DIR=<dir> npx vitest run tests/seal.test.ts in web/")
+	}
 	var key struct {
 		KID        string `json:"kid"`
 		PrivateHex string `json:"private_hex"`
 	}
 	var vec struct{ Purpose, Plaintext, Sealed string }
-	b, err := os.ReadFile("testdata/seal_key.json")
+	b, err := os.ReadFile(filepath.Join(dir, "seal_key.json"))
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(b, &key))
-	b, err = os.ReadFile("testdata/browser_sealed.json")
+	b, err = os.ReadFile(filepath.Join(dir, "browser_sealed.json"))
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(b, &vec))
 	priv, err := hex.DecodeString(key.PrivateHex)

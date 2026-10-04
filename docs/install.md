@@ -31,7 +31,7 @@ API token the first run created (revoke it under **Account**), and `--reset-pass
 Set `ANTHROPIC_API_KEY` and/or `OPENAI_API_KEY` first to have the model routes configured too. Stop with
 `./scripts/quickstart.sh --down` (`--wipe` deletes the data); `--container` builds and runs the container
 image instead of using a host toolchain; `--help` lists every option. See
-[docs/architecture.md](docs/architecture.md) for how the pieces fit, and [docs/opencode.md](docs/opencode.md) to
+[docs/architecture.md](architecture.md) for how the pieces fit, and [docs/opencode.md](opencode.md) to
 use opencode as the doc engine or to give opencode / Claude Code / Cursor the Hub as an MCP server (`dth mcp`).
 
 ## Local (one command)

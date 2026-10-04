@@ -44,6 +44,24 @@ jobs:
       - name: dth CLI builds for every release platform (pure Go)
         run: make cli-release
 
+  seal-interop:
+    # The browser seals a value to a key made for this run; the Go side must open it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: seal in the browser code
+        run: cd web && npm ci && SEAL_VECTOR_DIR="$RUNNER_TEMP/seal" npx vitest run tests/seal.test.ts
+      - name: open it in Go
+        run: SEAL_VECTOR_DIR="$RUNNER_TEMP/seal" go test ./internal/secrets -run TestUnsealsWhatTheBrowserSealed -v
+
   image:
     runs-on: ubuntu-latest
     steps:
@@ -137,7 +155,7 @@ jobs:
         env:
           CI: "1"
       - uses: grafana/setup-k6-action@v1
-      - name: k6 scripts parse (the runs themselves are manual; see docs/perf-results.md)
+      - name: k6 scripts parse (the runs themselves are manual: make perf-push, perf-qa, perf-signals)
         run: k6 inspect test/perf/push-burst.js >/dev/null && k6 inspect test/perf/qa.js >/dev/null
       - name: report and hub log on failure
         if: failure()
