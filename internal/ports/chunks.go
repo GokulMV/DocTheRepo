@@ -14,6 +14,8 @@ const (
 	SourceNotion       ChunkSource = "notion"
 	SourceUpload       ChunkSource = "upload"
 	SourceIssueDecode  ChunkSource = "issue_decode"
+	// SourceTool is a tool result from an MCP connection, fetched while answering (never stored).
+	SourceTool ChunkSource = "tool"
 )
 
 // Chunk is a retrieval-sized, individually addressable unit of code or documentation.

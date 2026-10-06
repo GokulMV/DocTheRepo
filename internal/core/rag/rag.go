@@ -95,6 +95,8 @@ type Engine struct {
 	// Sift picks the retrieved sources an answer needs with cheap yes/no judgments, and explores the index
 	// before the agent when retrieval finds too little; optional.
 	Sift *sift.Sifter
+	// Tools are the MCP connections' tools the agent may call (live data from connected products); optional.
+	Tools ToolBox
 }
 
 // Query is one question.
@@ -104,6 +106,8 @@ type Query struct {
 	// History is the thread so far (oldest first), for follow-up questions.
 	History []ports.ChatMessage
 	UserID  string
+	// Role is the asker's role; it decides which connected tools may be used.
+	Role    string
 	OnDelta func(text string)
 	// OnStatus reports the agent's steps while it looks further; optional.
 	OnStatus func(Status)
@@ -298,6 +302,12 @@ func (e *Engine) Ask(ctx context.Context, q Query) (Answer, error) {
 	tree := e.tree(q.Scope)
 	canLook := e.AgentSteps > 0 || (e.Sift != nil && tree != nil)
 	explored, agentRan := false, false
+	// A question about live state (errors, alerts, cost, tickets) or naming a connected product goes to the
+	// agent with its tools straight away: the index cannot answer it however much it finds.
+	if e.AgentSteps > 0 && e.wantsTools(ctx, q) {
+		investigated, agentRan = true, true
+		chunks = e.investigate(ctx, meta, q, chunks, &agentUsage)
+	}
 	// deeper looks further: explore the index with cheap judgments first, then (if that found nothing, or
 	// on a second call) let the agent's model search.
 	deeper := func() {
@@ -373,7 +383,7 @@ func (e *Engine) Ask(ctx context.Context, q Query) (Answer, error) {
 	if e.Cost != nil {
 		a.CostUSD, _ = e.Cost(rt.ProviderKind, a.Model, llmgateway.FeatureQA, a.Usage.InputTokens, a.Usage.OutputTokens)
 	}
-	if key != "" && len(a.Citations) > 0 {
+	if key != "" && len(a.Citations) > 0 && !citesTool(a.Citations) {
 		keep := Answer{Text: a.Text, Citations: a.Citations, Model: a.Model, Provider: a.Provider}
 		if qvec != nil {
 			_ = sc.PutAnswerMeaning(ctx, key, question, ScopeKey(q.Scope), embedModel, qvec, keep)
@@ -624,6 +634,8 @@ func sourceType(s ports.ChunkSource) string {
 		return "confluence" // a team page with its own link
 	case ports.SourceIssueDecode:
 		return "issue"
+	case ports.SourceTool:
+		return "tool" // a live result from a connected product
 	default:
 		return "doc"
 	}

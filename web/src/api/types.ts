@@ -55,7 +55,7 @@ export interface Token {
 
 export interface Citation {
   n: number;
-  type: 'code' | 'doc' | 'confluence' | 'issue';
+  type: 'code' | 'doc' | 'confluence' | 'issue' | 'tool';
   title: string;
   url?: string;
   repo?: string;
@@ -551,3 +551,30 @@ export interface LinkedDoc {
 }
 
 export const KNOWN_REASONS = ['known_bug', 'wont_fix', 'third_party', 'expected_noise', 'cannot_action', 'in_progress'] as const;
+
+export interface McpTool {
+  name: string;
+  title?: string;
+  description?: string;
+  read_only: boolean;
+}
+
+/** An MCP connection: another product's MCP server Ask can call. */
+export interface McpServer {
+  id: string;
+  name: string;
+  url: string;
+  catalog_key: string;
+  auth: 'none' | 'bearer' | 'header' | 'oauth' | 'aws' | 'google';
+  config: Record<string, string>;
+  has_secret: boolean;
+  signed_in: boolean;
+  min_role: string;
+  enabled: boolean;
+  tools: McpTool[];
+  tool_choices: Record<string, boolean>;
+  status: 'new' | 'ok' | 'needs_sign_in' | 'error';
+  last_error?: string;
+  checked_at?: string;
+  created_at: string;
+}

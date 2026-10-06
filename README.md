@@ -36,6 +36,7 @@ are checked before every paid call.
 | **Ask** | Hybrid retrieval (vectors + full text + the knowledge graph) over code, docs, Confluence and Jira, scoped to what the person may read. When search finds too little, the model looks further (searches again, reads files) before answering. Answers stream with citations, repeated questions come from a cache, and history is kept per user. |
 | **Architecture** | Every repository gets a generated architecture diagram; diagrams authored with [archify](https://github.com/tt-a1i/archify) appear next to it. |
 | **Issues** (shown once an alert tool is connected) | Sentry, Datadog, PagerDuty, Opsgenie, Grafana, Alertmanager, CloudWatch, GCP, Wiz, Splunk, Kafka/SQS/Pub/Sub/RabbitMQ lag and DLQs. Signals are scrubbed, grouped, matched against known issues and explained with the code behind them. Any source can be marked never-send-to-a-model. |
+| **Live lookups (MCP)** | Ask can call other products' MCP servers while answering: Sentry, Datadog, Grafana, PagerDuty, Jira and Confluence, Notion, Linear, GitHub, GitLab, AWS (SigV4 with the Hub's IAM role) and Google Cloud (its service account). Sign in with the product or paste a read-only token. Only read-only tools are used by default, results are cited as live, and nothing is stored. |
 | **Connect in one click** | **Connect with GitHub** creates a private GitHub App for the Hub and installs it on the repositories you pick, with nothing to copy. GitLab and tokens work too. |
 | **Sealed secrets** | Provider keys and credentials are sealed in the browser to the Hub's hybrid X25519 + ML-KEM-768 key, stored with AES-256-GCM under a local or KMS key, and are write-only. |
 | **Settings as code** | Configure sign-in and SSO, users, providers, routing, connectors, repositories and limits from YAML/JSON, with secrets as references to env, files, Vault, gopass, AWS or GCP secret managers. Apply it with `dth apply -f`, or let the Hub apply it at startup so a deployment comes up ready. |
@@ -193,6 +194,7 @@ Step-by-step guides: [docs/install.md](docs/install.md). Sign-in details: [docs/
 | [GitHub](docs/github.md) | One-click GitHub App, or an existing app or token |
 | [All connectors](docs/connectors.md) | Git hosts, team docs, error and alert sources |
 | [Confluence and Jira](docs/confluence-jira.md) | Spaces and projects synced read-only, cited in Ask |
+| [MCP connections](docs/mcp-connections.md) | Let Ask look things up live in Sentry, Datadog, Jira, AWS, Google Cloud and more |
 | [Wiz and Splunk](docs/wiz-splunk.md) | Security findings and log alerts in the Inbox |
 | [TypeSafe Jev](docs/jev.md) | Calibrated yes/no decisions that skip paid calls |
 | [opencode, Claude Code, Cursor](docs/opencode.md) | opencode as the docs engine; the Hub as an MCP server |

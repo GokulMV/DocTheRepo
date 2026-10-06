@@ -24,6 +24,8 @@ var sealedColumns = []struct{ table, id, col, what string }{
 	{"connectors", "id", "webhook_secret_ct", "webhook secrets"},
 	{"seal_keys", "id", "private_ct", "sealing keys"},
 	{"auth_settings", "id", "oidc_secret_ciphertext", "single sign-on client secret"},
+	{"mcp_servers", "id", "secret_ciphertext", "MCP connection keys"},
+	{"mcp_servers", "id", "oauth_ciphertext", "MCP sign-in tokens"},
 }
 
 // rotateKey is `dth-hub rotate-key`: it re-wraps every stored secret's data key under a new
