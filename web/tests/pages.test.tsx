@@ -18,17 +18,14 @@ describe('Shell', () => {
     renderAt('/ask', <Route element={<Shell />}><Route path="/ask" element={<p>ask page</p>} /></Route>);
     expect(await screen.findByText('ask page')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Docs' })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'More' }));
-    expect(screen.getByRole('link', { name: 'Palace' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Connectors' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Usage' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
   });
 
   it('shows administration to admins', async () => {
     mockApi({ 'GET /me': me('admin') });
     renderAt('/ask', <Route element={<Shell />}><Route path="/ask" element={<p>ask page</p>} /></Route>);
-    await userEvent.click(await screen.findByRole('button', { name: 'More' }));
-    expect(screen.getByRole('link', { name: 'Connectors' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Spend limits' })).toBeInTheDocument();
+    expect(await screen.findByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/connectors');
   });
 
   it('redirects to login when unauthenticated', async () => {

@@ -22,23 +22,25 @@ describe('Inbox: source and kind filters', () => {
 });
 
 describe('Connectors: Wiz and Splunk', () => {
-  it('adds Wiz with "never send to a model" on by default', async () => {
+  it('adds Wiz with "never send to a model" on by default, and gives Splunk one link with the key in it', async () => {
     const { calls } = mockApi({ 'GET /connectors': { items: [] }, 'POST /connectors': { id: 'w1', webhook_path: '/hooks/wiz/w1' } });
     renderAt('/connectors', <Route path="/connectors" element={<Connectors />} />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Add signal source' }));
-    const dialog = await screen.findByRole('dialog');
-    await userEvent.selectOptions(within(dialog).getByLabelText('Source'), 'wiz');
-    expect(within(dialog).getByRole('checkbox', { name: /Never send this source’s data to a model/ })).toBeChecked();
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Add' }));
-    expect(await screen.findByText(/\/hooks\/wiz\/w1/)).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: /Show all \d+ tools/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Connect Wiz' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Connect Wiz' });
+    await userEvent.click(within(dialog).getByText('More options'));
+    expect(within(dialog).getByRole('checkbox', { name: /Never send this tool’s data to an AI model/ })).toBeChecked();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create link' }));
+    const done = await screen.findByRole('dialog', { name: 'Finish in Wiz' });
+    expect((within(done).getByLabelText('Link') as HTMLInputElement).value).toMatch(/\/hooks\/wiz\/w1\?token=[0-9a-f]{48}$/);
     const body = JSON.parse(String(calls.find((c) => c.method === 'POST')!.init?.body));
-    expect(body).toMatchObject({ type: 'wiz', mode: 'webhook', config: { never_send_to_llm: 'true' } });
+    expect(body).toMatchObject({ type: 'wiz', name: 'Wiz', mode: 'webhook', config: { never_send_to_llm: 'true' } });
+    await userEvent.click(within(done).getByRole('button', { name: 'Done' }));
 
-    await userEvent.click(screen.getByRole('button', { name: 'Add signal source' }));
-    const d2 = await screen.findByRole('dialog');
-    await userEvent.selectOptions(within(d2).getByLabelText('Source'), 'splunk');
+    await userEvent.click(screen.getByRole('button', { name: 'Connect Splunk' }));
+    const d2 = await screen.findByRole('dialog', { name: 'Connect Splunk' });
+    await userEvent.click(within(d2).getByText('More options'));
     expect(within(d2).getByRole('checkbox', { name: /Never send/ })).not.toBeChecked();
-    expect(within(d2).getByText(/add \?token=<secret> to the URL/)).toBeInTheDocument();
   });
 });
 

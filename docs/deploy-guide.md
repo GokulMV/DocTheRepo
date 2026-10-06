@@ -110,7 +110,7 @@ ever created.
 |---|---|---|
 | **Anthropic (Claude)**, recommended | <https://console.anthropic.com/settings/keys> → **Create key**. Add billing under **Plans & billing**. | Writing docs, answering questions, explaining errors |
 | **OpenAI**, recommended | <https://platform.openai.com/api-keys> → **Create new secret key**. Add billing. | Search by meaning (embeddings) |
-| Others (optional) | Azure OpenAI, AWS Bedrock, Google Vertex AI, GitHub Models, Ollama, TypeSafe Jev | Add them later in the Hub under **Providers & routing**; each one shows where to get its key |
+| Others (optional) | Azure OpenAI, AWS Bedrock, Google Vertex AI, GitHub Models, Ollama, TypeSafe Jev | Add them later in the Hub under **Settings → AI models**; each one shows where to get its key |
 
 One provider is enough to start. Without OpenAI, search falls back to word matching.
 
@@ -366,13 +366,13 @@ needs its own SSO app (its own callback URL). Full details: [environments.md](en
 ## Step 5: First sign-in and finishing touches
 
 1. Open your Hub address and click **Sign in with single sign-on**. Use an owner email from row 6.
-2. **Connect your code:** **Connectors → Connect with GitHub**. GitHub opens: confirm creating the app,
+2. **Connect your code:** **Settings → Connections → Connect with GitHub**. GitHub opens: confirm creating the app,
    choose the repositories, then **Install**. For an organization, open **Organization or GitHub
    Enterprise** first and type its name. GitLab: add a GitLab connector with a token.
 3. **Pick repositories:** **Repositories → Track repository**. Docs generation starts by itself.
-4. **Check the models:** **Providers & routing** shows your providers. Click **Test** on each.
+4. **Check the models:** **Settings → AI models** shows your providers. Click **Test** on each.
 5. **Invite people:** anyone from your allowed domain can already sign in, as a viewer. To give someone
-   another role, add them under **Users & access** first.
+   another role, add them under **Settings → People** first.
 6. **Ask a question** on the **Ask** page.
 
 ### Check it works
@@ -381,10 +381,10 @@ needs its own SSO app (its own callback URL). Full details: [environments.md](en
 |---|---|---|
 | Hub is up | `https://<your Hub>/readyz` | `"status":"ready"` |
 | SSO works | Sign in | You land on the Hub as owner |
-| Models work | Providers & routing → Test | Green for each provider |
+| Models work | Settings → AI models → Test | Green for each provider |
 | Code connected | Repositories | Your repositories listed, docs being written |
 | Answers work | Ask | An answer with numbered sources |
-| Costs visible | Analytics | Usage, savings, Ask source picking |
+| Costs visible | Usage | Usage, savings, Ask source picking |
 
 ---
 
@@ -431,5 +431,5 @@ Every option: [operations.md](operations.md). Every settings-file field: [settin
 - **Back up:** the database (cloud setups back it up daily) and the master key (option A: the file you
   saved; Kubernetes: the `dth-key` Secret). See [operations.md](operations.md).
 - **Change settings later:** owners can change sign-in, users, models and spend limits in the Hub itself
-  (**Sign-in & SSO**, **Users & access**, **Providers & routing**). Edits to `hub.yaml` apply on the next
+  (**Settings → People → Sign-in**, **Settings → People**, **Settings → AI models**). Edits to `hub.yaml` apply on the next
   restart; they create and update, never delete.

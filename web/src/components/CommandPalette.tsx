@@ -25,8 +25,10 @@ export function CommandPalette({ open, onOpenChange, role }: { open: boolean; on
   const threads = useThreads();
   const entries = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    const pages: Entry[] = NAV.flatMap((s) =>
-      s.items.filter((i) => atLeast(role, i.min)).map((i) => ({ key: i.to, label: i.label, hint: s.section, icon: i.icon, to: i.to })),
+    const pages: Entry[] = NAV.filter((i) => atLeast(role, i.min)).flatMap((i) =>
+      (i.tabs ?? [{ to: i.to, label: i.label }])
+        .filter((t) => atLeast(role, t.min ?? i.min))
+        .map((t) => ({ key: t.to, label: t.label, hint: t.label === i.label ? 'Page' : i.label, icon: i.icon, to: t.to })),
     );
     const questions: Entry[] = (threads.data?.items ?? []).map((t) => ({ key: t.id, label: t.title, hint: 'Question', icon: MessageSquareText, to: `/ask/${t.id}` }));
     const match = (e: Entry) => !needle || e.label.toLowerCase().includes(needle);

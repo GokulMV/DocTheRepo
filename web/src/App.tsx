@@ -7,8 +7,7 @@ import Login from '@/pages/Login';
 import Invite from '@/pages/Invite';
 
 // Pages ship with the app, so switching pages never waits on the network (and never meets a stale chunk
-// after an upgrade). Only the two heavy ones — the graph and the charts — load separately, prefetched once
-// the app is idle.
+// after an upgrade). Only the heavy one — the charts — loads separately, prefetched once the app is idle.
 import Ask from '@/pages/Ask';
 import Docs from '@/pages/Docs';
 import Architecture from '@/pages/Architecture';
@@ -18,24 +17,19 @@ import Security from '@/pages/Security';
 import Repos from '@/pages/Repos';
 import Connectors from '@/pages/Connectors';
 import Providers from '@/pages/Providers';
-import Spend from '@/pages/Spend';
 import Activity from '@/pages/Activity';
-import Users from '@/pages/Users';
-import SignIn from '@/pages/SignIn';
 import Account from '@/pages/Account';
 import Setup from '@/pages/Setup';
-import SettingsFile from '@/pages/SettingsFile';
+import { Advanced, People } from '@/pages/SettingsGroups';
 import Inbox from '@/pages/Inbox';
 import IssueDetail from '@/pages/IssueDetail';
 import KnownIssues from '@/pages/KnownIssues';
-const loadPalace = () => import('@/pages/Palace');
 const loadAnalytics = () => import('@/pages/Analytics');
-const Palace = lazy(loadPalace);
 const Analytics = lazy(loadAnalytics);
 
 function usePrefetchHeavyPages() {
   useEffect(() => {
-    const run = () => void Promise.all([loadPalace(), loadAnalytics()]).catch(() => undefined);
+    const run = () => void loadAnalytics().catch(() => undefined);
     const w = window as Window & { requestIdleCallback?: (cb: () => void) => number };
     if (w.requestIdleCallback) w.requestIdleCallback(run);
     else setTimeout(run, 1500);
@@ -58,8 +52,7 @@ export default function App() {
           <Route path="/ask/:threadId" element={<Ask />} />
           <Route path="/docs" element={<Docs />} />
           <Route path="/docs/:nodeId" element={<Docs />} />
-          <Route path="/palace" element={<Palace />} />
-          <Route path="/palace/:entityId" element={<Palace />} />
+          <Route path="/palace/*" element={<Navigate to="/architecture" replace />} />
           <Route path="/architecture" element={<Architecture />} />
           <Route path="/architecture/:repoId" element={<Architecture />} />
           <Route path="/library" element={<Library />} />
@@ -76,11 +69,11 @@ export default function App() {
           <Route path="/account" element={<Account />} />
           <Route path="/connectors" element={admin(<Connectors />)} />
           <Route path="/providers" element={admin(<Providers />)} />
-          <Route path="/spend" element={admin(<Spend />)} />
-          <Route path="/users" element={admin(<Users />)} />
-          <Route path="/sign-in" element={<RequireRole min="owner"><SignIn /></RequireRole>} />
+          <Route path="/spend" element={admin(<Advanced />)} />
+          <Route path="/users" element={admin(<People />)} />
+          <Route path="/sign-in" element={<RequireRole min="owner"><People /></RequireRole>} />
           <Route path="/setup" element={admin(<Setup />)} />
-          <Route path="/settings-file" element={admin(<SettingsFile />)} />
+          <Route path="/settings-file" element={admin(<Advanced />)} />
           <Route path="*" element={<p className="text-sm text-slate-500">Page not found.</p>} />
         </Route>
       </Routes>

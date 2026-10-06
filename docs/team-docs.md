@@ -2,13 +2,13 @@
 
 Besides code, generated docs, Confluence and Jira ([confluence-jira.md](confluence-jira.md)), the Hub
 reads two more kinds of team documents. Like Confluence pages, they are shared: everyone who can sign in
-can read them, Ask cites them, they land on Library shelves, and the Palace links them to the services they
+can read them, Ask cites them, they land on Team docs shelves, and Architecture links them to the services they
 mention.
 
 | Source | How documents arrive | Updates |
 |---|---|---|
 | **Notion** | Pages shared with a Notion integration | Changed pages every 15 minutes; unshared or deleted pages leave daily |
-| **Upload** | Markdown, text or HTML files added in the Library | When someone uploads again (same name in the same collection replaces it) |
+| **Upload** | Markdown, text or HTML files added in Team docs | When someone uploads again (same name in the same collection replaces it) |
 
 ## Notion
 
@@ -16,7 +16,7 @@ mention.
    read access only (no insert or update), then copy the **Internal integration secret**.
 2. Share the pages the whole team may read with the integration: on a page, **••• → Connections → add
    the integration**. Sharing a page shares its subpages.
-3. In the Hub: **Connectors → Add knowledge source → Notion**, paste the secret. The first sync starts
+3. In the Hub: **Settings → Connections → Notion**, paste the secret. The first sync starts
    within a minute; **Sync now** runs one immediately.
 
 The Hub sees only what is shared with the integration, so access is managed in Notion. Pages are
@@ -33,7 +33,7 @@ source (Confluence, Jira, Notion, uploads).
 
 ## Upload documents
 
-**Library → Upload documents** (editors and above). Pick a collection, for example *Runbooks* or
+**Docs → Team docs → Upload documents** (editors and above). Pick a collection, for example *Runbooks* or
 *Onboarding*, and up to 20 files of at most 5 MB each:
 
 | Format | Read as |
@@ -43,9 +43,9 @@ source (Confluence, Jira, Notion, uploads).
 | `.html`, `.htm` | Converted to Markdown (scripts, styles and navigation dropped) |
 | `.pdf`, `.docx`, slides, spreadsheets | Refused with a message: export as Markdown or HTML first |
 
-Uploaded documents are listed under **Uploaded documents** in the Library, open in the Hub, and are
+Uploaded documents are listed under **Uploaded documents** in Team docs, open in the Hub, and are
 searched like generated docs (`include: ["docs"]` covers them). Uploading a file with the same name to the
-same collection replaces it; **Remove** on the document takes it out of the Library and search. Uploads
+same collection replaces it; **Remove** on the document takes it out of Team docs and search. Uploads
 and removals are in the audit log.
 
 ```sh

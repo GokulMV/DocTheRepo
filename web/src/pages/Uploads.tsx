@@ -125,7 +125,7 @@ export default function UploadView() {
   const d = doc.data;
   return (
     <>
-      <Link to="/library" className="mb-3 inline-block text-sm text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">← Library</Link>
+      <Link to="/library" className="mb-3 inline-block text-sm text-slate-500 hover:text-slate-800 dark:hover:text-slate-200">← Team docs</Link>
       <PageHeader
         title={d?.title ?? 'Document'}
         description={d ? `Uploaded to ${d.collection} ${relTime(d.updated_at)}${d.uploaded_by ? ` by ${d.uploaded_by}` : ''}.` : undefined}
@@ -135,7 +135,7 @@ export default function UploadView() {
       <ErrorNote error={doc.error ?? err} />
       {d && (d.body ? <Card><Markdown>{d.body}</Markdown></Card> : <Empty icon={FileText} title="This document is empty" />)}
       {d && <Badge>Uploaded</Badge>}
-      <Dialog open={confirm} onOpenChange={setConfirm} title={`Remove ${d?.title ?? 'this document'}?`} description="It leaves the Library and search. Answers given earlier keep their text.">
+      <Dialog open={confirm} onOpenChange={setConfirm} title={`Remove ${d?.title ?? 'this document'}?`} description="It leaves Team docs and search. Answers given earlier keep their text.">
         <DialogFooter>
           <Button variant="ghost" onClick={() => setConfirm(false)}>Cancel</Button>
           <Button variant="danger" onClick={() => void remove()}>Remove</Button>

@@ -74,3 +74,17 @@ func TestSiftAnalytics(t *testing.T) {
 	require.Len(t, rep.Daily, 1)
 	assert.Equal(t, int64(3), rep.Daily[0].Picked)
 }
+
+// Issues apply once an alert source is connected (code and team-document connectors do not count).
+func TestHasIssues(t *testing.T) {
+	st := storetest.New(t)
+	ctx := context.Background()
+	b := store.NewBrowse(st)
+	assert.False(t, b.HasIssues(ctx), "a fresh Hub has no Issues pages")
+	_, err := st.Pool.Exec(ctx, `INSERT INTO connectors (id, type, name) VALUES ($1, 'github', 'GitHub'), ($2, 'confluence', 'Confluence')`, ports.NewID(), ports.NewID())
+	require.NoError(t, err)
+	assert.False(t, b.HasIssues(ctx), "code and team documents are not alert sources")
+	_, err = st.Pool.Exec(ctx, `INSERT INTO connectors (id, type, name) VALUES ($1, 'sentry', 'Sentry')`, ports.NewID())
+	require.NoError(t, err)
+	assert.True(t, b.HasIssues(ctx))
+}

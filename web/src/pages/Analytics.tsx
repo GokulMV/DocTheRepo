@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { usePipelineStats, useSavings, useSift, useUsage, type SiftReport } from '@/api/hooks';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { useLimits, useSavings, useSift, useUsage, type SiftReport } from '@/api/hooks';
 import { Link } from 'react-router-dom';
 import { Card, ErrorNote, PageHeader, Select, Spinner, Table, Td } from '@/components/ui';
-import { daysAgoISO, num, relTime, shortSha, usd } from '@/lib/format';
+import { daysAgoISO, num, usd } from '@/lib/format';
 import { capFirst, featureLabel } from '@/lib/labels';
 
 const COLORS = ['#2f6fed', '#0f766e', '#ea580c', '#7c3aed', '#db2777', '#ca8a04', '#64748b'];
@@ -36,7 +36,7 @@ export function SiftCard({ data, loading }: { data?: SiftReport; loading: boolea
       <Card title="Ask source picking" className="mb-6">
         <p className="text-sm text-slate-500">
           No answers used the source picker in this period. Route <b>Ask source picking</b> to TypeSafe Jev or a small, cheap model under{' '}
-          <Link className="underline" to="/providers">Providers &amp; routing</Link> and Ask sends its answering model only the sources it needs.
+          <Link className="underline" to="/providers">Settings → AI models</Link> and Ask sends its answering model only the sources it needs.
         </p>
       </Card>
     );
@@ -71,39 +71,45 @@ export function SiftCard({ data, loading }: { data?: SiftReport; loading: boolea
   );
 }
 
+const isMonthBudget = (l: { scope: string; window: string; max_cost_usd?: number | null }) => l.scope === 'global' && l.window === 'month' && l.max_cost_usd != null;
+
 export default function Analytics() {
-  const [days, setDays] = useState(7);
-  const [groupBy, setGroupBy] = useState('feature');
-  const [metric, setMetric] = useState<'tokens' | 'cost_usd' | 'calls'>('tokens');
+  const [days, setDays] = useState(30);
   const from = useMemo(() => daysAgoISO(days), [days]);
-  const gran = days <= 2 ? 'hour' : 'day';
-  const usage = useUsage(groupBy, gran, from);
+  const monthFrom = useMemo(() => {
+    const n = new Date();
+    return new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth(), 1)).toISOString().replace(/\.\d{3}Z$/, 'Z');
+  }, []);
+  const usage = useUsage('feature', 'day', from);
+  const month = useUsage('feature', 'day', monthFrom);
   const savings = useSavings(from);
   const sift = useSift(from);
-  const pipe = usePipelineStats();
+  const limits = useLimits();
 
-  // Feature series read as their names ("docgen" → "Docs generation").
-  const seriesLabel = (k: string) => (!k ? '—' : groupBy === 'feature' ? featureLabel(k) : capFirst(k));
-  const chart = useMemo(() => {
-    const rows = new Map<string, Record<string, number | string>>();
-    for (const s of usage.data?.series ?? []) {
-      for (const p of s.points) {
-        const t = gran === 'hour' ? p.t.slice(5, 16).replace('T', ' ') : p.t.slice(0, 10);
-        const row = rows.get(t) ?? { t };
-        row[seriesLabel(s.key)] = p[metric];
-        rows.set(t, row);
-      }
-    }
-    return [...rows.values()];
-  }, [usage.data, metric, gran]);
-  const seriesKeys = usage.data?.series.map((s) => seriesLabel(s.key)) ?? [];
+  // One bar per day: what all features cost together.
+  const perDay = useMemo(() => {
+    const byDay = new Map<string, number>();
+    for (const s of usage.data?.series ?? []) for (const p of s.points) byDay.set(p.t.slice(0, 10), (byDay.get(p.t.slice(0, 10)) ?? 0) + p.cost_usd);
+    return [...byDay.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([t, cost]) => ({ t, Cost: Math.round(cost * 100) / 100 }));
+  }, [usage.data]);
+  const byFeature = useMemo(() => {
+    const total = usage.data?.totals.cost_usd ?? 0;
+    return (usage.data?.series ?? [])
+      .map((s) => ({ key: s.key, cost: s.points.reduce((n, p) => n + p.cost_usd, 0), tokens: s.points.reduce((n, p) => n + p.tokens, 0) }))
+      .filter((r) => r.cost > 0 || r.tokens > 0)
+      .sort((a, b) => b.cost - a.cost || b.tokens - a.tokens)
+      .map((r) => ({ ...r, share: total > 0 ? Math.round((r.cost / total) * 100) : 0 }));
+  }, [usage.data]);
+
   const t = usage.data?.totals;
-
+  const budget = limits.data?.find(isMonthBudget)?.max_cost_usd ?? null;
+  const spentMonth = month.data?.totals.cost_usd ?? 0;
+  const period = days === 1 ? 'last 24 hours' : `last ${days} days`;
   return (
     <>
       <PageHeader
-        title="Analytics"
-        description="Where your LLM usage goes, what the Hub avoided spending, and how fresh each repository's docs are."
+        title="Usage"
+        description="What the AI models cost, what the Hub avoided spending, and how much of your budget is left."
         actions={
           <Select aria-label="Period" value={days} onChange={(e) => setDays(Number(e.target.value))} className="w-36">
             <option value={1}>Last 24 hours</option>
@@ -113,91 +119,64 @@ export default function Analytics() {
           </Select>
         }
       />
-      <ErrorNote error={usage.error ?? savings.error ?? sift.error ?? pipe.error} />
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Calls" value={num(t?.calls)} hint={t ? `${num(t.cached_calls)} cached, ${num(t.blocked)} blocked` : undefined} />
-        <Stat label="Tokens" value={num(t?.tokens)} hint={t?.cache_read_tokens ? `${num(t.cache_read_tokens)} read from the prompt cache` : undefined} />
-        <Stat label="Cost" value={usd(t?.cost_usd)} hint="At your cost table prices" />
-        <Stat label="Saved" value={usd(savings.data?.total.cost_avoided_usd)} hint={savings.data ? `${num(savings.data.total.tokens_avoided)} tokens avoided` : undefined} />
+      <ErrorNote error={usage.error ?? savings.error ?? sift.error} />
+      <div className="mb-6 grid gap-4 sm:grid-cols-3">
+        <Stat label="Spent" value={usd(t?.cost_usd)} hint={t ? `${num(t.tokens)} tokens, ${period}` : undefined} />
+        <Stat label="Saved" value={usd(savings.data?.total.cost_avoided_usd)} hint={savings.data ? `${num(savings.data.total.tokens_avoided)} tokens not spent` : undefined} />
+        {budget ? (
+          <Stat label="Budget left this month" value={usd(Math.max(0, budget - spentMonth))} hint={`${usd(spentMonth)} of ${usd(budget)} used`} />
+        ) : (
+          <Stat label="Monthly budget" value="None" hint="Set one under Settings → AI models" />
+        )}
       </div>
-      <Card
-        title="Usage"
-        className="mb-6"
-        actions={
-          <>
-            <Select aria-label="Group by" value={groupBy} onChange={(e) => setGroupBy(e.target.value)} className="w-36">
-              {['feature', 'provider', 'model', 'repo', 'user'].map((g) => <option key={g} value={g}>By {g === 'repo' ? 'repository' : g}</option>)}
-            </Select>
-            <Select aria-label="Metric" value={metric} onChange={(e) => setMetric(e.target.value as typeof metric)} className="w-32">
-              <option value="tokens">Tokens</option>
-              <option value="cost_usd">Cost</option>
-              <option value="calls">Calls</option>
-            </Select>
-          </>
-        }
-      >
+      <Card title="Cost per day" className="mb-6">
         {usage.isLoading ? (
           <Spinner />
-        ) : chart.length === 0 ? (
+        ) : perDay.length === 0 ? (
           <p className="text-sm text-slate-500">No usage in this period.</p>
         ) : (
-          <div className="h-72">
+          <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chart}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+              <BarChart data={perDay}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                 <XAxis dataKey="t" fontSize={11} />
-                <YAxis fontSize={11} />
-                <Tooltip />
-                <Legend />
-                {seriesKeys.map((k, i) => <Bar key={k} dataKey={k} stackId="a" fill={COLORS[i % COLORS.length]} />)}
+                <YAxis fontSize={11} tickFormatter={(v: number) => `$${v}`} />
+                <Tooltip formatter={(v: number) => usd(v)} />
+                <Bar dataKey="Cost" fill={COLORS[0]} radius={[3, 3, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         )}
       </Card>
-      <SiftCard data={sift.data} loading={sift.isLoading} />
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card title="Savings">
-          <Table head={['How', 'Events', 'Tokens avoided', 'Cost avoided']}>
-            {savings.data?.by_kind.map((k) => (
-              <tr key={k.kind}>
-                <Td>{SAVINGS_LABEL[k.kind] ?? k.kind.replaceAll('_', ' ')}</Td>
-                <Td>{num(k.events)}</Td>
-                <Td>{num(k.tokens_avoided)}</Td>
-                <Td>{usd(k.cost_avoided_usd)}</Td>
-              </tr>
-            ))}
-          </Table>
-          {savings.data?.by_kind.length === 0 && <p className="text-sm text-slate-500">No savings recorded yet.</p>}
-        </Card>
-        <Card title="Pipeline">
-          {pipe.data && (
-            <>
-              <p className="mb-2 text-sm">Cosmetic pushes skipped by triage: <strong>{Math.round(pipe.data.triage_abort_rate * 100)}%</strong></p>
-              <div className="h-40">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={pipe.data.jobs.filter((j) => j.status === 'done')}>
-                    <XAxis dataKey="type" fontSize={11} />
-                    <YAxis fontSize={11} unit="s" />
-                    <Tooltip />
-                    <Line dataKey="p50_seconds" stroke="#2f6fed" name="p50" />
-                    <Line dataKey="p95_seconds" stroke="#ea580c" name="p95" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-              <Table head={['Repository', 'Processed', 'Last success']}>
-                {pipe.data.freshness.map((f) => (
-                  <tr key={f.repo_id}>
-                    <Td>{f.repo}</Td>
-                    <Td className="font-mono text-xs">{shortSha(f.last_processed_sha)}</Td>
-                    <Td>{relTime(f.last_success)}</Td>
-                  </tr>
-                ))}
-              </Table>
-            </>
+      <div className="mb-6 grid gap-6 lg:grid-cols-2">
+        <Card title="Where it went">
+          {byFeature.length === 0 ? <p className="text-sm text-slate-500">Nothing yet.</p> : (
+            <Table head={['Feature', 'Cost', 'Share']}>
+              {byFeature.map((r) => (
+                <tr key={r.key}>
+                  <Td>{featureLabel(r.key)}</Td>
+                  <Td>{usd(r.cost)}</Td>
+                  <Td>{r.share}%</Td>
+                </tr>
+              ))}
+            </Table>
           )}
         </Card>
+        <Card title="Saved by">
+          {savings.data?.by_kind.length ? (
+            <Table head={['How', 'Times', 'Saved']}>
+              {savings.data.by_kind.map((k) => (
+                <tr key={k.kind}>
+                  <Td>{SAVINGS_LABEL[k.kind] ?? capFirst(k.kind.replaceAll('_', ' '))}</Td>
+                  <Td>{num(k.events)}</Td>
+                  <Td>{usd(k.cost_avoided_usd)}</Td>
+                </tr>
+              ))}
+            </Table>
+          ) : <p className="text-sm text-slate-500">No savings recorded yet.</p>}
+        </Card>
       </div>
+      <SiftCard data={sift.data} loading={sift.isLoading} />
     </>
   );
 }

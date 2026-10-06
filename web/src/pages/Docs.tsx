@@ -187,7 +187,7 @@ function NoDocs() {
                 <div className="mx-auto mt-4 max-w-xl rounded-lg border border-red-200 bg-red-50 p-3 text-left text-xs text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-300">
                   <p className="font-medium">The last attempt failed {relTime(lastFailure.updated_at)}{tracked.find((r) => r.id === lastFailure.repo_id) ? ` (${tracked.find((r) => r.id === lastFailure.repo_id)!.full_name})` : ''}:</p>
                   <p className="mt-1 line-clamp-3 break-all" title={lastFailure.error}>{lastFailure.error}</p>
-                  <p className="mt-1">Details are under <Link className="underline" to="/activity">Activity</Link>. Fix the cause (often the model or key under Providers &amp; routing), then generate again.</p>
+                  <p className="mt-1">Details are under <Link className="underline" to="/activity">Activity</Link>. Fix the cause (often the model or key under Settings → AI models), then generate again.</p>
                 </div>
               )}
               {atLeast(me.data?.role, 'admin') && <Button className="mt-4" onClick={() => void generate()}>Generate docs now</Button>}

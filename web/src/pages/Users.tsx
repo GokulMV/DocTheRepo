@@ -219,7 +219,7 @@ export default function Users() {
   return (
     <>
       <PageHeader
-        title="Users & access"
+        title="People"
         description="Who can use the Hub, what they can do, and which repositories they see."
         actions={<Button onClick={() => setDialog({ kind: 'add' })}><UserPlus className="h-4 w-4" aria-hidden />Add user</Button>}
       />

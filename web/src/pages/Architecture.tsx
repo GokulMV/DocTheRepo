@@ -38,7 +38,7 @@ interface Architecture {
   counts?: Record<string, number>;
   restricted: number;
   env: string[];
-  docs: { entity_id: string; kind: string; name: string; key: string; relation: string }[];
+  docs: { entity_id: string; kind: string; name: string; key: string; relation: string; url?: string }[];
   owners: string[];
   diagrams: Diagram[];
   updated_at?: string;
@@ -221,7 +221,6 @@ function RepoArchitecture({ repoId }: { repoId: string }) {
                       ))}
                     </ul>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      {sel.entity_id && <Button size="sm" variant="secondary" onClick={() => nav(`/palace/${sel.entity_id}`)}>Open in Palace</Button>}
                       {sel.repo_id && sel.repo_id !== repoId && <Button size="sm" variant="secondary" onClick={() => { setSelected(undefined); nav(`/architecture/${sel.repo_id}`); }}>Its architecture</Button>}
                       <Button size="sm" variant="secondary" onClick={() => nav(`/ask?q=${encodeURIComponent(`How does ${sel.name} fit into ${a.repo.full_name}?`)}`)}>Ask about it</Button>
                     </div>
@@ -236,7 +235,7 @@ function RepoArchitecture({ repoId }: { repoId: string }) {
                   {a.docs.length ? (
                     <ul className="space-y-1.5 text-sm">
                       {a.docs.map((d) => (
-                        <li key={d.entity_id}><Link to={`/palace/${d.entity_id}`} className="text-brand-600 hover:underline dark:text-brand-300">{d.name}</Link> <span className="text-xs text-slate-500">{d.relation === 'runbook_for' ? 'runbook' : kindMeta(d.kind).label}</span></li>
+                        <li key={d.entity_id}>{d.url ? <a href={d.url} target="_blank" rel="noreferrer" className="text-brand-600 hover:underline dark:text-brand-300">{d.name}</a> : <span>{d.name}</span>} <span className="text-xs text-slate-500">{d.relation === 'runbook_for' ? 'runbook' : kindMeta(d.kind).label}</span></li>
                       ))}
                     </ul>
                   ) : <p className="text-sm text-slate-500">No linked Confluence or Jira pages.</p>}

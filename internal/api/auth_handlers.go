@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
@@ -33,6 +34,8 @@ type authHandlers struct {
 	mailer Mailer
 	// environment is the deployment's name for the UI banner ("" or production: no banner).
 	environment string
+	// hasIssues says whether to show the Issues pages (nil: always).
+	hasIssues func(ctx context.Context) bool
 	// loginLimit throttles password attempts per client IP.
 	mu         sync.Mutex
 	loginLimit map[string]*rate.Limiter
@@ -216,6 +219,11 @@ func (h *authHandlers) me(w http.ResponseWriter, r *http.Request) {
 	}
 	out := map[string]any{"id": p.UserID, "email": p.Email, "name": p.Name, "role": p.Role,
 		"repo_access": map[string]any{"all": scope.All, "repo_ids": ids}}
+	issues := true
+	if h.hasIssues != nil {
+		issues = h.hasIssues(r.Context())
+	}
+	out["features"] = map[string]bool{"issues": issues}
 	if p.Via == "session" {
 		out["csrf_token"] = p.CSRF
 	}

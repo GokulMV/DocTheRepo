@@ -1,22 +1,18 @@
-import { ChevronDown, Plug } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '@/api/client';
 import { keys, useConnectors, useInvalidating } from '@/api/hooks';
 import type { Check, Connector, RemoteResult } from '@/api/types';
-import { Badge, Button, Card, Dialog, DialogFooter, Empty, ErrorNote, Field, Input, PageHeader, Select, Spinner, Table, Td, Textarea, statusTone } from '@/components/ui';
+import { Badge, Button, Card, Dialog, DialogFooter, ErrorNote, Field, Input, PageHeader, Select, Spinner, Table, Td, Textarea, statusTone } from '@/components/ui';
 import { relTime } from '@/lib/format';
 import { seal } from '@/lib/seal';
 import { SealedBadge, SealedHint } from '@/components/Sealed';
 import { KNOWLEDGE, knowledgeSpec, SOURCES, sourceSpec } from './signalSources';
+import { ConnectAlerts, ConnectDocs, randomSecret } from './ConnectTools';
+import { Link } from 'react-router-dom';
 import { nameOf, sentence } from '@/lib/labels';
-
-function randomSecret() {
-  const b = new Uint8Array(24);
-  crypto.getRandomValues(b);
-  return Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
-}
 
 /** GitHubMark is GitHub's logo, for the "Connect with GitHub" button. */
 function GitHubMark({ className }: { className?: string }) {
@@ -260,10 +256,8 @@ function AddGit({ onCreated }: { onCreated: (id: string, type: string, secret: s
   };
   return (
     <>
-      <Button onClick={() => setOpen(true)}>Connect git host</Button>
-      <Dialog open={open} onOpenChange={setOpen} title="Connect GitHub or GitLab" description="Read access to code, and write access limited to the generated-docs path (enforced by the Hub).">
-        <ConnectGitHub />
-        <div className="my-4 flex items-center gap-3 text-xs text-slate-400"><span className="h-px flex-1 bg-slate-200 dark:bg-white/10" />or enter the details yourself (GitLab, a token, or an existing app)<span className="h-px flex-1 bg-slate-200 dark:bg-white/10" /></div>
+      <button type="button" onClick={() => setOpen(true)} className="text-sm text-brand-600 hover:underline dark:text-brand-300">GitLab, a token, or GitHub Enterprise with your own app</button>
+      <Dialog open={open} onOpenChange={setOpen} title="Connect GitLab or GitHub by hand" description="Read access to code, and write access limited to the generated-docs path (enforced by the Hub).">
         <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); submit(); }}>
           <Field label="Host">
             <Select value={type} onChange={(e) => setType(e.target.value as 'github' | 'gitlab')}>
@@ -334,121 +328,6 @@ function TestResult({ id, onClose }: { id: string; onClose: () => void }) {
   );
 }
 
-function AddSignal({ onCreated }: { onCreated: (c: { id: string; type: string; secret: string; path: string }) => void }) {
-  const [open, setOpen] = useState(false);
-  const [type, setType] = useState('sentry');
-  const spec = sourceSpec(type)!;
-  const [name, setName] = useState('');
-  const [mode, setMode] = useState<string>('');
-  const [config, setConfig] = useState<Record<string, string>>({});
-  const [creds, setCreds] = useState('');
-  const [noLLM, setNoLLM] = useState(false);
-  const create = useInvalidating((b: object) => api.post<{ id: string; webhook_path: string }>('/connectors', b), keys.connectors);
-  const pick = (t: string) => { setType(t); setConfig({}); setMode(''); setNoLLM(t === 'wiz'); };
-  return (
-    <>
-      <Button variant="secondary" onClick={() => setOpen(true)}>Add signal source</Button>
-      <Dialog open={open} onOpenChange={setOpen} title="Add a signal source" description="Errors, alerts, logs, and event platforms. Read-only: the Hub never changes anything in these tools.">
-        <form
-          className="space-y-3"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            const secret = spec.secret ? randomSecret() : '';
-            const m = mode || spec.modes[0];
-            const cfg: Record<string, string> = Object.fromEntries(Object.entries(config).filter(([, v]) => v.trim() !== ''));
-            if (noLLM) cfg.never_send_to_llm = 'true';
-            const r = await create.mutateAsync({ type, name: name || spec.label, mode: m, config: cfg, credentials: creds ? await seal(creds, 'connector.credentials') : undefined, webhook_secret: secret ? await seal(secret, 'connector.webhook_secret') : undefined });
-            onCreated({ id: r.id, type, secret, path: r.webhook_path });
-            setOpen(false);
-          }}
-        >
-          <Field label="Source" hint={spec.help}>
-            <Select value={type} onChange={(e) => pick(e.target.value)}>
-              {(['Errors & alerts', 'Security & log platforms', 'Cloud logs & alarms', 'Event platforms'] as const).map((g) => (
-                <optgroup key={g} label={g}>{SOURCES.filter((s) => s.group === g).map((s) => <option key={s.type} value={s.type}>{s.label}</option>)}</optgroup>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder={spec.label} /></Field>
-          {spec.modes.length > 1 && (
-            <Field label="How events arrive">
-              <Select value={mode || spec.modes[0]} onChange={(e) => setMode(e.target.value)}>{spec.modes.map((m) => <option key={m} value={m}>{m === 'both' ? 'Webhook and polling' : m === 'poll' ? 'Polling' : 'Webhook'}</option>)}</Select>
-            </Field>
-          )}
-          {spec.config?.map((c) => (
-            <Field key={c.key} label={c.key + (c.required ? '' : ' (optional)')} hint={c.hint || undefined}>
-              <Input value={config[c.key] ?? ''} required={c.required} onChange={(e) => setConfig({ ...config, [c.key]: e.target.value })} />
-            </Field>
-          ))}
-          {spec.credentials && (
-            <Field label="Credentials (optional)" hint={spec.credentials + '. Stored encrypted; never shown again.'}>
-              <Textarea rows={3} className="font-mono text-xs" value={creds} onChange={(e) => setCreds(e.target.value)} />
-            </Field>
-          )}
-          <label className="flex items-start gap-2 text-sm">
-            <input type="checkbox" className="mt-1" checked={noLLM} onChange={(e) => setNoLLM(e.target.checked)} />
-            <span>Never send this source’s data to a model<span className="block text-xs text-slate-500">Issues are grouped and shown but not explained, and are left out of rule proposals.</span></span>
-          </label>
-          <ErrorNote error={create.error} />
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={create.isPending}>Add</Button>
-          </DialogFooter>
-        </form>
-      </Dialog>
-    </>
-  );
-}
-
-function AddKnowledge({ onCreated }: { onCreated: (type: string) => void }) {
-  const [open, setOpen] = useState(false);
-  const [type, setType] = useState<'confluence' | 'jira' | 'notion'>('confluence');
-  const spec = knowledgeSpec(type)!;
-  const [name, setName] = useState('');
-  const [config, setConfig] = useState<Record<string, string>>({});
-  const [token, setToken] = useState('');
-  const create = useInvalidating((b: object) => api.post<{ id: string }>('/connectors', b), keys.connectors);
-  return (
-    <>
-      <Button variant="secondary" onClick={() => setOpen(true)}>Add knowledge source</Button>
-      <Dialog open={open} onOpenChange={setOpen} title="Add a knowledge source" description="Confluence spaces, Jira projects and Notion pages, synced read-only for answers, decodes, the Library, and known issues. To add files, use Library → Upload documents.">
-        <form
-          className="space-y-3"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            const cfg = Object.fromEntries(Object.entries(config).filter(([, v]) => v.trim() !== ''));
-            await create.mutateAsync({ type, name: name || spec.label, mode: 'poll', config: cfg, credentials: await seal(token, 'connector.credentials') });
-            onCreated(type);
-            setOpen(false);
-            setConfig({});
-            setToken('');
-          }}
-        >
-          <Field label="Source" hint={spec.help}>
-            <Select value={type} onChange={(e) => { setType(e.target.value as 'confluence' | 'jira' | 'notion'); setConfig({}); }}>
-              {KNOWLEDGE.map((k) => <option key={k.type} value={k.type}>{k.label}</option>)}
-            </Select>
-          </Field>
-          <Field label="Name"><Input value={name} onChange={(e) => setName(e.target.value)} placeholder={spec.label} /></Field>
-          {spec.config.map((c) => (
-            <Field key={c.key} label={c.label + (c.required ? '' : ' (optional)')} hint={c.hint}>
-              <Input value={config[c.key] ?? ''} required={c.required} placeholder={c.placeholder} onChange={(e) => setConfig({ ...config, [c.key]: e.target.value })} />
-            </Field>
-          ))}
-          <Field label={spec.token?.label ?? 'API token'} hint={spec.token?.hint ?? 'Cloud: an API token for the e-mail above · Data Center: a personal access token. Stored encrypted; never shown again.'}>
-            <Input type="password" required value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" />
-          </Field>
-          <ErrorNote error={create.error} />
-          <DialogFooter>
-            <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button type="submit" disabled={create.isPending}>Add</Button>
-          </DialogFooter>
-        </form>
-      </Dialog>
-    </>
-  );
-}
-
 const remoteDone: Record<RemoteResult['action'], string> = {
   suspended: 'The GitHub App installation is suspended: GitHub sends no events and the App cannot read your repositories until you enable it again.',
   resumed: 'The GitHub App installation is active again.',
@@ -485,8 +364,10 @@ export default function Connectors() {
   const clearGitHub = () => setParams({}, { replace: true });
   const [testing, setTesting] = useState<string>();
   const [created, setCreated] = useState<{ id: string; type: string; secret: string }>();
-  const [signal, setSignal] = useState<{ id: string; type: string; secret: string; path: string }>();
+  const [alertTool, setAlertTool] = useState<string>();
+  const [docTool, setDocTool] = useState<'confluence' | 'jira' | 'notion'>();
   const [knowledge, setKnowledge] = useState<string>();
+  const [allTools, setAllTools] = useState(false);
   const sync = useInvalidating((id: string) => api.post<{ job_ids: string[] }>(`/connectors/${id}/sync`));
   const [remote, setRemote] = useState<{ name: string; result: RemoteResult }>();
   const del = useInvalidating(async (c: Connector) => {
@@ -503,10 +384,14 @@ export default function Connectors() {
     : `Remove ${c.name} and its repositories?`);
   const confirmDisable = (c: Connector) => !c.enabled || !isApp(c) || confirm(
     `Disable ${c.name}?\n\nThe GitHub App installation is suspended on GitHub until you enable it again.`);
+  const list = conns.data ?? [];
+  const codeConns = list.filter((c) => c.type === 'github' || c.type === 'gitlab');
+  const docConns = list.filter((c) => knowledgeSpec(c.type));
+  const alertConns = list.filter((c) => sourceSpec(c.type));
+  const shown = allTools ? SOURCES : SOURCES.filter((x) => POPULAR.includes(x.type));
   return (
     <>
-      <PageHeader title="Connectors" description="Where the Hub reads from: your git host (code), error and alert tools for the Inbox (Sentry, Datadog, PagerDuty, Wiz, Splunk…), and Confluence and Jira for knowledge."
-        actions={<div className="flex flex-wrap gap-2"><AddKnowledge onCreated={setKnowledge} /><AddSignal onCreated={setSignal} /><AddGit onCreated={(id, type, secret) => setCreated({ id, type, secret })} /></div>} />
+      <PageHeader title="Connections" description="Where the Hub reads from: your code, your team's documents, and (optional) the tools that report errors and alerts." />
       {ghError && (
         <Card title="GitHub was not connected" className="mb-4">
           <p className="text-sm text-red-700 dark:text-red-400">{ghError}</p>
@@ -516,26 +401,8 @@ export default function Connectors() {
       {ghConnected && <PickRepos connectorId={ghConnected} onDone={clearGitHub} />}
       {knowledge && (
         <Card title="Syncing" className="mb-4">
-          <p className="text-sm">Saved. The first {knowledgeSpec(knowledge)?.label} sync starts within a minute; pages and issues then appear in Ask, the Library, and (when labelled) Known Issues. Health shows here after each sync.</p>
+          <p className="text-sm">Connected. The first {knowledgeSpec(knowledge)?.label} sync starts within a minute; its pages then appear in Ask and Team docs.</p>
           <Button size="sm" variant="secondary" className="mt-2" onClick={() => setKnowledge(undefined)}>Done</Button>
-        </Card>
-      )}
-      {signal && (
-        <Card title="Finish setup" className="mb-4">
-          {signal.path ? (
-            <>
-              <p className="text-sm">Point {sourceSpec(signal.type)?.label ?? signal.type} at this URL{signal.secret && ' and give it the secret'} ({sourceSpec(signal.type)?.help})</p>
-              <dl aria-label="Webhook details" className="mt-2 grid grid-cols-[8rem_1fr] gap-y-1 text-sm">
-                <dt className="text-slate-500">URL</dt>
-                <dd className="font-mono text-xs">{window.location.origin}{signal.path}</dd>
-                {signal.secret && <><dt className="text-slate-500">Secret</dt><dd className="font-mono text-xs">{signal.secret}</dd></>}
-              </dl>
-              {signal.secret && <p className="mt-2 text-xs text-slate-500">The secret is shown once.</p>}
-            </>
-          ) : (
-            <p className="text-sm">Saved. The Hub starts reading {sourceSpec(signal.type)?.label ?? signal.type} within a minute; its health shows here after the first poll.</p>
-          )}
-          <Button size="sm" variant="secondary" className="mt-2" onClick={() => setSignal(undefined)}>Done</Button>
         </Card>
       )}
       {created && (
@@ -554,40 +421,96 @@ export default function Connectors() {
       {conns.isLoading && <Spinner />}
       <ErrorNote error={conns.error ?? sync.error ?? del.error ?? toggle.error} />
       {remote && <RemoteNotice name={remote.name} result={remote.result} onClose={() => setRemote(undefined)} />}
-      {conns.data?.length === 0 && <Empty icon={Plug} title="No connectors yet">Connect GitHub or GitLab to start, then add the tools that report your errors and alerts.</Empty>}
-      {!!conns.data?.length && (
-        <Card>
-          <Table head={['Name', 'Type', 'Mode', 'Health', 'Last sync', '']}>
-            {conns.data.map((c) => (
-              <tr key={c.id}>
-                <Td>
-                  <span className="font-medium">{c.name}</span>{!c.enabled && <Badge tone="amber">disabled</Badge>}
-                  {c.has_credentials && <div className="mt-1"><SealedBadge meta={c.credentials_meta} label="Credentials sealed" /></div>}
-                </Td>
-                <Td>{nameOf(c.type)}</Td>
-                <Td>{nameOf(c.mode)}</Td>
-                <Td><Badge tone={statusTone(c.health)}>{c.health}</Badge>{c.last_error && <p className="max-w-xs truncate text-xs text-red-600" title={c.last_error}>{c.last_error}</p>}</Td>
-                <Td>{relTime(c.last_sync_at)}{c.mode !== 'webhook' && sourceSpec(c.type) && <p className="text-xs text-slate-500">polled every {c.poll_seconds}s</p>}{knowledgeSpec(c.type) && <p className="text-xs text-slate-500">synced every {Math.round(c.poll_seconds / 60)} min</p>}</Td>
-                <Td>
-                  <div className="flex flex-wrap gap-1">
-                    {knowledgeSpec(c.type) && <Button size="sm" variant="secondary" onClick={() => sync.mutate(c.id)}>Sync now</Button>}
-                    {(c.type === 'github' || c.type === 'gitlab') && (
-                      <>
-                        <Button size="sm" variant="secondary" onClick={() => setTesting(c.id)}>Test</Button>
-                        <Button size="sm" variant="secondary" onClick={() => sync.mutate(c.id)}>Sync now</Button>
-                      </>
-                    )}
-                    <Button size="sm" variant="ghost" onClick={() => confirmDisable(c) && toggle.mutate(c)}>{c.enabled ? 'Disable' : 'Enable'}</Button>
-                    <Button size="sm" variant="ghost" onClick={() => confirmRemove(c) && del.mutate(c)}>Remove</Button>
-                  </div>
-                </Td>
-              </tr>
-            ))}
-          </Table>
-        </Card>
-      )}
+
+      <Group title="Code" text="The repositories the Hub documents and answers questions about.">
+        {codeConns.length === 0 ? (
+          <div className="max-w-xl"><ConnectGitHub /></div>
+        ) : <ConnectorTable items={codeConns} actions={rowActions} />}
+        <div className="mt-3"><AddGit onCreated={(id, type, secret) => setCreated({ id, type, secret })} /></div>
+      </Group>
+
+      <Group title="Team documents" text="Pages Ask can answer from, next to your code.">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {KNOWLEDGE.map((k) => <Tile key={k.type} label={k.label} sub="Site, what to sync, a token" onClick={() => setDocTool(k.type)} />)}
+          <Link to="/library" className={tileClass}><span className="font-medium">Upload files</span><span className="text-xs text-slate-500">Markdown, text or HTML, under Team docs</span></Link>
+        </div>
+        {docConns.length > 0 && <div className="mt-4"><ConnectorTable items={docConns} actions={rowActions} /></div>}
+      </Group>
+
+      <Group title="Errors and alerts" badge="Optional" text="Connect the tools that report problems and the Hub groups them into Issues and explains them with your code. Most need no form: you get one link to paste into the tool.">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {shown.map((x) => <Tile key={x.type} label={x.label} sub={x.modes.includes('poll') && !x.modes.includes('webhook') && !x.modes.includes('both') ? 'Read on a schedule' : 'Paste one link'} onClick={() => setAlertTool(x.type)} />)}
+        </div>
+        <button type="button" className="mt-2 text-sm text-brand-600 hover:underline dark:text-brand-300" onClick={() => setAllTools((v) => !v)}>
+          {allTools ? 'Show fewer' : `Show all ${SOURCES.length} tools (cloud logs, queues, Wiz, Splunk…)`}
+        </button>
+        {alertConns.length > 0 && <div className="mt-4"><ConnectorTable items={alertConns} actions={rowActions} /></div>}
+      </Group>
+
       {sync.data && <p className="mt-2 text-sm text-slate-600">Queued {sync.data.job_ids.length} sync job(s).</p>}
       {testing && <TestResult id={testing} onClose={() => setTesting(undefined)} />}
+      {alertTool && <ConnectAlerts type={alertTool} onClose={() => setAlertTool(undefined)} />}
+      {docTool && <ConnectDocs type={docTool} onClose={() => setDocTool(undefined)} onDone={(t) => { setDocTool(undefined); setKnowledge(t); }} />}
     </>
+  );
+
+  function rowActions(c: Connector) {
+    return (
+      <div className="flex flex-wrap gap-1">
+        {(knowledgeSpec(c.type) || c.type === 'github' || c.type === 'gitlab') && <Button size="sm" variant="secondary" onClick={() => sync.mutate(c.id)}>Sync now</Button>}
+        {(c.type === 'github' || c.type === 'gitlab') && <Button size="sm" variant="secondary" onClick={() => setTesting(c.id)}>Test</Button>}
+        <Button size="sm" variant="ghost" onClick={() => confirmDisable(c) && toggle.mutate(c)}>{c.enabled ? 'Disable' : 'Enable'}</Button>
+        <Button size="sm" variant="ghost" onClick={() => confirmRemove(c) && del.mutate(c)}>Remove</Button>
+      </div>
+    );
+  }
+}
+
+/** The alert tools shown first; the rest are one click away. */
+const POPULAR = ['sentry', 'datadog', 'pagerduty', 'grafana', 'opsgenie', 'alertmanager', 'cloudwatch', 'generic'];
+
+const tileClass = 'flex flex-col items-start gap-0.5 rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-left text-sm transition-colors hover:border-brand-400 dark:border-white/10 dark:bg-slate-900/60 dark:hover:border-brand-400/60';
+
+function Tile({ label, sub, onClick }: { label: string; sub: string; onClick: () => void }) {
+  return (
+    <button type="button" onClick={onClick} className={tileClass} aria-label={`Connect ${label}`}>
+      <span className="font-medium">{label}</span>
+      <span className="text-xs text-slate-500">{sub}</span>
+    </button>
+  );
+}
+
+function Group({ title, text, badge, children }: { title: string; text: string; badge?: string; children: React.ReactNode }) {
+  return (
+    <section className="mb-10">
+      <div className="mb-3 flex items-center gap-2">
+        <h2 className="text-base font-semibold">{title}</h2>
+        {badge && <Badge>{badge}</Badge>}
+      </div>
+      <p className="mb-4 max-w-3xl text-sm text-slate-500 dark:text-slate-400">{text}</p>
+      {children}
+    </section>
+  );
+}
+
+/** ConnectorTable lists connected tools with their health. */
+function ConnectorTable({ items, actions }: { items: Connector[]; actions: (c: Connector) => React.ReactNode }) {
+  return (
+    <Card>
+      <Table head={['Name', 'Health', 'Last sync', '']}>
+        {items.map((c) => (
+          <tr key={c.id}>
+            <Td>
+              <span className="font-medium">{c.name}</span>{!c.enabled && <Badge tone="amber">Disabled</Badge>}
+              <p className="text-xs text-slate-500">{nameOf(c.type)}{c.mode !== 'poll' && sourceSpec(c.type) ? ' · link' : ''}</p>
+              {c.has_credentials && <div className="mt-1"><SealedBadge meta={c.credentials_meta} label="Credentials sealed" /></div>}
+            </Td>
+            <Td><Badge tone={statusTone(c.health)}>{c.health}</Badge>{c.last_error && <p className="max-w-xs truncate text-xs text-red-600" title={c.last_error}>{c.last_error}</p>}</Td>
+            <Td>{relTime(c.last_sync_at)}</Td>
+            <Td>{actions(c)}</Td>
+          </tr>
+        ))}
+      </Table>
+    </Card>
   );
 }

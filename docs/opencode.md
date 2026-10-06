@@ -25,7 +25,7 @@ dth adapter-test dth engine opencode --model anthropic/claude-sonnet-5-5 {task_f
 # → every check PASS and "Conforms to DocGen v2."
 ```
 
-**Add it** (UI: **Providers & routing → Add provider → opencode**, enter the model as opencode names it,
+**Add it** (UI: **Settings → AI models → Add provider → opencode**, enter the model as opencode names it,
 and keep "Use it for everything": that routes **Docs generation** to it). The Hub runs
 `dth engine opencode --model {model} {task_file} {result_file}`, with `{model}` the route's model; set
 `command_template` under Advanced to change it. With the API (kind `opencode`, or `external_cli` with an

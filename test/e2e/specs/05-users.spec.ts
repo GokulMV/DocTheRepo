@@ -17,10 +17,11 @@ test('add a user with a password link, sign in with it, remove them', async ({ b
   await page.goto('/users');
   await expect(page.getByText('People sign in with single sign-on or email and password.')).toBeVisible();
   await page.getByRole('button', { name: 'Add user' }).click();
-  await page.getByLabel('Email').fill('pat@acme.test');
-  await page.getByLabel('Name (optional)').fill('Pat');
-  await page.getByRole('radio', { name: /editor/i }).check();
-  await page.getByRole('dialog').getByRole('button', { name: 'Add user' }).click();
+  const add = page.getByRole('dialog'); // People also holds the sign-in settings, so stay inside the dialog
+  await add.getByLabel('Email', { exact: true }).fill('pat@acme.test');
+  await add.getByLabel('Name (optional)').fill('Pat');
+  await add.getByRole('radio', { name: /editor/i }).check();
+  await add.getByRole('button', { name: 'Add user' }).click();
   const link = await page.getByLabel('password link', { exact: true }).inputValue();
   expect(link).toMatch(/\/invite\/[A-Za-z0-9_-]+$/);
   await page.getByRole('button', { name: 'Done' }).click();

@@ -9,7 +9,7 @@
 | A model is first set up for `docgen` | Repositories that were synced before any model was set up get their docs written then. |
 | **Generate docs** (Repositories page) | Every file is documented again from the latest commit. |
 
-Docs need a model routed to `docgen` (**Providers & routing**; "Use it for everything" does this when you add a
+Docs need a model routed to `docgen` (**Settings → AI models**; "Use it for everything" does this when you add a
 provider). Without one, the code is still indexed and searchable.
 
 ## Leaving files out: `.dthignore`
@@ -57,7 +57,7 @@ appear in each job's result under **Activity → Jobs** (`router`):
 | **Fast** | Short code, when the **Docs (short code)** route (`docgen_fast`) is set | the cheaper model |
 | **Full** | Everything else | the **Docs generation** route |
 
-Pick the mode under **Providers & routing → Docs generation cost**, or with `docs.generation_mode` /
+Pick the mode under **Settings → AI models → Advanced → Docs generation cost**, or with `docs.generation_mode` /
 `DTH_DOCS_MODE`:
 
 | Mode | Comment used when | Fast model writes |
@@ -78,13 +78,13 @@ Other things that keep cost down:
 - **Output sized to the code.** One or two sentences for simple code, at most about 150 words. Output
   room is reserved per call for what is asked; output tokens cost several times input tokens.
 - **Context is signatures, not files.** Each call gets the code being documented plus one hop of related
-  declarations as signatures, the same idea as code-graph tools: the Hub's own knowledge graph (Palace)
+  declarations as signatures, the same idea as code-graph tools: the Hub's own knowledge graph
   and syntax trees provide it.
 - **Only changed code** on a push, after syntax-tree triage that skips cosmetic changes. Tests and
   generated or vendored files are skipped, and so is anything in `.dthignore`.
 - **Prompt caching** (Claude) marks the system prompt for caching. It mostly helps follow-up questions in
   Ask: docs prompts differ per file and are usually below the minimum cacheable size.
-- **Spend limits** stop a job before it exceeds a ceiling; a dry run (**Repositories → Dry run**) shows
+- **The monthly budget** (**Settings → AI models**) and detailed spend limits (**Settings → Advanced**) stop a job before it exceeds a ceiling; a dry run (**Repositories → Dry run**) shows
   the estimate and the routing first.
 
 Recommended routing: **Docs generation** on a strong model, **Docs (short code)** on a fast one (for

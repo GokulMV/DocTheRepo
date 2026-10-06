@@ -1,5 +1,5 @@
 // Package mcp serves the Hub to coding agents over the Model Context Protocol (stdio transport): opencode,
-// Claude Code, Cursor, and any other MCP client can ask questions, browse the Palace and Library, and read
+// Claude Code, Cursor, and any other MCP client can ask questions, browse the knowledge graph and team docs, and read
 // Inbox issues with their decodes. Every tool is a thin call to the Hub REST API with the user's personal
 // access token, so repository access, roles, and audit apply exactly as in the UI.
 package mcp

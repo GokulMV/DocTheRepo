@@ -18,21 +18,19 @@ describe('Connectors: knowledge sources', () => {
     const jira = { id: 'j1', type: 'jira', name: 'Jira', mode: 'poll', enabled: true, health: 'ok', poll_seconds: 900, last_sync_at: null };
     const { calls } = mockApi({ 'GET /connectors': { items: [jira] }, 'POST /connectors': { id: 'j2' }, 'POST /connectors/j1/sync': { job_ids: ['job1'] } });
     renderAt('/connectors', <Route path="/connectors" element={<Connectors />} />);
-    expect(await screen.findByText('synced every 15 min')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Sync now' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Sync now' }));
     expect(await screen.findByText('Queued 1 sync job(s).')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole('button', { name: 'Add knowledge source' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Add a knowledge source' });
-    await userEvent.selectOptions(within(dialog).getByLabelText('Source'), 'jira');
+    await userEvent.click(screen.getByRole('button', { name: 'Connect Jira' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Connect Jira' });
     await userEvent.type(within(dialog).getByLabelText('Site URL'), 'https://acme.atlassian.net');
     await userEvent.type(within(dialog).getByLabelText('Projects'), 'ENG, OPS');
     await userEvent.type(within(dialog).getByLabelText('Account e-mail (optional)'), 'bot@acme.com');
     await userEvent.type(within(dialog).getByLabelText('API token'), 'tok');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Add' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
     expect(await screen.findByText(/The first Jira sync starts within a minute/)).toBeInTheDocument();
     const b = body(calls, 'POST', '/connectors');
-    expect(b).toEqual({ type: 'jira', name: 'Jira', mode: 'poll', credentials: expect.stringMatching(/^dthseal1:/),
+    expect(b).toEqual({ type: 'jira', name: 'Jira 2', mode: 'poll', credentials: expect.stringMatching(/^dthseal1:/),
       config: { base_url: 'https://acme.atlassian.net', projects: 'ENG, OPS', email: 'bot@acme.com' } });
     expect(openSealed(b.credentials, 'connector.credentials')).toBe('tok'); // sealed in the browser
   });

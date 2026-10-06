@@ -4,7 +4,7 @@ import { session } from '../lib/stack';
 // Every button, heading, table header, form label, option, placeholder and screen-reader label on every page
 // starts with a capital letter. Identifiers people type or read as values (model names, paths, emails,
 // branches) are shown in code style or are data, and are not checked.
-const ROUTES = ['/ask', '/docs', '/palace', '/architecture', '/library', '/inbox', '/known-issues', '/repos', '/activity', '/analytics',
+const ROUTES = ['/ask', '/docs', '/architecture', '/library', '/inbox', '/known-issues', '/repos', '/activity', '/analytics',
   '/account', '/connectors', '/providers', '/spend', '/users', '/sign-in', '/setup', '/settings-file'];
 
 test('labels start with a capital letter everywhere', async ({ browser }) => {

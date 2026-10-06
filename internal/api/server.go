@@ -54,6 +54,9 @@ type Deps struct {
 	Environment string
 	// Mailer emails invite and password links (nil: off).
 	Mailer Mailer
+	// HasIssues reports whether the Issues pages apply: an alert source is connected or an issue exists
+	// (nil: always shown).
+	HasIssues func(ctx context.Context) bool
 	// Settings is the secret-reference policy for /settings/apply (nil: the settings endpoints are off).
 	Settings *SettingsPolicy
 }
@@ -85,7 +88,7 @@ func NewRouter(d Deps) http.Handler {
 		if d.OIDC != nil && d.Auth.OIDC() == nil {
 			d.Auth.UseConfigOIDC(d.OIDC) // the caller did not run LoadSignIn (tests)
 		}
-		ah := &authHandlers{svc: d.Auth, secure: d.SecureCookies, publicURL: d.PublicURL, sealKeys: d.SealKeys, requireSealed: d.RequireSealed, mailer: d.Mailer, environment: d.Environment}
+		ah := &authHandlers{svc: d.Auth, secure: d.SecureCookies, publicURL: d.PublicURL, sealKeys: d.SealKeys, requireSealed: d.RequireSealed, mailer: d.Mailer, environment: d.Environment, hasIssues: d.HasIssues}
 		r.Route("/api/v1", func(r chi.Router) {
 			r.Get("/openapi.json", openapiHandler)
 			r.Group(func(r chi.Router) {

@@ -27,7 +27,7 @@ decode and issue → service routing.
 
 1. Get an API key from TypeSafe (Jev is in early access).
 2. Make sure the Hub can reach `api.typesafe.ai` (egress allow-list / proxy).
-3. Add Jev as a provider and point the `decide` route at it. In the UI: **Providers & routing → Add
+3. Add Jev as a provider and point the `decide` route at it. In the UI: **Settings → AI models → Add
    provider**, kind `jev`, then set the **decide** route on the same page. With the API:
 
    ```sh
@@ -56,7 +56,7 @@ decode and issue → service routing.
 
 Every Jev call goes through the same guard rails as every other paid call: secrets are scrubbed from the
 state (and PII redacted if the provider is set to), the spend guard checks the limits first, and the
-reported usage lands on the usage ledger (Analytics shows it under the `decide` feature; gated decodes show
+reported usage lands on the usage ledger (Usage shows it under the `decide` feature; gated decodes show
 up as `decision_gate` savings).
 
 ## Measure it before trusting it
