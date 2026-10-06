@@ -208,4 +208,5 @@ const (
 	PurposeConnectorCreds   = "connector.credentials"
 	PurposeConnectorWebhook = "connector.webhook_secret"
 	PurposeOIDCClientSecret = "auth.oidc_client_secret"
+	PurposeMCPSecret        = "mcp.secret"
 )

@@ -11,7 +11,7 @@ import { ml_kem768 } from '@noble/post-quantum/ml-kem.js';
 import { api } from '@/api/client';
 
 export const SEAL_PREFIX = 'dthseal1:';
-export type Purpose = 'provider.api_key' | 'connector.credentials' | 'connector.webhook_secret' | 'auth.oidc_client_secret';
+export type Purpose = 'provider.api_key' | 'connector.credentials' | 'connector.webhook_secret' | 'auth.oidc_client_secret' | 'mcp.secret';
 
 export interface PublicSealKey {
   kid: string;

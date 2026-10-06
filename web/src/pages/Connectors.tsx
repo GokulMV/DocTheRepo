@@ -11,6 +11,7 @@ import { seal } from '@/lib/seal';
 import { SealedBadge, SealedHint } from '@/components/Sealed';
 import { KNOWLEDGE, knowledgeSpec, SOURCES, sourceSpec } from './signalSources';
 import { ConnectAlerts, ConnectDocs, randomSecret } from './ConnectTools';
+import { McpSection } from './McpConnections';
 import { Link } from 'react-router-dom';
 import { nameOf, sentence } from '@/lib/labels';
 
@@ -445,6 +446,10 @@ export default function Connectors() {
           {allTools ? 'Show fewer' : `Show all ${SOURCES.length} tools (cloud logs, queues, Wiz, Splunk…)`}
         </button>
         {alertConns.length > 0 && <div className="mt-4"><ConnectorTable items={alertConns} actions={rowActions} /></div>}
+      </Group>
+
+      <Group title="Look things up live (MCP)" badge="Optional" text="Let Ask check other products while it answers: current errors in Sentry, logs in Datadog, tickets in Jira, resources in AWS or Google Cloud. Most connect by signing in. Only read-only tools are used unless you turn others on.">
+        <McpSection tileClass={tileClass} />
       </Group>
 
       {sync.data && <p className="mt-2 text-sm text-slate-600">Queued {sync.data.job_ids.length} sync job(s).</p>}

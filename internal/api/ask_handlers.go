@@ -142,7 +142,7 @@ func (h *askHandlers) ask(w http.ResponseWriter, r *http.Request) {
 			history = append(history, ports.ChatMessage{Role: m.Role, Content: m.Content})
 		}
 	}
-	query := rag.Query{Question: q, Scope: rag.Scope{All: all, RepoIDs: ids, Sources: sources}, History: history, UserID: p.UserID}
+	query := rag.Query{Question: q, Scope: rag.Scope{All: all, RepoIDs: ids, Sources: sources}, History: history, UserID: p.UserID, Role: string(p.Role)}
 
 	var stream *sse
 	if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {

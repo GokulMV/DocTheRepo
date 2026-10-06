@@ -22,7 +22,7 @@ export function Citations({ items }: { items: Citation[] }) {
       {items.map((c) => (
         <li key={c.n} className="flex items-baseline gap-2">
           <span className="font-mono text-slate-400">[{c.n}]</span>
-          <Badge tone={c.type === 'code' ? 'blue' : 'gray'}>{c.type}</Badge>
+          <Badge tone={c.type === 'code' ? 'blue' : c.type === 'tool' ? 'green' : 'gray'}>{c.type === 'tool' ? 'live' : c.type}</Badge>
           <span className="truncate">
             {c.repo && <span className="text-slate-500">{c.repo} · </span>}
             {c.url ? (

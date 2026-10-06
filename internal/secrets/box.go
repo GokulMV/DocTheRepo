@@ -120,6 +120,12 @@ func ConnectorWebhookAAD(connectorID string) []byte {
 	return []byte("connector:" + connectorID + ":webhook")
 }
 
+// MCPSecretAAD binds an MCP connection's key (token, header value, cloud credentials) to its row.
+func MCPSecretAAD(id string) []byte { return []byte("mcp_server:" + id + ":secret") }
+
+// MCPOAuthAAD binds an MCP connection's OAuth client and tokens to its row.
+func MCPOAuthAAD(id string) []byte { return []byte("mcp_server:" + id + ":oauth") }
+
 // KeyIDOf returns the key that sealed blob, without opening it.
 func KeyIDOf(blob []byte) (string, error) {
 	if len(blob) < 2 || blob[0] != formatV1 || len(blob) < 2+int(blob[1]) {

@@ -49,6 +49,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/core/spendguard"
 	"github.com/GokulMV/DocTheRepo/internal/core/suggest"
 	"github.com/GokulMV/DocTheRepo/internal/ingest"
+	"github.com/GokulMV/DocTheRepo/internal/mcpconn"
 	"github.com/GokulMV/DocTheRepo/internal/observability"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
 	"github.com/GokulMV/DocTheRepo/internal/queue"
@@ -99,6 +100,9 @@ type app struct {
 	arch          *store.ArchitectureStore
 	sealKeys      *store.SealKeys
 	archSync      *ingest.ArchitectureSync
+	// MCP connections: other products' MCP servers Ask can call.
+	mcpStore *store.MCPServers
+	mcp      *mcpconn.Manager
 }
 
 func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.Box, q *queue.Queue, log *slog.Logger, m *observability.Metrics) (*app, error) {
@@ -220,6 +224,9 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 		},
 		Observe:    func(stage string, d time.Duration) { m.Retrieval.WithLabelValues(stage).Observe(d.Seconds()) },
 		AgentSteps: cfg.Ask.AgentSteps, SimilarAnswer: cfg.Ask.SimilarAnswer}
+	a.mcpStore = store.NewMCPServers(st, box, secrets.MCPSecretAAD, secrets.MCPOAuthAAD)
+	a.mcp = &mcpconn.Manager{Store: a.mcpStore, PublicURL: cfg.Server.PublicURL, Version: version}
+	a.rag.Tools = mcpToolBox{a.mcp}
 	if cfg.Ask.Sift != "off" {
 		a.rag.Sift = &sift.Sifter{GW: gw, Cache: &sift.Memory{}, Cost: a.rag.Cost, KeepAt: cfg.Ask.SiftKeepAt}
 	}
@@ -443,7 +450,25 @@ func (a *app) v1Routes() []func(chi.Router) {
 		api.ArchitectureRoutes(api.ArchitectureDeps{Auth: a.auth, Store: a.arch, Scan: a.archSync.Scan}),
 		api.GitHubConnectRoutes(api.GitHubConnectDeps{Auth: a.auth, Connectors: a.conns, Seal: a.box.Seal, Open: a.box.Open,
 			PublicURL: a.cfg.Server.PublicURL, InvalidateHost: a.hosts.Invalidate, SealKeys: a.sealKeys, RequireSealed: a.cfg.Settings.RequireSealed}),
+		api.MCPRoutes(api.MCPDeps{Auth: a.auth, Store: a.mcpStore, Manager: a.mcp, SealKeys: a.sealKeys, RequireSealed: a.cfg.Settings.RequireSealed}),
 	}
+}
+
+// mcpToolBox gives Ask's agent the MCP connections' tools.
+type mcpToolBox struct{ m *mcpconn.Manager }
+
+func (b mcpToolBox) AgentTools(ctx context.Context, role string) []rag.AgentTool {
+	ts := b.m.Tools(ctx, role)
+	out := make([]rag.AgentTool, len(ts))
+	for i, t := range ts {
+		out[i] = rag.AgentTool{Name: t.Name, Server: t.Server, Description: t.Description, Schema: t.Schema}
+	}
+	return out
+}
+
+func (b mcpToolBox) CallTool(ctx context.Context, role, name string, args json.RawMessage) (string, error) {
+	_, text, err := b.m.Call(ctx, role, name, args)
+	return text, err
 }
 
 // registerWebhook points the repo's push/review webhook at <public_url>/hooks/<kind>/<connector>, unless the
