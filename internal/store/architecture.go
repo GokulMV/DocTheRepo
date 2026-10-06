@@ -143,6 +143,7 @@ type ArchDoc struct {
 	Name     string `json:"name"`
 	Key      string `json:"key"`
 	Relation string `json:"relation"`
+	URL      string `json:"url,omitempty"` // the page in Confluence, Jira or Notion, when known
 }
 
 // Architecture is one repository's generated architecture, plus the diagrams authored in it.
@@ -598,6 +599,25 @@ func (a *ArchitectureStore) Repo(ctx context.Context, repoID string, sc rag.Scop
 
 	out := buildArchitecture(in)
 	out.Repo.ServiceName = serviceName
+	if len(out.Docs) > 0 { // link each page to where it lives
+		ids := make([]string, len(out.Docs))
+		for i, d := range out.Docs {
+			ids[i] = d.EntityID
+		}
+		urls := map[string]string{}
+		if rows, err := a.s.Pool.Query(ctx, `SELECT id, coalesce(attrs->>'url', '') FROM entities WHERE id = ANY($1::uuid[])`, ids); err == nil {
+			for rows.Next() {
+				var id, u string
+				if rows.Scan(&id, &u) == nil {
+					urls[id] = u
+				}
+			}
+			rows.Close()
+		}
+		for i := range out.Docs {
+			out.Docs[i].URL = urls[out.Docs[i].EntityID]
+		}
+	}
 	if out.Diagrams, err = a.Diagrams(ctx, repoID); err != nil {
 		return Architecture{}, err
 	}

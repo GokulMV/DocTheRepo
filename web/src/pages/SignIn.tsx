@@ -284,7 +284,7 @@ export default function SignIn() {
   };
   return (
     <>
-      <PageHeader title="Sign-in & SSO" description="How people sign in to the Hub. Who may sign in and with which role is under Users & access." />
+      <PageHeader title="Sign-in & SSO" description="How people sign in to the Hub. Who may sign in, and with which role, is under People." />
       {q.isLoading && <Spinner />}
       <ErrorNote error={q.error} />
       {q.data && (

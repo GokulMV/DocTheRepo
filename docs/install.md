@@ -66,8 +66,8 @@ terraform init && terraform apply
 Register the `oidc_redirect_url` output with Okta/Google. `oidc_allowed_domains` is required: without it
 any account at the IdP could sign in, and the first sign-in becomes owner.
 
-You can also set up single sign-on later, in the Hub under **Sign-in & SSO**, and add people under
-**Users & access**. See [Users and sign-in](users-and-sign-in.md).
+You can also set up single sign-on later, in the Hub under **Settings → People → Sign-in**, and add people under
+**Settings → People**. See [Users and sign-in](users-and-sign-in.md).
 
 ## GCP — `deploy/terraform/gcp`
 

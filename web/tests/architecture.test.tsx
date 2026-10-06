@@ -30,7 +30,7 @@ const arch = {
   hidden: { interface: 4 },
   restricted: 1,
   env: ['STRIPE_SECRET_KEY'],
-  docs: [{ entity_id: 'p1', kind: 'confluence_page', name: 'Payments runbook', key: '9001', relation: 'runbook_for' }],
+  docs: [{ entity_id: 'p1', kind: 'confluence_page', name: 'Payments runbook', key: '9001', relation: 'runbook_for', url: 'https://acme.atlassian.net/wiki/pages/9001' }],
   owners: ['team-payments'],
   diagrams: [{ id: 'd1', path: 'docs/architecture/system.html', title: 'System architecture', generator: 'archify 3.0.1', size_bytes: 10, updated_at: '2026-10-02T00:00:00Z' }],
 };
@@ -58,12 +58,11 @@ describe('Architecture', () => {
     expect(screen.getByText('+ 4 more')).toBeInTheDocument();
     expect(screen.getByText(/1 link\(s\) to repositories you don’t have access to/)).toBeInTheDocument();
     expect(screen.getByText('STRIPE_SECRET_KEY')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Payments runbook' })).toHaveAttribute('href', '/palace/p1');
+    expect(screen.getByRole('link', { name: 'Payments runbook' })).toHaveAttribute('href', 'https://acme.atlassian.net/wiki/pages/9001'); // opens the page itself
     expect(screen.queryByRole('button', { name: /Find diagrams/ })).not.toBeInTheDocument(); // viewers cannot scan
 
     await userEvent.click(screen.getByRole('button', { name: 'Service payments' }));
     expect(await screen.findByText('×2')).toBeInTheDocument(); // publishes payments.settled twice
-    expect(screen.getByRole('button', { name: 'Open in Palace' })).toBeInTheDocument();
 
     await userEvent.click(screen.getByRole('tab', { name: /System architecture/ }));
     const frame = await screen.findByTitle('System architecture');

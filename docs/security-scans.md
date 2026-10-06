@@ -39,7 +39,7 @@ instance under load.
 
 - Each module reads at most 20 files and 120 KB, from at most 80 files per scan; the estimate is shown
   first. Calls go through the spend guard like every other model call.
-- The **Security scans** route (Providers & routing) chooses the model; without one, scans use the Ask
+- The **Security scans** route (Settings → AI models) chooses the model; without one, scans use the Ask
   model. A strong model finds more and rejects more false positives.
 - Results are cached per module and exact file contents: re-scanning code that has not changed reuses
   the verified findings and makes no model call.

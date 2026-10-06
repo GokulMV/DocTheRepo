@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useState } from 'react';
-import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, Ellipsis, LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Pin, PinOff, Plus, Search, Sun, Trash2 } from 'lucide-react';
+import { LogOut, Monitor, Moon, PanelLeftClose, PanelLeftOpen, Plus, Search, Sun, Trash2 } from 'lucide-react';
 import { api, ApiError } from '@/api/client';
 import { keys, useAuthConfig, useMe, useThreads } from '@/api/hooks';
 import { CommandPalette } from '@/components/CommandPalette';
@@ -10,7 +10,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Logo } from '@/components/Logo';
 import { Spinner, cx } from '@/components/ui';
 import { setTheme, useTheme, type ThemeChoice } from '@/theme';
-import { NAV, PRIMARY, type NavItem } from './nav';
+import { NAV, navItemFor, tabFor, type NavItem } from './nav';
 
 export { NAV } from './nav';
 
@@ -102,66 +102,53 @@ function useCollapsed(): [boolean, () => void] {
   return [collapsed, toggle];
 }
 
-const PINS_KEY = 'dth.pinned';
-
-/** usePins is the user's pinned pages, remembered per browser. */
-function usePins(): [string[], (to: string) => void] {
-  const [pins, setPins] = useState<string[]>(() => {
-    try {
-      const v = JSON.parse(localStorage.getItem(PINS_KEY) ?? '[]');
-      return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
-    } catch {
-      return [];
-    }
-  });
-  const toggle = (to: string) =>
-    setPins((p) => {
-      const next = p.includes(to) ? p.filter((x) => x !== to) : [...p, to];
-      try {
-        localStorage.setItem(PINS_KEY, JSON.stringify(next));
-      } catch {
-        // remembered for this visit only
-      }
-      return next;
-    });
-  return [pins, toggle];
-}
-
 const rowBase = 'group relative flex w-full items-center rounded-lg text-sm transition-colors';
 const rowIdle = 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/[0.05] dark:hover:text-slate-100';
 const rowActive = 'bg-slate-100 font-medium text-slate-900 dark:bg-white/[0.08] dark:text-white';
 
-/** SideLink is one sidebar row: icon and label (icon with a tooltip when collapsed), with an optional pin toggle. */
-function SideLink({ item, collapsed, pinned, onPin, end }: { item: NavItem; collapsed: boolean; pinned?: boolean; onPin?: () => void; end?: boolean }) {
+/** SideLink is one sidebar row: icon and label (icon with a tooltip when collapsed). It stays active on every
+ * page of its section. */
+function SideLink({ item, collapsed, active }: { item: NavItem; collapsed: boolean; active: boolean }) {
   return (
-    <div className="group/row relative">
-      <NavLink
-        to={item.to}
-        end={end}
-        title={collapsed ? item.label : undefined}
-        aria-label={collapsed ? item.label : undefined}
-        className={({ isActive }) => cx(rowBase, collapsed ? 'h-9 justify-center' : 'gap-3 px-3 py-2', isActive ? rowActive : rowIdle)}
-      >
-        {({ isActive }) => (
-          <>
-            <item.icon className={cx('h-[18px] w-[18px] shrink-0', isActive ? 'text-brand-600 dark:text-brand-300' : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300')} aria-hidden />
-            {!collapsed && <span className="truncate pr-5">{item.label}</span>}
-          </>
-        )}
-      </NavLink>
-      {!collapsed && onPin && (
-        <button
-          type="button"
-          onClick={onPin}
-          aria-label={pinned ? `Unpin ${item.label}` : `Pin ${item.label}`}
-          title={pinned ? 'Unpin' : 'Pin to the top'}
-          className={cx('absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-slate-700 dark:hover:bg-white/10 dark:hover:text-slate-200',
-            pinned ? 'hidden group-hover/row:block' : 'hidden group-hover/row:block')}
-        >
-          {pinned ? <PinOff className="h-3.5 w-3.5" aria-hidden /> : <Pin className="h-3.5 w-3.5" aria-hidden />}
-        </button>
-      )}
-    </div>
+    <Link
+      to={item.to}
+      title={collapsed ? item.label : undefined}
+      aria-label={collapsed ? item.label : undefined}
+      aria-current={active ? 'page' : undefined}
+      className={cx(rowBase, collapsed ? 'h-9 justify-center' : 'gap-3 px-3 py-2', active ? rowActive : rowIdle)}
+    >
+      <item.icon className={cx('h-[18px] w-[18px] shrink-0', active ? 'text-brand-600 dark:text-brand-300' : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300')} aria-hidden />
+      {!collapsed && <span className="truncate">{item.label}</span>}
+    </Link>
+  );
+}
+
+/** SectionTabs shows the pages of the current section (Docs · Architecture · Team docs) above the page. */
+function SectionTabs({ role }: { role: Role }) {
+  const loc = useLocation();
+  const item = navItemFor(loc.pathname);
+  const tabs = (item?.tabs ?? []).filter((t) => atLeast(role, t.min ?? item!.min));
+  if (!item || tabs.length < 2) return null;
+  const current = tabFor(item, loc.pathname);
+  return (
+    <nav aria-label={`${item.label} pages`} className="-mt-2 mb-6 flex gap-1 overflow-x-auto border-b border-slate-200/80 dark:border-white/[0.07]">
+      {tabs.map((t) => {
+        const on = current?.to === t.to;
+        return (
+          <Link
+            key={t.to}
+            to={t.to}
+            aria-current={on ? 'page' : undefined}
+            className={cx(
+              '-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors',
+              on ? 'border-brand-600 font-medium text-slate-900 dark:border-brand-400 dark:text-white' : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200',
+            )}
+          >
+            {t.label}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -217,8 +204,6 @@ export function Shell() {
   const loc = useLocation();
   const qc = useQueryClient();
   const [collapsed, toggle] = useCollapsed();
-  const [pins, togglePin] = usePins();
-  const [moreOpen, setMoreOpen] = useState(false);
   const [search, setSearch] = useState(false);
   // A new page starts at the top, like a page load would, without the reload.
   useEffect(() => {
@@ -246,13 +231,9 @@ export function Shell() {
     window.location.assign('/login');
   };
   const who = user.name || user.email;
-  const allowed = (i: NavItem) => atLeast(user.role, i.min as Role);
-  const all = NAV.flatMap((s) => s.items).filter(allowed);
-  const primary = PRIMARY.map((to) => all.find((i) => i.to === to)).filter((i): i is NavItem => !!i);
-  const moreSections = NAV.map((s) => ({ section: s.section, items: s.items.filter((i) => allowed(i) && !PRIMARY.includes(i.to) && i.to !== '/ask') })).filter((s) => s.items.length);
-  const activeInMore = moreSections.some((s) => s.items.some((i) => loc.pathname === i.to || loc.pathname.startsWith(i.to + '/')));
-  const showMore = moreOpen || activeInMore;
-  const pinned = pins.map((to) => all.find((i) => i.to === to)).filter((i): i is NavItem => !!i);
+  const allowed = (i: NavItem) => atLeast(user.role, i.min as Role) && (!i.feature || user.features?.[i.feature] !== false);
+  const sections = NAV.filter(allowed);
+  const here = navItemFor(loc.pathname);
   const threadId = loc.pathname.startsWith('/ask/') ? loc.pathname.slice(5) : undefined;
   const newQuestion: NavItem = { to: '/ask', label: 'New question', min: 'viewer', icon: Plus };
   return (
@@ -315,43 +296,10 @@ export function Shell() {
               </span>
               {!collapsed && <span>New question</span>}
             </NavLink>
-            {primary.map((i) => (
-              <SideLink key={i.to} item={i} collapsed={collapsed} pinned={pins.includes(i.to)} onPin={() => togglePin(i.to)} />
+            {sections.map((i) => (
+              <SideLink key={i.to} item={i} collapsed={collapsed} active={here?.to === i.to} />
             ))}
-            <button
-              type="button"
-              onClick={() => (collapsed ? (toggle(), setMoreOpen(true)) : setMoreOpen((o) => !o))}
-              aria-expanded={showMore}
-              title={collapsed ? 'More' : undefined}
-              aria-label={collapsed ? 'More' : undefined}
-              className={cx(rowBase, rowIdle, collapsed ? 'h-9 justify-center' : 'gap-3 px-3 py-2')}
-            >
-              {collapsed ? <Ellipsis className="h-[18px] w-[18px] text-slate-400" aria-hidden /> : <ChevronDown className={cx('h-[18px] w-[18px] text-slate-400 transition-transform', showMore ? '' : '-rotate-90')} aria-hidden />}
-              {!collapsed && <span>{showMore ? 'Less' : 'More'}</span>}
-            </button>
-            {showMore && !collapsed && (
-              <div className="ml-3 border-l border-slate-200 pl-2 dark:border-white/[0.08]">
-                {moreSections.map((s) => (
-                  <div key={s.section}>
-                    <p className="px-3 pb-0.5 pt-2.5 text-[10.5px] font-semibold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500">{s.section}</p>
-                    {s.items.map((i) => (
-                      <SideLink key={i.to} item={i} collapsed={false} pinned={pins.includes(i.to)} onPin={() => togglePin(i.to)} />
-                    ))}
-                  </div>
-                ))}
-              </div>
-            )}
           </div>
-          {pinned.length > 0 && (
-            <div role="group" aria-label="Pinned">
-              {collapsed ? <div className="mx-2 my-3 border-t border-slate-200 dark:border-white/[0.08]" aria-hidden /> : <SectionLabel>Pinned</SectionLabel>}
-              <div className="space-y-px">
-                {pinned.map((i) => (
-                  <SideLink key={i.to} item={i} collapsed={collapsed} pinned onPin={() => togglePin(i.to)} />
-                ))}
-              </div>
-            </div>
-          )}
           {!collapsed && <Recents current={threadId} />}
         </nav>
         <div className={cx('border-t border-slate-200/80 pt-3 dark:border-white/[0.06]', collapsed ? 'px-2' : 'px-4')}>
@@ -384,6 +332,7 @@ export function Shell() {
         <div className="mx-auto max-w-[1600px] px-6 py-8 lg:px-10">
           {/* Reset on navigation (not remounted): a failed page does not block the next, and switching never flashes. */}
           <ErrorBoundary resetKey={loc.pathname}>
+            <SectionTabs role={user.role} />
             <Suspense fallback={<Spinner />}>
               <Outlet context={user} />
             </Suspense>

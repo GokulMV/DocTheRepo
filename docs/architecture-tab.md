@@ -22,7 +22,7 @@ the number of code-level links an arrow stands for.
 
 **Large repositories:** each layer shows its most connected items ("+ N more" counts the rest).
 
-**Reading it:** hover to trace a component's links; click one for its connections, **Open in Palace**, or
+**Reading it:** hover to trace a component's links; click one for its connections or
 **Ask about it**. **Fit** scales the diagram to the page; **100%** shows it at full size.
 
 **Below the diagram:** the environment variables the code reads, the Confluence and Jira pages linked to

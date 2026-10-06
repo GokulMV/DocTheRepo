@@ -24,7 +24,7 @@ Hub calls. Most of what it is paid to read is the source material put in front o
    [budgets](#limits).
 
 The answering model then gets fewer, better sources. How much is cut depends on your questions and index;
-the `sift` details on each answer and Analytics show the real numbers. The judge reads the same material,
+the `sift` details on each answer and Usage show the real numbers. The judge reads the same material,
 but at a fraction of the price.
 
 ## It never makes an answer worse by failing
@@ -59,7 +59,7 @@ routes:
   sift: { provider: jev,       model: jev-latest }        # or { provider: anthropic, model: claude-haiku-4-5 }
 ```
 
-`dth init` sets `sift` to your fast model when you give one. In the UI the route is **Providers & routing →
+`dth init` sets `sift` to your fast model when you give one. In the UI the route is **Settings → AI models → Advanced →
 Ask source picking**.
 
 | Setting | Env | Default | Meaning |
@@ -74,7 +74,7 @@ Ask source picking**.
   conversation's title shows the total saved so far. These are kept with the conversation.
 - The Ask API's `done` event carries `sift`: candidates, kept, tokens not sent to the answering model, the
   judge's tokens and cost, and files explored.
-- **Analytics** shows the judge's usage under *Ask source picking*. The net saving (answering-model input
+- **Usage** shows the judge's usage under *Ask source picking*. The net saving (answering-model input
   not sent, minus the judge's cost) appears under *Ask sources trimmed before answering*.
 
 ## Limits
@@ -94,4 +94,4 @@ jevgrep's authors reported 25.8% lower total cost, judge included, with the same
 run on ten SWE-bench tasks. That is their measurement for coding agents, not a promise for Ask. The Hub's version is written
 from scratch for its own index: it judges indexed chunks rather than files on disk, runs inside the LLM
 gateway (spend limits, secret scrubbing, ledger), and works with any chat model as well as Jev. Measure it
-on your own questions in Analytics before relying on a particular saving.
+on your own questions in Usage before relying on a particular saving.

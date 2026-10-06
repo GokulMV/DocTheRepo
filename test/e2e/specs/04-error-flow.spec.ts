@@ -11,19 +11,17 @@ test('error flow: Sentry webhook → decoded in the Inbox → mark as known → 
   const hub = await ensureConfigured(api, []);
   expect((await api.put('/routes/decode', { provider_id: hub.providerId, model: 'stub' })).status).toBe(200);
 
-  // Add Sentry as a signal source in the UI; the Hub shows the webhook URL and the secret once.
+  // Connect Sentry in the UI: the Hub gives the link for Sentry, and Sentry's own signing secret is pasted back.
   await page.goto('/connectors');
-  await page.getByRole('button', { name: 'Add signal source' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add a signal source' });
-  await dialog.getByRole('combobox', { name: /^Source/ }).selectOption('sentry');
-  await dialog.getByLabel('Name').fill('Sentry (e2e)');
-  await dialog.getByRole('button', { name: 'Add' }).click();
-  const details = page.getByLabel('Webhook details');
-  const url = (await details.locator('dd').nth(0).textContent())!.trim();
-  const secret = (await details.locator('dd').nth(1).textContent())!.trim();
+  await page.getByRole('button', { name: 'Connect Sentry' }).click();
+  await page.getByRole('dialog', { name: 'Connect Sentry' }).getByRole('button', { name: 'Create link' }).click();
+  const finish = page.getByRole('dialog', { name: 'Finish in Sentry' });
+  const url = await finish.getByLabel('Link', { exact: true }).inputValue();
   expect(url).toMatch(/\/hooks\/sentry\/[0-9a-f-]{36}$/);
-  expect(secret).toMatch(/^[0-9a-f]{48}$/);
-  await page.getByRole('button', { name: 'Done' }).click();
+  const secret = 'sentry-e2e-client-secret';
+  await finish.getByLabel('Sentry Client Secret').fill(secret);
+  await finish.getByRole('button', { name: 'Save' }).click();
+  await expect(finish).toBeHidden();
 
   const s = await stack();
   const deliver = async (eventId: string) => {

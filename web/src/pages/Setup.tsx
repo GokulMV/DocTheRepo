@@ -92,8 +92,8 @@ export default function Setup() {
   const done = steps.filter((s) => s.done).length;
   const next = steps.findIndex((s) => !s.done);
   const optional = [
-    { title: 'Spend limits', text: limits.data?.length ? 'A daily ceiling is set. Tune it per feature or repository.' : 'Set a daily ceiling on model spend.', to: '/spend' },
-    { title: 'Vector search', text: routed.has('embedding') ? 'On.' : 'Optional: route “embedding” to a provider with embeddings (OpenAI, Azure, Ollama…). Keyword and graph search work without it.', to: '/providers' },
+    { title: 'Monthly budget', text: limits.data?.length ? 'A spending limit is set.' : 'Set the most the Hub may spend on models each month.', to: '/providers' },
+    { title: 'Search by meaning', text: routed.has('embedding') ? 'On.' : 'Optional: choose a search model (OpenAI, Azure, Ollama…) under AI models. Word search works without it.', to: '/providers' },
     { title: 'Errors and alerts', text: 'Connect Sentry, Datadog, PagerDuty and others to explain incidents in the Inbox.', to: '/connectors' },
     { title: 'Confluence and Jira', text: 'Include wiki pages and tickets in answers.', to: '/connectors' },
     { title: 'Settings as code', text: 'Keep all of this in a YAML file with secret references.', to: '/settings-file' },

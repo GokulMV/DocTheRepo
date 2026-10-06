@@ -96,7 +96,7 @@ func HubTools(call Caller) []Tool {
 				return clip(b.String()), nil
 			}},
 		{Name: "search_entities", Title: "Search the knowledge graph", Annotations: readOnly,
-			Description: "Find Palace entities (services, repos, endpoints, env vars, topics, datastores, dependencies, Confluence pages, owners) by name.",
+			Description: "Find knowledge-graph entities (services, repos, endpoints, env vars, topics, datastores, dependencies, Confluence pages, owners) by name.",
 			InputSchema: obj(map[string]any{
 				"q":     str("Name or part of a name."),
 				"kind":  str("Entity kind filter, e.g. service, endpoint, queue_topic, env_var, datastore, dependency, repo."),

@@ -36,6 +36,6 @@ describe('Analytics', () => {
     mockApi({ ...base, 'GET /analytics/sift': { answers: 4, picked: 0, trimmed: 0, candidates: 0, kept: 0, tokens_saved: 0, judge_tokens: 0, judge_cost_usd: 0, saved_usd: 0, explored: 0, daily: [] } });
     renderAt('/analytics', <Route path="/analytics" element={<Analytics />} />);
     expect(await screen.findByText(/No answers used the source picker in this period/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Providers & routing' })).toHaveAttribute('href', '/providers');
+    expect(screen.getByRole('link', { name: 'Settings → AI models' })).toHaveAttribute('href', '/providers');
   });
 });

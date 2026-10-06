@@ -1,6 +1,6 @@
 # Users and sign-in
 
-Admins manage people under **Users & access**. Owners choose how people sign in under **Sign-in & SSO**.
+Admins manage people under **Settings → People**. Owners choose how people sign in under **Settings → People → Sign-in**.
 
 ## Roles
 
@@ -40,7 +40,7 @@ database has no users, and a link is safer.
 
 ### Adding someone
 
-1. **Users & access → Add user.** Enter their email, name and role.
+1. **Settings → People → Add user.** Enter their email, name and role.
 2. With passwords on, keep the password link ticked. With [email](#email) set up, the Hub emails them a
    one-time link; otherwise it shows the link for you to send however you normally would. They open it,
    choose a password of at least 12 characters, and are signed in. The link works once and expires after
@@ -84,12 +84,12 @@ the URL. Compose: put both variables in `.env`.
 | Google Workspace | `smtp-relay.gmail.com:587` (SMTP relay) or `smtp.gmail.com:587` | Relay: allow the Hub's IP in the admin console; `smtp.gmail.com`: an app password |
 | Microsoft 365 | `smtp.office365.com:587` | A mailbox with SMTP AUTH turned on |
 
-An owner can check it with **Users & access → Send test email**, which sends one to their own address.
+An owner can check it with **Settings → People → Send test email**, which sends one to their own address.
 When a message is refused, the error is shown next to the link, so the admin can pass the link on.
 
 ### Setting up single sign-on
 
-**Sign-in & SSO** walks through it for each provider:
+**Settings → People → Sign-in** walks through it for each provider:
 
 1. Pick your identity provider.
 2. Create a web (confidential) OpenID Connect app there. Register the **callback URL** shown on the page,
@@ -122,7 +122,7 @@ If single sign-on breaks while passwords are off:
 
 Deployments can also configure single sign-on in the config file or environment (`auth.mode: oidc`,
 `auth.oidc.*`, the Helm `auth.oidc` values and the Terraform variables). Settings saved under
-**Sign-in & SSO** take precedence. Removing them there switches back to the config file's settings.
+**Settings → People → Sign-in** take precedence. Removing them there switches back to the config file's settings.
 
 ## Endpoints
 

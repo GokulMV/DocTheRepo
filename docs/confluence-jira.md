@@ -4,8 +4,8 @@ The Hub syncs Confluence spaces and Jira projects **read-only**. Synced pages an
 
 - **Ask**: answers can cite them (`include: confluence` covers both).
 - **Decodes**: runbooks are used for explanations.
-- **The Library**: shelves for Confluence, Jira, Runbooks and Decisions, plus the shelves your labels match.
-- **The Palace**: links from services to the pages that document them.
+- **Team docs**: shelves for Confluence, Jira, Runbooks and Decisions, plus the shelves your labels match.
+- **Architecture**: each service lists the pages that document it.
 - **Known issues**: labelled issues and pages are imported as draft rules.
 
 Cloud and Data Center are both supported. Notion pages and uploaded documents work the same way: see
@@ -13,7 +13,7 @@ Cloud and Data Center are both supported. Notion pages and uploaded documents wo
 
 ## Connect
 
-In the UI, go to **Connectors → Add knowledge source** and pick Confluence or Jira. With the API:
+In the UI, go to **Settings → Connections** and click **Confluence** or **Jira** under *Team documents*. With the API:
 
 ```sh
 # Confluence Cloud: e-mail + API token. Data Center: omit email and use a personal access token.
@@ -52,7 +52,7 @@ Confluence or Jira permissions.
     results, and writes are idempotent.
 - **Indexing.** Unchanged content is not re-embedded (the same manifest diff as code). Headings become chunk
   boundaries.
-- **Palace links.**
+- **Service links.**
   - A service, repository, or endpoint named in a page gets a `documented_in` link to it. Names must match
     exactly: whole words, at least 4 characters, endpoints written as `POST /orders`.
   - Pages labelled `runbook`, `playbook`, or `oncall` (or titled "…runbook…") also link `runbook_for` back.

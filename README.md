@@ -34,8 +34,8 @@ are checked before every paid call.
 |---|---|
 | **Docs that keep up** | Each push is triaged by syntax tree: cosmetic changes cost nothing, and structural ones regenerate only the affected sections. Docs land directly, as an auto-merged PR, or as a PR for an approver. Hand-written blocks survive regeneration. |
 | **Ask** | Hybrid retrieval (vectors + full text + the knowledge graph) over code, docs, Confluence and Jira, scoped to what the person may read. When search finds too little, the model looks further (searches again, reads files) before answering. Answers stream with citations, repeated questions come from a cache, and history is kept per user. |
-| **Palace & Architecture** | A knowledge graph extracted from code: repositories, services, endpoints, topics, datastores, docs. Every repository gets a generated architecture diagram; diagrams authored with [archify](https://github.com/tt-a1i/archify) appear next to it. |
-| **Inbox** | Sentry, Datadog, PagerDuty, Opsgenie, Grafana, Alertmanager, CloudWatch, GCP, Wiz, Splunk, Kafka/SQS/Pub/Sub/RabbitMQ lag and DLQs. Signals are scrubbed, grouped, matched against known issues and explained with the code behind them. Any source can be marked never-send-to-a-model. |
+| **Architecture** | Every repository gets a generated architecture diagram; diagrams authored with [archify](https://github.com/tt-a1i/archify) appear next to it. |
+| **Issues** (shown once an alert tool is connected) | Sentry, Datadog, PagerDuty, Opsgenie, Grafana, Alertmanager, CloudWatch, GCP, Wiz, Splunk, Kafka/SQS/Pub/Sub/RabbitMQ lag and DLQs. Signals are scrubbed, grouped, matched against known issues and explained with the code behind them. Any source can be marked never-send-to-a-model. |
 | **Connect in one click** | **Connect with GitHub** creates a private GitHub App for the Hub and installs it on the repositories you pick, with nothing to copy. GitLab and tokens work too. |
 | **Sealed secrets** | Provider keys and credentials are sealed in the browser to the Hub's hybrid X25519 + ML-KEM-768 key, stored with AES-256-GCM under a local or KMS key, and are write-only. |
 | **Settings as code** | Configure sign-in and SSO, users, providers, routing, connectors, repositories and limits from YAML/JSON, with secrets as references to env, files, Vault, gopass, AWS or GCP secret managers. Apply it with `dth apply -f`, or let the Hub apply it at startup so a deployment comes up ready. |
@@ -43,7 +43,7 @@ are checked before every paid call.
 
 <p align="center">
   <img src="docs/images/ask.png" alt="Ask, with question history" width="49%">
-  <img src="docs/images/palace.png" alt="The Palace knowledge graph" width="49%">
+  <img src="docs/images/architecture.png" alt="A generated architecture diagram" width="49%">
 </p>
 
 ## Quick start
@@ -72,8 +72,8 @@ master key that encrypts your keys; back it up). It never overwrites routing you
 `--down --wipe` deletes data.
 
 Then, in the UI:
-1. **Connectors → Connect with GitHub**, and pick repositories.
-2. **Providers & routing:** add your model provider.
+1. **Settings → Connections → Connect with GitHub**, and pick repositories.
+2. **Settings → AI models:** add your model provider.
 3. **Ask** away.
 
 More ways to run it, from Docker Compose with `dth up` to Kubernetes (Helm) and AWS/GCP (Terraform), are in
@@ -129,8 +129,8 @@ make build                 # or use a dth release binary
 For SSO it shows the steps to create the app at your identity provider and the callback URL to register
 there. It never asks for secrets: the file refers to environment variables (`DTH_SECRET_…`) that you set
 where the Hub runs. It then prints the prerequisites for your target, the secrets to set, and the exact
-deploy command. Owners can change any of this later in the UI (**Sign-in & SSO**, **Users & access**,
-**Providers & routing**).
+deploy command. Owners can change any of this later in the UI (**Settings → People → Sign-in**, **Settings → People**,
+**Settings → AI models**).
 
 ### Prerequisites
 
@@ -139,7 +139,7 @@ Needed for every team deployment:
 | Requirement | Details |
 |---|---|
 | A domain and HTTPS | e.g. `https://docs-hub.acme.com`. SSO providers and GitHub webhooks require https. |
-| An identity provider app (for SSO) | A web OpenID Connect app with the callback `https://<your domain>/api/v1/auth/callback`. `dth init` and **Sign-in & SSO** show the steps per provider. Without SSO, people sign in with passwords you send them links for. |
+| An identity provider app (for SSO) | A web OpenID Connect app with the callback `https://<your domain>/api/v1/auth/callback`. `dth init` and **Settings → People → Sign-in** show the steps per provider. Without SSO, people sign in with passwords you send them links for. |
 | A model provider | An API key (Anthropic, OpenAI, Azure OpenAI), a GitHub token for GitHub Models, cloud access (Bedrock, Vertex), an Ollama server, or opencode for docs. You pay the provider directly; spend limits are enforced before every call. |
 | Access to your code | Rights to install a GitHub App on your organization (one click in the Hub), or a GitHub/GitLab token. |
 | Network | Outbound HTTPS to the git host, model provider and identity provider. Inbound HTTPS from the git host for webhooks (otherwise the Hub polls every minute). |

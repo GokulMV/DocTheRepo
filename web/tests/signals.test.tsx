@@ -114,17 +114,33 @@ describe('KnownIssues', () => {
 });
 
 describe('Connectors: signal sources', () => {
-  it('creates a source and shows its webhook URL and secret once', async () => {
-    const { calls } = mockApi({ 'GET /connectors': { items: [] }, 'POST /connectors': { id: 'c9', webhook_path: '/hooks/sentry/c9' } });
+  it('connects Datadog with one link that carries its key', async () => {
+    const { calls } = mockApi({ 'GET /connectors': { items: [] }, 'POST /connectors': { id: 'c8', webhook_path: '/hooks/datadog/c8' } });
     renderAt('/connectors', <Route path="/connectors" element={<Connectors />} />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Add signal source' }));
-    const dialog = await screen.findByRole('dialog');
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Add' }));
-    expect(await screen.findByText(/\/hooks\/sentry\/c9/)).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'Connect Datadog' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Connect Datadog' });
+    expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument(); // nothing to fill in
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Create link' }));
+    const done = await screen.findByRole('dialog', { name: 'Finish in Datadog' });
     const body = JSON.parse(String(calls.find((c) => c.method === 'POST')!.init?.body));
-    expect(body.type).toBe('sentry');
+    expect(body).toMatchObject({ type: 'datadog', name: 'Datadog', mode: 'webhook' });
     const secret = openSealed(body.webhook_secret, 'connector.webhook_secret'); // sent sealed
     expect(secret).toMatch(/^[0-9a-f]{48}$/);
-    expect(screen.getByText(secret)).toBeInTheDocument(); // shown once, in the clear, to the person setting it up
+    expect((within(done).getByLabelText('Link') as HTMLInputElement).value).toBe(`${window.location.origin}/hooks/datadog/c8?token=${secret}`);
+    expect(within(done).getByText(/@webhook-dth/)).toBeInTheDocument();
+  });
+
+  it('takes the signing secret Sentry makes and saves it', async () => {
+    const { calls } = mockApi({ 'GET /connectors': { items: [] }, 'POST /connectors': { id: 'c9', webhook_path: '/hooks/sentry/c9' }, 'PATCH /connectors/c9': {} });
+    renderAt('/connectors', <Route path="/connectors" element={<Connectors />} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Connect Sentry' }));
+    await userEvent.click(within(await screen.findByRole('dialog', { name: 'Connect Sentry' })).getByRole('button', { name: 'Create link' }));
+    const done = await screen.findByRole('dialog', { name: 'Finish in Sentry' });
+    expect((within(done).getByLabelText('Link') as HTMLInputElement).value).toBe(`${window.location.origin}/hooks/sentry/c9`); // Sentry signs; no key in the link
+    await userEvent.type(within(done).getByLabelText('Sentry Client Secret'), 'sentry-client-secret');
+    await userEvent.click(within(done).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
+    const patch = JSON.parse(String(calls.find((c) => c.method === 'PATCH')!.init?.body));
+    expect(openSealed(patch.webhook_secret, 'connector.webhook_secret')).toBe('sentry-client-secret');
   });
 });

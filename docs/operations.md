@@ -85,7 +85,7 @@ yq '{"apiVersion":"monitoring.coreos.com/v1","kind":"PrometheusRule","metadata":
 
 **In the product:**
 - **Activity** shows every job with its progress and errors, plus recent events.
-- **Analytics** shows usage, cost and savings.
+- **Usage** shows usage, cost and savings.
 
 Both read the same tables the metrics describe.
 
@@ -156,7 +156,7 @@ The browser sealing key is separate: rotate it with `POST /api/v1/seal/rotate` (
 5. Check:
    - `/readyz` is green;
    - you can sign in;
-   - **Providers & routing → Test** succeeds (the secrets decrypt);
+   - **Settings → AI models → Test** succeeds (the secrets decrypt);
    - **Activity** shows jobs moving.
 
 **If the master key is lost**, the database is still usable: docs, the index, users and history are
@@ -204,7 +204,7 @@ anything needs attention.
 - **Audit log:** every change to users, sign-in, connectors, providers and settings is recorded. Read it at
   `GET /api/v1/audit` (admin), filtered by actor, action and time.
 - **Secrets:** they are write-only in the UI and API, and sealed in the browser to the Hub's key. To rotate
-  a provider key, enter the new one under **Providers & routing** (or re-apply the settings file).
+  a provider key, enter the new one under **Settings → AI models** (or re-apply the settings file).
 - **Retention:** signal events are kept for `retention.event_days` (30), and deleted chunks for
   `retention.chunk_gc_days` (14). Cached answers expire after 7 days or when their sources change.
 
@@ -215,9 +215,9 @@ anything needs attention.
 | Docs stay "queued" | No worker role running, or one repository's earlier job still running (one job per repository at a time) | Check `DTH_ROLES` includes `worker`; **Activity** shows progress |
 | Docs job failed: "does not support the effort parameter" | An old version with a Haiku route | Upgrade; the Hub now leaves effort out for models that reject it |
 | Ask says "I could not find this" | Nothing relevant indexed, or the person cannot see that repository | Check the repository has docs; with the agent on, the steps shown say what was searched |
-| SSO: "single sign-on failed" | Callback URL not registered exactly, wrong secret, or no `email` claim (Entra: add the optional claim) | **Sign-in & SSO** shows the callback URL; logs show the IdP's error |
-| SSO: "email domain is not allowed" | `allowed_domains` excludes it | Add the domain under **Sign-in & SSO** |
-| Locked out (passwords off, SSO broken) | The identity provider changed, or its app was deleted | Restart the Hub with `DTH_SETTINGS='auth: {password: true}'`, then run `dth-hub invite you@acme.com` where the Hub runs (`docker compose exec hub /dth-hub invite …`, `kubectl exec deploy/dth-api -- /dth-hub invite …`). Open the printed link, set a password, sign in, and fix SSO under **Sign-in & SSO** |
+| SSO: "single sign-on failed" | Callback URL not registered exactly, wrong secret, or no `email` claim (Entra: add the optional claim) | **Settings → People → Sign-in** shows the callback URL; logs show the IdP's error |
+| SSO: "email domain is not allowed" | `allowed_domains` excludes it | Add the domain under **Settings → People → Sign-in** |
+| Locked out (passwords off, SSO broken) | The identity provider changed, or its app was deleted | Restart the Hub with `DTH_SETTINGS='auth: {password: true}'`, then run `dth-hub invite you@acme.com` where the Hub runs (`docker compose exec hub /dth-hub invite …`, `kubectl exec deploy/dth-api -- /dth-hub invite …`). Open the printed link, set a password, sign in, and fix SSO under **Settings → People → Sign-in** |
 | Webhooks not arriving | Hub not reachable from the git host, or `DTH_PUBLIC_URL` wrong | The Hub polls every minute as a fallback; check the delivery log on the git host |
 | "master key … missing" at start | The key file is not where `DTH_LOCAL_KEY_FILE` points | Restore it from backup (see Backups); never start a new key over an existing database unless you accept re-entering secrets |
 | Startup log: "settings at startup not fully applied" | A reference did not resolve, or the identity provider was unreachable | The log names the item; the Hub retries every 30 s and keeps serving |

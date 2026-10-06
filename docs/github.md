@@ -2,7 +2,7 @@
 
 ## One click (recommended)
 
-**Connectors → Connect git host → Connect with GitHub.**
+**Settings → Connections → Connect with GitHub.**
 
 1. **Create the app.** GitHub opens its "Create GitHub App" page, already filled in for this Hub. Click
    **Create GitHub App**. To create it in an organization you administer, or on GitHub Enterprise Server,
@@ -37,7 +37,7 @@ on its own.
 ## Use an App you already have
 
 GitHub App names are unique across GitHub, and uninstalling an App doesn't delete it. To reuse an App
-(for example one an earlier **Connect with GitHub** created), choose **Connectors → Add git host →
+(for example one an earlier **Connect with GitHub** created), choose **Settings → Connections → GitLab, a token, or GitHub Enterprise with your own app →
 Already created a DocTheRepo app on GitHub? Use it instead**:
 
 1. Open **GitHub → Settings → Developer settings → GitHub Apps** (for an organization: the org's

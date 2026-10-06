@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { Route } from 'react-router-dom';
@@ -29,15 +29,27 @@ describe('sidebar', () => {
     expect(localStorage.getItem('dth.sidebar-collapsed')).toBe('0');
   });
 
-  it('keeps most pages under More, opens it for the current page, and pins pages', async () => {
-    mockApi({ 'GET /me': me('admin') });
-    renderAt('/connectors', <Route element={<Shell />}><Route path="/connectors" element={<p>connectors page</p>} /></Route>);
-    expect(await screen.findByText('connectors page')).toBeInTheDocument();
-    // The current page is inside More, so More is open.
-    expect(screen.getByRole('button', { name: 'Less' })).toHaveAttribute('aria-expanded', 'true');
-    await userEvent.click(screen.getByRole('button', { name: 'Pin Spend limits' }));
-    expect(screen.getByRole('group', { name: 'Pinned' })).toHaveTextContent('Spend limits');
-    expect(JSON.parse(localStorage.getItem('dth.pinned') ?? '[]')).toEqual(['/spend']);
+  it('shows six sections, tabs for the current one, and Issues only when it applies', async () => {
+    mockApi({ 'GET /me': { ...me('admin'), features: { issues: false } } });
+    renderAt('/providers', <Route element={<Shell />}><Route path="/providers" element={<p>models page</p>} /></Route>);
+    expect(await screen.findByText('models page')).toBeInTheDocument();
+    const main = screen.getByRole('navigation', { name: 'Main' });
+    for (const name of ['Docs', 'Repositories', 'Usage', 'Settings']) expect(within(main).getByRole('link', { name })).toBeInTheDocument();
+    expect(within(main).queryByRole('link', { name: 'Issues' })).not.toBeInTheDocument(); // no alert source yet
+    expect(within(main).getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
+    const tabs = screen.getByRole('navigation', { name: 'Settings pages' });
+    expect(within(tabs).getAllByRole('link').map((l) => l.textContent)).toEqual(['Connections', 'AI models', 'People', 'Advanced']);
+    expect(within(tabs).getByRole('link', { name: 'AI models' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('shows Issues once an alert source is connected, and hides admin pages from viewers', async () => {
+    mockApi({ 'GET /me': { ...me('viewer'), features: { issues: true } } });
+    renderAt('/known-issues', <Route element={<Shell />}><Route path="/known-issues" element={<p>rules page</p>} /></Route>);
+    expect(await screen.findByText('rules page')).toBeInTheDocument();
+    const main = screen.getByRole('navigation', { name: 'Main' });
+    expect(within(main).getByRole('link', { name: 'Issues' })).toHaveAttribute('aria-current', 'page');
+    expect(within(main).queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('navigation', { name: 'Issues pages' })).getByRole('link', { name: 'Known issues' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('lists recent questions and searches with Ctrl+K', async () => {

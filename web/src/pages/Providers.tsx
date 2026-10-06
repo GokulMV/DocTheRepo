@@ -8,6 +8,7 @@ import { Badge, Button, Card, Dialog, DialogFooter, Empty, ErrorNote, Field, Inp
 import { CHAT_FEATURES, PROVIDER_KINDS, providerKind } from './providerKinds';
 import { SealedBadge, SealedHint } from '@/components/Sealed';
 import { seal } from '@/lib/seal';
+import { MonthlyBudget, SimpleModels } from './ModelSetup';
 import { capFirst, featureLabel, nameOf, sentence } from '@/lib/labels';
 
 const FEATURE_HELP: Record<string, string> = {
@@ -353,24 +354,32 @@ export default function Providers() {
   const list = providers.data?.items ?? [];
   return (
     <>
-      <PageHeader title="Providers & routing" description="Bring your own LLM accounts, then choose which provider and model each feature uses. Every call is checked against your spend limits first." actions={<AddProvider kinds={providers.data?.kinds ?? []} routed={(routes.data?.items ?? []).map((r) => r.feature)} />} />
+      <PageHeader title="AI models" description="The AI accounts the Hub uses, which model does what, and the most it may spend. You pay the provider directly." actions={<AddProvider kinds={providers.data?.kinds ?? []} routed={(routes.data?.items ?? []).map((r) => r.feature)} />} />
       {(providers.isLoading || routes.isLoading) && <Spinner />}
       <ErrorNote error={providers.error ?? routes.error} />
       <Card title="Providers" className="mb-6">
         {list.length === 0 ? (
-          <Empty icon={Cpu} title="No providers">Add Anthropic, OpenAI, Azure OpenAI, Bedrock, Vertex, Ollama, or any OpenAI-compatible endpoint.</Empty>
+          <Empty icon={Cpu} title="No providers yet">Add your Anthropic or OpenAI key with “Add provider”. Azure OpenAI, Bedrock, Vertex, GitHub Models, Ollama and others work too.</Empty>
         ) : (
           <Table head={['Name', 'Kind', 'Key', 'Test', '']}>{list.map((p) => <ProviderRow key={p.id} p={p} />)}</Table>
         )}
       </Card>
-      <Card title="Feature routing">
-        <Table head={['Feature', 'Provider', 'Model', 'Effort', 'Fallback', '']}>
-          {(routes.data?.features ?? []).map((f) => (
-            <RouteRow key={f} feature={f} route={routes.data?.items.find((r) => r.feature === f)} providers={list} />
-          ))}
-        </Table>
-      </Card>
-      <DocsCost />
+      {routes.data && <SimpleModels providers={list} routes={routes.data.items} />}
+      <MonthlyBudget />
+      <details className="group rounded-xl border border-slate-200/80 bg-white shadow-card dark:border-white/[0.07] dark:bg-slate-900/60">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-sm font-semibold">
+          Advanced: a model per feature, fallbacks and docs cost
+          <ChevronDown className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180" aria-hidden />
+        </summary>
+        <div className="border-t border-slate-200/80 p-4 dark:border-white/[0.06]">
+          <Table head={['Feature', 'Provider', 'Model', 'Effort', 'Fallback', '']}>
+            {(routes.data?.features ?? []).map((f) => (
+              <RouteRow key={f} feature={f} route={routes.data?.items.find((r) => r.feature === f)} providers={list} />
+            ))}
+          </Table>
+          <DocsCost />
+        </div>
+      </details>
     </>
   );
 }

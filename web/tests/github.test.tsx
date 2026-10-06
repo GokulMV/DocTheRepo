@@ -10,17 +10,17 @@ afterEach(() => vi.unstubAllGlobals());
 const route = <Route path="/connectors" element={<Connectors />} />;
 
 describe('Connect with GitHub', () => {
-  it('starts the one-click flow from the git host dialog', async () => {
+  it('offers the one-click flow first, and the manual form for GitLab and tokens', async () => {
     mockApi({ 'GET /connectors': { items: [] } });
     const assign = vi.fn();
     vi.stubGlobal('location', { ...window.location, assign });
     renderAt('/connectors', route);
-    await userEvent.click(await screen.findByRole('button', { name: 'Connect git host' }));
-    await userEvent.click(screen.getByRole('button', { name: /Organization or GitHub Enterprise/ }));
+    await userEvent.click(await screen.findByRole('button', { name: /Organization or GitHub Enterprise/ }));
     await userEvent.type(screen.getByLabelText('Organization (optional)'), 'acme');
     await userEvent.click(screen.getByRole('button', { name: 'Connect with GitHub' }));
     expect(assign).toHaveBeenCalledWith('/api/v1/github/connect/start?org=acme');
-    expect(screen.getByLabelText('Host')).toBeInTheDocument(); // the manual form is still there
+    await userEvent.click(screen.getByRole('button', { name: /GitLab, a token/ }));
+    expect(screen.getByLabelText('Host')).toBeInTheDocument(); // the manual form
   });
 
   it('after installing, offers the repositories to track', async () => {

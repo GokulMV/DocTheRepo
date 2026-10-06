@@ -55,7 +55,7 @@ No system can promise that it can never be hacked. Be clear about the limits:
 
 - **Access:** OIDC single sign-on or a local owner; roles (viewer, editor, admin, owner) and per-repository
   access are enforced on every API call and in retrieval. Repositories you can't see never appear: not in
-  answers, the Palace, Architecture, or as a dependency.
+  answers, Architecture, or as a dependency.
 - **Sessions:** HTTP-only, SameSite cookies, with a CSRF token on every change. Personal access tokens are
   stored hashed.
 - **Webhooks:** every delivery is verified (HMAC signatures or shared secrets) and rate-limited per

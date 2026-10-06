@@ -14,6 +14,8 @@ export interface Me {
   email: string;
   name: string;
   role: Role;
+  /** Optional areas that apply to this Hub (issues: an alert source is connected or an issue exists). */
+  features?: { issues?: boolean };
   repo_access: { all: boolean; repo_ids: string[] };
   csrf_token?: string;
 }

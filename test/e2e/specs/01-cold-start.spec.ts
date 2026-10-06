@@ -28,9 +28,9 @@ test('cold start: connect, push, docs PR merged, cited answer', async ({ page })
   // Git host (webhook mode: the hub registers the webhook when a repo is tracked).
   mark(`Git host (webhook mode: the hub registers the webhook when a repo is tracked).`);
   await page.goto('/connectors');
-  await expect(page.getByText('No connectors yet')).toBeVisible();
-  await page.getByRole('button', { name: 'Connect git host' }).click();
-  const connect = page.getByRole('dialog', { name: 'Connect GitHub or GitLab' });
+  await expect(page.getByRole('button', { name: 'Connect with GitHub' })).toBeVisible(); // nothing connected: one click first
+  await page.getByRole('button', { name: /GitLab, a token/ }).click();
+  const connect = page.getByRole('dialog', { name: 'Connect GitLab or GitHub by hand' });
   await connect.getByLabel('API base URL').fill(s.github_api_url);
   await connect.getByLabel('Access token').fill('ghp_e2e_token');
   await connect.getByRole('button', { name: 'Connect', exact: true }).click();
@@ -63,6 +63,7 @@ test('cold start: connect, push, docs PR merged, cited answer', async ({ page })
   await page.getByLabel('Model to test').fill('stub');
   await page.getByRole('button', { name: 'Test' }).click();
   await expect(page.getByText(/ok|reachable|\d+ ms/i).first()).toBeVisible();
+  await page.getByText('Advanced: a model per feature').click();
   for (const feature of ['Docs generation', 'Ask (Q&A)', 'Change triage', 'Embeddings']) {
     const row = page.getByRole('row').filter({ has: page.getByLabel(`${feature}: provider`) });
     await expect(row.getByLabel(`${feature}: provider`)).toHaveValue(/.+/);

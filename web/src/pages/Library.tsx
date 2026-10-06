@@ -55,8 +55,8 @@ export default function Library() {
   return (
     <>
       <PageHeader
-        title="Library"
-        description="Documentation organised by topic — architecture, services, APIs, runbooks, decisions — whichever repository it came from."
+        title="Team docs"
+        description="Pages from Confluence, Jira and Notion, uploaded files, and generated docs grouped by topic. Ask answers from all of them."
         actions={atLeast(me.data?.role, 'editor') && <><UploadDocs collections={[]} /><NewShelf /></>}
       />
       {shelves.isLoading && <Spinner />}
@@ -96,7 +96,7 @@ export default function Library() {
                 ) : i.type === 'confluence_page' || i.type === 'jira_issue' || i.type === 'knowledge_doc' ? (
                   <a href={i.path} target="_blank" rel="noreferrer" className="font-medium text-brand-600">{i.title}</a>
                 ) : (
-                  <Link to={`/palace/${i.id}`} className="font-medium text-brand-600">{i.title}</Link>
+                  <span className="font-medium">{i.title}</span>
                 )}
                 {i.type === 'confluence_page' && <Badge>Confluence</Badge>}
                 {i.type === 'jira_issue' && <Badge>Jira</Badge>}

@@ -241,3 +241,14 @@ func (b *Browse) Sift(ctx context.Context, from, to time.Time) (SiftReport, erro
 	}
 	return rep, nil
 }
+
+// notSignalTypes are the connector types that do not feed the Issues pages: code and team documents.
+const notSignalTypes = `'github', 'gitlab', 'confluence', 'jira', 'notion', 'upload'`
+
+// HasIssues reports whether the Issues pages apply: an alert source is connected, or an issue exists.
+func (b *Browse) HasIssues(ctx context.Context) bool {
+	var ok bool
+	err := b.s.Pool.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM connectors WHERE type::text NOT IN (`+notSignalTypes+`))
+		OR EXISTS (SELECT 1 FROM issues)`).Scan(&ok)
+	return err != nil || ok // when unsure, show them
+}
