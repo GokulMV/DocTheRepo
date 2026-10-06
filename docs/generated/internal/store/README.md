@@ -3,4 +3,5 @@
 
 - [`gen`](gen/README.md)
 - [`queries`](queries/README.md)
-- [`analytics.go`](analytics.go.md) — Defines analytics types and methods for reporting on the source picker's performance and cost savings.
+- [`analytics.go`](analytics.go.md) — Package store provides database access for analytics and browsing functionality in DocTheRepo.
+- [`architecture.go`](architecture.go.md) — Manages retrieval and storage of repository architecture documentation, including entities, relationships, diagrams, and external documentation links.
