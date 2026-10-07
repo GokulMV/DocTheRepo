@@ -29,7 +29,8 @@ export const featureLabel = (f: string) => FEATURE_LABELS[f] ?? sentence(f);
 
 /** Job types, as people see them. */
 export const JOB_LABELS: Record<string, string> = {
-  code_push: 'Docs update',
+  code_push: 'Code update',
+  repo_docs: 'Docs writing',
   decode_issue: 'Error explanation',
   knowledge_sync: 'Knowledge sync',
   security_scan: 'Security scan',

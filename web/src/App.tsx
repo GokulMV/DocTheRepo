@@ -52,6 +52,8 @@ export default function App() {
           <Route path="/ask/:threadId" element={<Ask />} />
           <Route path="/docs" element={<Docs />} />
           <Route path="/docs/:nodeId" element={<Docs />} />
+          <Route path="/docs/r/:repoId" element={<Docs />} />
+          <Route path="/docs/r/:repoId/:type/:key" element={<Docs />} />
           <Route path="/palace/*" element={<Navigate to="/architecture" replace />} />
           <Route path="/architecture" element={<Architecture />} />
           <Route path="/architecture/:repoId" element={<Architecture />} />

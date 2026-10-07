@@ -361,14 +361,16 @@ func (q *Queries) ListThreads(ctx context.Context, arg ListThreadsParams) ([]QaT
 
 const overviewChunks = `-- name: OverviewChunks :many
 SELECT c.chunk_id,
-       (CASE WHEN lower(c.path) ~ '(^|/)readme' THEN 3
+       (CASE WHEN c.path IN ('@docs/overview/overview', '@docs/architecture/architecture') THEN 4
+             WHEN lower(c.path) ~ '(^|/)readme' THEN 3
              WHEN lower(c.path) ~ '(architecture|overview|design|getting[-_]started|introduction)' THEN 2
              ELSE 1 END)::float8 AS rank
 FROM chunks c
 WHERE c.deleted_at IS NULL
   AND ($1::boolean OR c.repo_id = ANY($2::uuid[]))
   AND (cardinality($3::text[]) = 0 OR c.source::text = ANY($3::text[]))
-  AND (lower(c.path) ~ '(^|/)readme'
+  AND (c.path IN ('@docs/overview/overview', '@docs/architecture/architecture')
+       OR lower(c.path) ~ '(^|/)readme'
        OR lower(c.path) ~ '(architecture|overview|design|getting[-_]started|introduction)'
        OR (c.source = 'generated_doc' AND lower(c.path) ~ '(^|/)(main|index|app|server|cli|cmd)[^/]*\.md$'))
 ORDER BY rank DESC, length(c.path), c.chunk_id
@@ -388,7 +390,8 @@ type OverviewChunksRow struct {
 }
 
 // Material that describes a repository as a whole, for broad questions ("how does this repo work?"):
-// READMEs and architecture/overview docs first, then generated docs of entry points.
+// the Hub's Overview and Architecture documents first, then READMEs and architecture/overview docs, then
+// generated docs of entry points.
 func (q *Queries) OverviewChunks(ctx context.Context, arg OverviewChunksParams) ([]OverviewChunksRow, error) {
 	rows, err := q.db.Query(ctx, overviewChunks,
 		arg.AllRepos,

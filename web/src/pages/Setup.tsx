@@ -1,7 +1,10 @@
+import { useQueries } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { ArrowRight, BookOpen, ChevronDown, CircleCheck, Cpu, FolderGit2, KeyRound, Plug, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
+import { api } from '@/api/client';
 import { useAuthConfig, useConnectors, useLimits, useMe, useProviders, useRepos, useRoutes, useTree } from '@/api/hooks';
+import type { RepoDocsList } from '@/api/types';
 import { PageHeader, Spinner, cx } from '@/components/ui';
 import { featureLabel } from '@/lib/labels';
 
@@ -35,6 +38,11 @@ export default function Setup() {
   const limits = useLimits();
   const docs = useTree();
   const me = useMe();
+  const v2 = !!me.data?.features?.docs_v2;
+  // Docs v2: a repository has docs when it has documents.
+  const repoDocs = useQueries({ queries: (repos.data ?? []).map((r) => ({
+    queryKey: ['repo-docs', r.id], queryFn: () => api.get<RepoDocsList>(`/repo-docs?repo_id=${r.id}`), enabled: v2,
+  })) });
   const authCfg = useAuthConfig();
   const [more, setMore] = useState(false);
   const [passwordsEnough, setPasswordsEnough] = useState(() => readFlag(SIGNIN_OK));
@@ -42,7 +50,8 @@ export default function Setup() {
   const routed = new Set(routes.data?.items.map((r) => r.feature));
   const git = conns.data?.filter((c) => c.type === 'github' || c.type === 'gitlab') ?? [];
   const tracked = repos.data ?? [];
-  const hasDocs = (docs.data?.length ?? 0) > 0;
+  const docRepos = v2 ? repoDocs.filter((q) => (q.data?.items.length ?? 0) > 0).length : docs.data?.length ?? 0;
+  const hasDocs = docRepos > 0;
   const owner = me.data?.role === 'owner';
   const sso = !!authCfg.data?.sso;
   const signIn: Step[] = owner ? [{
@@ -85,7 +94,7 @@ export default function Setup() {
       done: hasDocs,
       why: 'The first docs are written automatically once the steps above are done; then on every push.',
       need: tracked.length && routed.has('docgen') && !hasDocs ? 'Nothing yet? Use “Generate docs” on the Repositories page.' : 'Nothing to do.',
-      status: hasDocs ? `${docs.data?.length} repositor${docs.data?.length === 1 ? 'y has' : 'ies have'} docs` : undefined,
+      status: hasDocs ? `${docRepos} repositor${docRepos === 1 ? 'y has' : 'ies have'} docs` : undefined,
       to: hasDocs ? '/docs' : '/repos', action: hasDocs ? 'Open Docs' : 'Repositories', icon: BookOpen,
     },
   ];

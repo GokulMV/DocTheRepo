@@ -99,16 +99,19 @@ WHERE m.id = sqlc.arg(id) AND m.thread_id = t.id AND t.user_id = sqlc.arg(user_i
 
 -- name: OverviewChunks :many
 -- Material that describes a repository as a whole, for broad questions ("how does this repo work?"):
--- READMEs and architecture/overview docs first, then generated docs of entry points.
+-- the Hub's Overview and Architecture documents first, then READMEs and architecture/overview docs, then
+-- generated docs of entry points.
 SELECT c.chunk_id,
-       (CASE WHEN lower(c.path) ~ '(^|/)readme' THEN 3
+       (CASE WHEN c.path IN ('@docs/overview/overview', '@docs/architecture/architecture') THEN 4
+             WHEN lower(c.path) ~ '(^|/)readme' THEN 3
              WHEN lower(c.path) ~ '(architecture|overview|design|getting[-_]started|introduction)' THEN 2
              ELSE 1 END)::float8 AS rank
 FROM chunks c
 WHERE c.deleted_at IS NULL
   AND (sqlc.arg(all_repos)::boolean OR c.repo_id = ANY(sqlc.arg(repo_ids)::uuid[]))
   AND (cardinality(sqlc.arg(sources)::text[]) = 0 OR c.source::text = ANY(sqlc.arg(sources)::text[]))
-  AND (lower(c.path) ~ '(^|/)readme'
+  AND (c.path IN ('@docs/overview/overview', '@docs/architecture/architecture')
+       OR lower(c.path) ~ '(^|/)readme'
        OR lower(c.path) ~ '(architecture|overview|design|getting[-_]started|introduction)'
        OR (c.source = 'generated_doc' AND lower(c.path) ~ '(^|/)(main|index|app|server|cli|cmd)[^/]*\.md$'))
 ORDER BY rank DESC, length(c.path), c.chunk_id

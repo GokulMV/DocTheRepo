@@ -40,7 +40,10 @@ const (
 	Suggest   = "suggest"
 	Decide    = "decide"
 	Security  = "security"
-	Other     = "other"
+	// RepoDocs is Docs v2 (documents per repository); Cards are its per-file notes.
+	RepoDocs = "repo_docs"
+	Cards    = "cards"
+	Other    = "other"
 )
 
 // NotFound is the Hub's exact "not in the sources" sentence (rag.NotFoundAnswer).
@@ -179,11 +182,15 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var system, user strings.Builder
+	firstUser := ""
 	for _, m := range in.Messages {
 		text := contentText(m.Content)
 		if m.Role == "system" || m.Role == "developer" {
 			system.WriteString(text)
 		} else if m.Role == "user" {
+			if firstUser == "" {
+				firstUser = text
+			}
 			user.Reset() // the last user turn is the prompt
 			user.WriteString(text)
 		}
@@ -210,6 +217,10 @@ func (s *Server) chat(w http.ResponseWriter, r *http.Request) {
 		out = decideReply(user.String())
 	case Security:
 		out = security(system.String(), user.String())
+	case RepoDocs:
+		out = repoDoc(firstUser) // a repair turn gets the same, valid answer
+	case Cards:
+		out = cards(firstUser)
 	default:
 		out = "ok"
 	}
@@ -272,6 +283,10 @@ func classify(system string) string {
 		return Decide
 	case strings.HasPrefix(system, "You are a kryptonite "):
 		return Security
+	case strings.HasPrefix(system, "You write documentation for a software repository"):
+		return RepoDocs
+	case strings.HasPrefix(system, "You take short notes on source files"):
+		return Cards
 	}
 	return Other
 }
@@ -645,4 +660,56 @@ func security(system, prompt string) string {
 		return string(b)
 	}
 	return "{}"
+}
+
+var (
+	cardFileRE  = regexp.MustCompile(`(?m)^=== (\S+) \(`)
+	sectionRE   = regexp.MustCompile(`(?m)^- ([a-z_-]+): "([^"]+)" \(([^)]*)\)`)
+	fileShownRE = regexp.MustCompile("(?m)^### (\\S+)\n```\n\\s*(\\d+)\\| ")
+	citeAnyRE   = regexp.MustCompile(`\[([A-Za-z0-9_./-]+\.[A-Za-z0-9]+):(\d+)\]`)
+	codeRE      = regexp.MustCompile(`(?m)^### (\S+) \(([^:\s]+):(\d+)`)
+)
+
+// cards notes every file it is shown.
+func cards(prompt string) string {
+	var out []map[string]any
+	for _, m := range cardFileRE.FindAllStringSubmatch(prompt, -1) {
+		out = append(out, map[string]any{"path": m[1], "purpose": "stub: code in " + m[1] + ".", "symbols": []any{}, "notes": ""})
+	}
+	b, _ := json.Marshal(map[string]any{"cards": out})
+	return string(b)
+}
+
+// repoDoc writes every required section, naming and citing the first code shown in the material, so the
+// checks (citations, names, sections) pass and the document is retrievable by the code's words.
+func repoDoc(prompt string) string {
+	doc := ""
+	if i := strings.Index(prompt, "Document: "); i >= 0 {
+		doc = strings.SplitN(prompt[i+len("Document: "):], "\n", 2)[0]
+	}
+	cite, name := "", ""
+	if m := codeRE.FindStringSubmatch(prompt); m != nil {
+		name, cite = m[1], fmt.Sprintf(" [%s:%s]", m[2], m[3])
+	} else if m := citeAnyRE.FindStringSubmatch(prompt); m != nil {
+		cite = fmt.Sprintf(" [%s:%s]", m[1], m[2])
+	} else if m := fileShownRE.FindStringSubmatch(prompt); m != nil {
+		cite = fmt.Sprintf(" [%s:%s]", m[1], m[2])
+	}
+	about := "the code"
+	if name != "" {
+		about = "`" + name + "`"
+	}
+	var secs []map[string]string
+	for _, m := range sectionRE.FindAllStringSubmatch(prompt, -1) {
+		if !strings.Contains(m[3], "required") {
+			continue
+		}
+		md := fmt.Sprintf("stub: %s for %s is handled by %s%s.", m[2], doc, about, cite)
+		if strings.Contains(m[3], "table") {
+			md = fmt.Sprintf("| Item | Notes |\n|---|---|\n| %s | stub%s |", strings.Trim(about, "`"), cite)
+		}
+		secs = append(secs, map[string]string{"key": m[1], "markdown": md})
+	}
+	b, _ := json.Marshal(map[string]any{"at_a_glance": "stub: " + doc + ". It describes what this code does in plain words.", "sections": secs, "gaps": []string{}})
+	return string(b)
 }

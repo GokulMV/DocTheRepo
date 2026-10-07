@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS file_cards;
+DROP TABLE IF EXISTS repo_docs;

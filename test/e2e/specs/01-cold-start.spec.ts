@@ -1,19 +1,10 @@
 import { expect, test } from '@playwright/test';
-import { eventually, file, prs, push, setChecks, signIn, stack } from '../lib/stack';
-
-// docsPRMerged waits for a docs PR not in seen and for the hub's lifecycle sweep to merge it (reporting CI
-// green if the PR is still waiting).
-async function docsPRMerged(repo: string, seen: number[]): Promise<number> {
-  const pr = await eventually(async () => (await prs(repo)).find((p) => !seen.includes(p.number) && p.head.startsWith('dth/docs-')), 'a docs PR', 120_000);
-  if (!pr.merged) await setChecks(repo, pr.number, 'success');
-  await eventually(async () => (await prs(repo)).find((p) => p.number === pr.number && p.merged), `docs PR #${pr.number} merged`);
-  return pr.number;
-}
+import { eventually, prs, push, signIn, stack } from '../lib/stack';
 
 // Plan § 10 cold start: an empty hub → first SSO sign-in (becomes owner) → setup checklist → connect the
-// git host and the team's own LLM → track a repo → a developer push arrives by webhook → a docs PR is
-// opened and merged when CI is green → the question is answered with a citation to the new doc.
-test('cold start: connect, push, docs PR merged, cited answer', async ({ page }) => {
+// git host and the team's own LLM → track a repo → the repository's documents are written in the Hub → a
+// developer push arrives by webhook and the affected documents are rewritten → a cited answer.
+test('cold start: connect, push, documents written, cited answer', async ({ page }) => {
   const s = await stack();
   const repo = 'acme/payments';
   const t0 = Date.now();
@@ -82,12 +73,21 @@ test('cold start: connect, push, docs PR merged, cited answer', async ({ page })
   await expect(tracked).toContainText('Webhook: registered');
   await expect(page.getByRole('cell', { name: repo })).toBeVisible();
 
-  // Tracking started the first sync: it documents the existing code; its docs PR merges once CI is green.
-  mark(`Tracking started the first sync; its docs PR merges once CI is green.`);
-  const first = await docsPRMerged(repo, []);
+  // Tracking started the first sync: the code is read, then the repository's documents are written in the Hub.
+  mark(`Tracking started the first sync; the documents are written in the Hub.`);
+  const repos = await (await page.request.get('/api/v1/repos')).json();
+  const repoId: string = repos.items.find((r: { full_name: string }) => r.full_name === repo).id;
+  type Doc = { type: string; key: string; status: string; updated_at: string };
+  const docs = async (): Promise<Doc[]> => (await (await page.request.get(`/api/v1/repo-docs?repo_id=${repoId}`)).json()).items ?? [];
+  const firstDocs = await eventually(async () => {
+    const ds = await docs();
+    return ds.some((d) => d.type === 'overview' && d.status === 'ok') && ds.some((d) => d.type === 'architecture') && ds.some((d) => d.type === 'module') ? ds : undefined;
+  }, 'the overview, architecture and module guides', 120_000);
+  expect(await prs(repo), 'documents live in the Hub: no docs PR').toHaveLength(0);
+  const moduleBefore = firstDocs.find((d) => d.type === 'module')!;
 
-  // A developer pushes new code; the webhook delivers it and a new docs PR follows.
-  mark(`A developer pushes new code; the webhook delivers it and a new docs PR follows.`);
+  // A developer pushes new code; the webhook delivers it and the affected documents are rewritten.
+  mark(`A developer pushes new code; the affected documents are rewritten.`);
   await push(repo, {
     'refunds/chargeback.go': `package refunds
 
@@ -98,32 +98,27 @@ func HandleChargeback(paymentID string, amountMinor int64) error {
 }
 `,
   });
-  await docsPRMerged(repo, [first]);
-  const doc = await file(repo, 'docs/generated/refunds/chargeback.go.md');
-  expect(doc.exists, 'the generated doc is on main').toBe(true);
-  expect(doc.content).toContain('HandleChargeback');
+  await eventually(async () => (await docs()).some((d) => d.type === 'module' && d.updated_at !== moduleBefore.updated_at) || (await docs()).length > firstDocs.length, 'documents rewritten after the push', 120_000);
 
-  // The Docs tree has the new page.
-  mark(`The Docs tree has the new page.`);
+  // The Docs page opens on the overview, with every document in its navigation.
+  mark(`The Docs page has the documents.`);
   await page.goto('/docs');
-  const tree = page.getByRole('navigation', { name: 'Documentation' });
-  const open = async (name: string) => {
-    const b = tree.getByRole('button', { name, exact: true });
-    if ((await b.getAttribute('aria-expanded')) !== 'true') await b.click();
-  };
-  await open('acme/payments'); // the only repository: open already
-  for (const dir of ['docs', 'generated', 'refunds']) await open(dir);
-  await tree.getByRole('button', { name: /chargeback/ }).click();
-  await expect(page.getByRole('heading', { name: /HandleChargeback/ }).first()).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'At a glance' })).toBeVisible();
+  const nav = page.getByRole('navigation', { name: 'Documents' });
+  await nav.getByRole('link', { name: 'Architecture' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Architecture' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Architectural style' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /confidence/ }).first()).toBeVisible();
 
-  // Ask, and get a cited answer that points at the new doc.
-  mark(`Ask, and get a cited answer that points at the new doc.`);
+  // Ask, and get a cited answer that points at the new code.
+  mark(`Ask, and get a cited answer.`);
   await page.goto('/ask');
   await page.getByLabel('Question').fill('How are chargebacks handled?');
   await page.getByRole('button', { name: 'Ask', exact: true }).click();
   const citations = page.locator('ol li');
   await expect(citations.first()).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText('docs/generated/refunds/chargeback.go.md').first()).toBeVisible();
+  await expect(page.getByText(/refunds\/chargeback\.go/).first()).toBeVisible();
   await expect(page.getByText(/\[1\]/).first()).toBeVisible();
 
   // The checklist reflects the finished setup, and Activity shows the work.
@@ -131,5 +126,5 @@ func HandleChargeback(paymentID string, amountMinor int64) error {
   await page.goto('/setup');
   await expect(page.getByText('Everything is set up. This page stays as a health check.')).toBeVisible();
   await page.goto('/activity');
-  await expect(page.getByRole('cell', { name: /Docs update/ }).first()).toBeVisible();
+  await expect(page.getByRole('cell', { name: /Docs writing/ }).first()).toBeVisible();
 });

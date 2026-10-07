@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { ensureConfigured, jobDone, llmStats, push, session, stack } from '../lib/stack';
 
-// Plan § 10 spend: a limit below the job's estimate → the push job is spend_blocked and the provider is
+// Plan § 10 spend: a limit below the job's estimate → the docs job is spend_blocked and the provider is
 // never called; an admin can run it once above the ceiling (audited).
 test('spend limit below the estimate blocks before any provider call', async ({ browser }) => {
   const owner = await session(browser, 'owner@acme.test');
@@ -36,7 +36,7 @@ def shipping_cost_cents(weight_grams: int, express: bool = False) -> int:
     });
     await page.goto('/activity');
     await page.getByLabel('Job status').selectOption('spend_blocked');
-    const blocked = page.getByRole('row').filter({ hasText: 'Docs update' }).filter({ hasText: 'Spend blocked' }).first();
+    const blocked = page.getByRole('row').filter({ hasText: 'Docs writing' }).filter({ hasText: 'Spend blocked' }).first();
     await expect(async () => {
       await page.reload();
       await page.getByLabel('Job status').selectOption('spend_blocked');
@@ -44,19 +44,20 @@ def shipping_cost_cents(weight_grams: int, express: bool = False) -> int:
     }).toPass({ timeout: 60_000 });
 
     const stats = await llmStats();
-    expect(stats.docgen?.calls ?? 0, 'no docgen call reached the provider').toBe(0);
+    expect(stats.repo_docs?.calls ?? 0, 'no document call reached the provider').toBe(0);
+    expect(stats.cards?.calls ?? 0, 'no file-notes call either').toBe(0);
     expect(stats.triage?.calls ?? 0, 'no triage call either').toBe(0);
 
     // The job explains itself; an admin runs it once above the ceiling.
     await blocked.click();
-    const dialog = page.getByRole('dialog', { name: 'Docs update · Spend blocked' });
+    const dialog = page.getByRole('dialog', { name: 'Docs writing · Spend blocked' });
     await expect(dialog.getByText(/spend|ceiling|limit/i).first()).toBeVisible();
     page.once('dialog', (d) => d.accept());
     await dialog.getByRole('button', { name: 'Retry above ceiling' }).click();
     const queued = await dialog.getByText(/^Queued job /).textContent();
     const retryId = queued!.replace('Queued job ', '').replace(/\.$/, '');
     await jobDone(owner.api, retryId);
-    expect((await llmStats()).docgen?.calls ?? 0, 'the override run documented the change').toBeGreaterThan(0);
+    expect((await llmStats()).repo_docs?.calls ?? 0, 'the override run wrote the documents').toBeGreaterThan(0);
     const audit = await owner.api.get('/audit');
     expect(JSON.stringify(audit.data)).toMatch(/override/i);
   } finally {

@@ -299,6 +299,8 @@ func runJob(t *testing.T, a *app, q *queue.Queue, typ ports.JobType) string {
 		out, err = ingest.DecodeHandler(a.decoder)(ctx, *job)
 	case ports.JobKnowledgeSync:
 		out, err = a.knowledge.Handle(ctx, *job)
+	case ports.JobRepoDocs:
+		out, err = a.pipe.RepoDocs(ctx, *job)
 	case security.JobScan:
 		out, err = a.securityJobs.HandleScan(ctx, *job)
 	case security.JobFix:

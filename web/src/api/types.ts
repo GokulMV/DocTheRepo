@@ -15,7 +15,7 @@ export interface Me {
   name: string;
   role: Role;
   /** Optional areas that apply to this Hub (issues: an alert source is connected or an issue exists). */
-  features?: { issues?: boolean };
+  features?: { issues?: boolean; docs_v2?: boolean };
   repo_access: { all: boolean; repo_ids: string[] };
   csrf_token?: string;
 }
@@ -577,4 +577,63 @@ export interface McpServer {
   last_error?: string;
   checked_at?: string;
   created_at: string;
+}
+
+export type ConfidenceLabel = 'high' | 'medium' | 'low';
+
+/** A Docs v2 document in the navigation (no sections). */
+export interface RepoDocSummary {
+  id: string;
+  type: string;
+  key: string;
+  title: string;
+  group: string;
+  order: number;
+  at_a_glance: string;
+  confidence: number;
+  label: ConfidenceLabel;
+  why?: string[];
+  changed?: number;
+  status: 'ok' | 'failed';
+  error?: string;
+  updated_at: string;
+}
+
+export interface RepoDocsList {
+  repo_id: string;
+  items: RepoDocSummary[];
+  budget?: { cap_usd: number; spent_usd: number };
+  job?: { id: string; status: string; progress?: { stage: string; done: number; total: number }; error?: string; updated_at: string };
+}
+
+export interface RepoDocSection {
+  key: string;
+  title: string;
+  markdown: string;
+  score: number;
+  label: ConfidenceLabel;
+  why?: string[];
+}
+
+export interface RepoDoc {
+  id: string;
+  repo_id: string;
+  repo: string;
+  type: string;
+  key: string;
+  title: string;
+  group: string;
+  at_a_glance: string;
+  sections: RepoDocSection[];
+  gaps?: string[];
+  confidence: number;
+  label: ConfidenceLabel;
+  why?: string[];
+  calibrated?: boolean;
+  changed?: number;
+  source_sha: string;
+  model?: string;
+  status: string;
+  error?: string;
+  updated_at: string;
 }
