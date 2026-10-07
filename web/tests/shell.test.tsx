@@ -36,6 +36,7 @@ describe('sidebar', () => {
     const main = screen.getByRole('navigation', { name: 'Main' });
     for (const name of ['Docs', 'Repositories', 'Usage', 'Settings']) expect(within(main).getByRole('link', { name })).toBeInTheDocument();
     expect(within(main).queryByRole('link', { name: 'Issues' })).not.toBeInTheDocument(); // no alert source yet
+    expect(within(main).queryByRole('link', { name: 'System' })).not.toBeInTheDocument(); // repositories do not talk
     expect(within(main).getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
     const tabs = screen.getByRole('navigation', { name: 'Settings pages' });
     expect(within(tabs).getAllByRole('link').map((l) => l.textContent)).toEqual(['Connections', 'AI models', 'People', 'Advanced']);
@@ -43,12 +44,13 @@ describe('sidebar', () => {
   });
 
   it('shows Issues once an alert source is connected, and hides admin pages from viewers', async () => {
-    mockApi({ 'GET /me': { ...me('viewer'), features: { issues: true } } });
+    mockApi({ 'GET /me': { ...me('viewer'), features: { issues: true, system: true } } });
     renderAt('/known-issues', <Route element={<Shell />}><Route path="/known-issues" element={<p>rules page</p>} /></Route>);
     expect(await screen.findByText('rules page')).toBeInTheDocument();
     const main = screen.getByRole('navigation', { name: 'Main' });
     expect(within(main).getByRole('link', { name: 'Issues' })).toHaveAttribute('aria-current', 'page');
     expect(within(main).queryByRole('link', { name: 'Settings' })).not.toBeInTheDocument();
+    expect(within(main).getByRole('link', { name: 'System' })).toHaveAttribute('href', '/system');
     expect(within(screen.getByRole('navigation', { name: 'Issues pages' })).getByRole('link', { name: 'Known issues' })).toHaveAttribute('aria-current', 'page');
   });
 

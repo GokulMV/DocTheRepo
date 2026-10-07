@@ -10,7 +10,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Logo } from '@/components/Logo';
 import { Spinner, cx } from '@/components/ui';
 import { setTheme, useTheme, type ThemeChoice } from '@/theme';
-import { NAV, navItemFor, tabFor, type NavItem } from './nav';
+import { NAV, OPT_IN_FEATURES, navItemFor, tabFor, type NavItem } from './nav';
 
 export { NAV } from './nav';
 
@@ -231,7 +231,8 @@ export function Shell() {
     window.location.assign('/login');
   };
   const who = user.name || user.email;
-  const allowed = (i: NavItem) => atLeast(user.role, i.min as Role) && (!i.feature || user.features?.[i.feature] !== false);
+  const allowed = (i: NavItem) => atLeast(user.role, i.min as Role) && (!i.feature ||
+    (OPT_IN_FEATURES.includes(i.feature) ? user.features?.[i.feature] === true : user.features?.[i.feature] !== false));
   const sections = NAV.filter(allowed);
   const here = navItemFor(loc.pathname);
   const threadId = loc.pathname.startsWith('/ask/') ? loc.pathname.slice(5) : undefined;

@@ -34,6 +34,8 @@ Each document is written only when the repository has what it describes. For exa
 | Operations | **Integrations** | External systems and what breaks if each is down |
 | People | **Glossary** | Domain and technical terms in plain words |
 | People | **Ownership and contributing** | Owners, conventions, adding a feature |
+| People | **Recent changes** | What changed recently, by area, in plain words (from the last 90 days of commits; rewritten at most once a week) |
+| People | **Decision records** | Decisions visible in the history (migrations, replacements, adoptions) and in `adr/` or `decisions/` files, with context and consequences, marked "inferred" when only a commit message supports them |
 
 The Architecture document covers:
 
@@ -46,6 +48,26 @@ The Architecture document covers:
 - **External systems.**
 - **Do's and don'ts.**
 - **Trade-offs and limits.**
+
+## System architecture (across repositories)
+
+When tracked repositories talk to each other, a **System** item appears in the sidebar. Repositories count as talking when:
+- one publishes events another consumes;
+- one's code calls another's endpoints or code;
+- one depends on a package built from another (for example `github.com/acme/lib` or `@acme/lib`).
+
+The page shows:
+- **A map** of the repositories and their links, drawn from the code.
+- **The links** themselves, each with where it is in the code.
+- **A write-up** covering:
+  - each repository's role;
+  - how the parts talk;
+  - end-to-end flows across services, with sequence diagrams;
+  - shared contracts;
+  - coupling and risks;
+  - rules for changes across services.
+
+The write-up is rewritten when the links or the repositories' own documents change. It spans every linked repository, so only someone who can read all of them sees it. Others see the map and the links between the repositories they can read.
 
 ## How a repository is split into modules
 
@@ -90,6 +112,14 @@ A document's confidence is its weakest required section. It is lowered when a mo
 Click the badge to see why.
 
 **In Ask:** each section is a search piece that carries its confidence, so the answering model knows when to prefer the code. Broad questions ("how is this built?") start from the Overview and Architecture.
+
+**Answer confidence.** Every cited answer gets its own High / Medium / Low badge. Hover over it to see why. It is lowered when:
+- few of its statements cite a source;
+- the sources behind it are weak (code counts most, then pages, then generated documents by their own confidence);
+- it rests on a single source;
+- the source picker found nothing clearly relevant.
+
+**Coding agents.** The Hub's MCP server returns the same answer confidence in `ask`. Its `read_document` tool returns a document's confidence, the reasons, and which sections to check against the code.
 
 ## When documents are rewritten
 

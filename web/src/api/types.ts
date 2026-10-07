@@ -15,7 +15,7 @@ export interface Me {
   name: string;
   role: Role;
   /** Optional areas that apply to this Hub (issues: an alert source is connected or an issue exists). */
-  features?: { issues?: boolean; docs_v2?: boolean };
+  features?: { issues?: boolean; docs_v2?: boolean; system?: boolean };
   repo_access: { all: boolean; repo_ids: string[] };
   csrf_token?: string;
 }
@@ -90,6 +90,13 @@ export interface AskResponse {
   cached: boolean;
   usage: { input_tokens: number; output_tokens: number; cost_usd: number };
   sift?: SiftSummary;
+  confidence?: AnswerConfidence;
+}
+
+export interface AnswerConfidence {
+  score: number;
+  label: 'high' | 'medium' | 'low';
+  why?: string[];
 }
 
 export interface Thread {
@@ -113,6 +120,8 @@ export interface Message {
   investigated?: boolean;
   /** How the source picker trimmed this answer's sources, when it ran. */
   sift?: SiftSummary;
+  /** How far the answer can be trusted, and why. */
+  confidence?: AnswerConfidence;
   feedback?: 'up' | 'down';
   created_at: string;
 }
@@ -636,4 +645,25 @@ export interface RepoDoc {
   status: string;
   error?: string;
   updated_at: string;
+}
+
+export interface SystemLink {
+  from_repo: string;
+  from_name: string;
+  to_repo: string;
+  to_name: string;
+  kind: 'event' | 'api' | 'call' | 'library' | 'other';
+  via: string;
+  path?: string;
+  line?: number;
+  n: number;
+}
+
+export interface SystemView {
+  links: SystemLink[];
+  repos: { id: string; name: string }[];
+  complete: boolean;
+  diagram: string;
+  doc?: Omit<RepoDoc, 'repo_id' | 'repo' | 'type' | 'key' | 'group' | 'source_sha'>;
+  job?: { id: string; status: string; error?: string; updated_at: string };
 }

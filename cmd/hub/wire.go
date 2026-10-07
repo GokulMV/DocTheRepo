@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -106,8 +107,12 @@ type app struct {
 	archSync      *ingest.ArchitectureSync
 	// MCP connections: other products' MCP servers Ask can call.
 	repoDocs *store.RepoDocs
-	mcpStore *store.MCPServers
-	mcp      *mcpconn.Manager
+	// systemHas caches whether repositories talk to each other (the System page).
+	systemMu  sync.Mutex
+	systemAt  time.Time
+	systemHas bool
+	mcpStore  *store.MCPServers
+	mcp       *mcpconn.Manager
 }
 
 func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.Box, q *queue.Queue, log *slog.Logger, m *observability.Metrics) (*app, error) {
@@ -290,6 +295,7 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 	if cfg.Docs.Version != 1 {
 		a.pipe.DocsV2 = true
 		a.pipe.RepoDocsFacts = a.repoDocs
+		a.pipe.SystemStore = a.repoDocs
 		a.pipe.RepoDocsGen = &repodocs.Generator{GW: gw, Store: a.repoDocs, Cost: func(kind, model, feature string, in, out int64) (float64, bool) {
 			return a.enforcer.Guard().Cost(kind, model, feature, in, out)
 		}}
@@ -310,6 +316,7 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 func (a *app) registerHandlers(pool *queue.Pool) {
 	pool.Register(ports.JobCodePush, a.pipe.CodePush)
 	pool.Register(ports.JobRepoDocs, a.pipe.RepoDocs)
+	pool.Register(ports.JobSystemDocs, a.pipe.SystemDocs)
 	pool.Register(ports.JobImportDocs, a.pipe.ImportDocs)
 	pool.Register(ports.JobReindex, a.pipe.Reindex)
 	pool.Register(ports.JobSignalBatch, a.polls.Handle)
@@ -697,4 +704,17 @@ func sortedKeys(m map[string]string) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// hasSystem reports whether tracked repositories talk to each other, remembered for a minute (it is
+// asked on every page load).
+func (a *app) hasSystem(ctx context.Context) bool {
+	a.systemMu.Lock()
+	defer a.systemMu.Unlock()
+	if time.Since(a.systemAt) < time.Minute {
+		return a.systemHas
+	}
+	links, err := a.repoDocs.SystemLinks(ctx)
+	a.systemHas, a.systemAt = err == nil && len(links) > 0, time.Now()
+	return a.systemHas
 }

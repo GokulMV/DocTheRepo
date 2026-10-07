@@ -19,6 +19,8 @@ const (
 	JobSignalBatch   JobType = "signal_batch"
 	// JobRepoDocs writes a repository's documents (Docs v2).
 	JobRepoDocs JobType = "repo_docs"
+	// JobSystemDocs writes the System architecture across repositories.
+	JobSystemDocs JobType = "system_docs"
 	// JobPRReview advances a docs PR after its approver's review (webhook ingress does no git I/O itself).
 	JobPRReview JobType = "pr_review"
 	// JobSecurityScan and JobSecurityFix run the Security page's scans and requested fixes.
@@ -27,7 +29,7 @@ const (
 )
 
 // AllJobTypes lists every job type the worker pool knows about.
-var AllJobTypes = []JobType{JobCodePush, JobRepoDocs, JobDecodeIssue, JobKnowledgeSync, JobImportDocs, JobReindex, JobSignalBatch, JobPRReview,
+var AllJobTypes = []JobType{JobCodePush, JobRepoDocs, JobSystemDocs, JobDecodeIssue, JobKnowledgeSync, JobImportDocs, JobReindex, JobSignalBatch, JobPRReview,
 	JobSecurityScan, JobSecurityFix}
 
 // JobStatus is the lifecycle state of a job (plan § 6.5).

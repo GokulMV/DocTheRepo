@@ -11,6 +11,7 @@ import Invite from '@/pages/Invite';
 import Ask from '@/pages/Ask';
 import Docs from '@/pages/Docs';
 import Architecture from '@/pages/Architecture';
+import System from '@/pages/System';
 import Library from '@/pages/Library';
 import UploadView from '@/pages/Uploads';
 import Security from '@/pages/Security';
@@ -55,6 +56,7 @@ export default function App() {
           <Route path="/docs/r/:repoId" element={<Docs />} />
           <Route path="/docs/r/:repoId/:type/:key" element={<Docs />} />
           <Route path="/palace/*" element={<Navigate to="/architecture" replace />} />
+          <Route path="/system" element={<System />} />
           <Route path="/architecture" element={<Architecture />} />
           <Route path="/architecture/:repoId" element={<Architecture />} />
           <Route path="/library" element={<Library />} />

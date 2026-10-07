@@ -140,6 +140,8 @@ type Answer struct {
 	Investigated bool `json:"investigated,omitempty"`
 	// Sift reports how the sources were picked (absent when sifting was off or skipped).
 	Sift *SiftSummary `json:"sift,omitempty"`
+	// Confidence says how far the answer can be trusted, and why (absent for "not found").
+	Confidence *Confidence `json:"confidence,omitempty"`
 }
 
 // SiftSummary is what the source picker did for one answer.
@@ -369,6 +371,7 @@ func (e *Engine) Ask(ctx context.Context, q Query) (Answer, error) {
 	}
 	a.Investigated = investigated
 	a.Sift = sum
+	a.Confidence = Score(a, packed, weak)
 	if sum != nil && e.Cost != nil {
 		saved, _ := e.Cost(rt.ProviderKind, a.Model, llmgateway.FeatureQA, int64(sum.TokensSaved), 0)
 		sum.SavedUSD = saved - sum.CostUSD

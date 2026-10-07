@@ -398,6 +398,19 @@ func (g *Generator) repoHash(e *env, spec Spec) string {
 					parts = append(parts, p)
 				}
 			}
+		case "commits":
+			parts = append(parts, weekOf(e.facts.Commits))
+		case "decisions":
+			for _, c := range e.facts.Commits {
+				if IsDecisionCommit(c) {
+					parts = append(parts, c.SHA)
+				}
+			}
+			for _, p := range e.facts.AllPaths {
+				if IsADR(p) {
+					parts = append(parts, p)
+				}
+			}
 		case "error_symbols", "central_bodies", "entry_points":
 			for i, s := range e.symbols {
 				if i == 40 {

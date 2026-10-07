@@ -76,6 +76,11 @@ func HubTools(call Caller) []Tool {
 						Path  string `json:"path"`
 						Lines string `json:"lines"`
 					} `json:"citations"`
+					Confidence *struct {
+						Score float64  `json:"score"`
+						Label string   `json:"label"`
+						Why   []string `json:"why"`
+					} `json:"confidence"`
 				}
 				body := map[string]any{"question": in.Question, "scope": map[string]any{"repo_ids": ids, "include": in.Include}}
 				if err := call(ctx, "POST", "/ask", body, &out); err != nil {
@@ -83,6 +88,15 @@ func HubTools(call Caller) []Tool {
 				}
 				var b strings.Builder
 				b.WriteString(out.Answer)
+				if c := out.Confidence; c != nil {
+					fmt.Fprintf(&b, "\n\nConfidence: %s (%.0f%%)", c.Label, c.Score*100)
+					if len(c.Why) > 0 {
+						b.WriteString(" because " + strings.Join(c.Why, "; "))
+					}
+					if c.Label != "high" {
+						b.WriteString(". Check the cited code before relying on it.")
+					}
+				}
 				if len(out.Citations) > 0 {
 					b.WriteString("\n\nSources:\n")
 					for _, c := range out.Citations {
@@ -191,6 +205,105 @@ func HubTools(call Caller) []Tool {
 				}
 				return getJSON(ctx, call, "/library/shelves/"+url.PathEscape(in.Slug))
 			}},
+		{Name: "list_docs", Title: "A repository's documents", Annotations: readOnly,
+			Description: "List a repository's documents (overview, architecture, module guides, API, flows, data model, tests, runbooks and more) with their confidence. Read one with read_document.",
+			InputSchema: obj(map[string]any{"repo": str("Repository (owner/name).")}, "repo"),
+			Call: func(ctx context.Context, raw json.RawMessage) (string, error) {
+				var in struct {
+					Repo string `json:"repo"`
+				}
+				if err := json.Unmarshal(raw, &in); err != nil || in.Repo == "" {
+					return "", fmt.Errorf("repo is required")
+				}
+				ids, err := repoIDs(ctx, call, []string{in.Repo})
+				if err != nil {
+					return "", err
+				}
+				var out struct {
+					Items []struct {
+						Type, Key, Title, Group, Label string
+						AtAGlance                      string  `json:"at_a_glance"`
+						Confidence                     float64 `json:"confidence"`
+						Status                         string  `json:"status"`
+					} `json:"items"`
+				}
+				if err := call(ctx, "GET", "/repo-docs?repo_id="+url.QueryEscape(ids[0]), nil, &out); err != nil {
+					return "", err
+				}
+				if len(out.Items) == 0 {
+					return "No documents for " + in.Repo + " yet.", nil
+				}
+				var b strings.Builder
+				for _, d := range out.Items {
+					if d.Status != "ok" {
+						continue
+					}
+					fmt.Fprintf(&b, "- %s (type %q, key %q, %s, confidence %s %.0f%%): %s\n", d.Title, d.Type, d.Key, d.Group, d.Label, d.Confidence*100, d.AtAGlance)
+				}
+				return clip(b.String()), nil
+			}},
+		{Name: "read_document", Title: "Read a document", Annotations: readOnly,
+			Description: "Read one of a repository's documents as Markdown, with its confidence and the reasons, and which sections to check against the code. Types: overview, architecture, module (key = module key from list_docs), flows, api, events, data, config, tests, build, errors, getting-started, operations, security, integrations, glossary, ownership, changes, decisions.",
+			InputSchema: obj(map[string]any{"repo": str("Repository (owner/name)."), "type": str("Document type."), "key": str("Module key for module guides; otherwise omit.")}, "repo", "type"),
+			Call: func(ctx context.Context, raw json.RawMessage) (string, error) {
+				var in struct {
+					Repo, Type, Key string
+				}
+				if err := json.Unmarshal(raw, &in); err != nil || in.Repo == "" || in.Type == "" {
+					return "", fmt.Errorf("repo and type are required")
+				}
+				ids, err := repoIDs(ctx, call, []string{in.Repo})
+				if err != nil {
+					return "", err
+				}
+				key := in.Key
+				if key == "" {
+					key = in.Type
+				}
+				var d struct {
+					Title      string   `json:"title"`
+					AtAGlance  string   `json:"at_a_glance"`
+					Confidence float64  `json:"confidence"`
+					Label      string   `json:"label"`
+					Why        []string `json:"why"`
+					Calibrated bool     `json:"calibrated"`
+					SourceSHA  string   `json:"source_sha"`
+					Changed    float64  `json:"changed"`
+					Sections   []struct {
+						Title, Markdown, Label string
+						Why                    []string `json:"why"`
+					} `json:"sections"`
+					Gaps []string `json:"gaps"`
+				}
+				q := url.Values{"repo_id": {ids[0]}, "type": {in.Type}, "key": {key}}
+				if err := call(ctx, "GET", "/repo-docs/find?"+q.Encode(), nil, &d); err != nil {
+					return "", err
+				}
+				var b strings.Builder
+				fmt.Fprintf(&b, "# %s\n\nConfidence: %s (%.0f%%)", d.Title, d.Label, d.Confidence*100)
+				if d.Calibrated {
+					b.WriteString(", judged by a calibrated model")
+				}
+				if len(d.Why) > 0 {
+					b.WriteString(". Why: " + strings.Join(d.Why, "; "))
+				}
+				fmt.Fprintf(&b, ". Written from commit %s", shortSHA(d.SourceSHA))
+				if d.Changed >= 0.05 {
+					fmt.Fprintf(&b, "; %.0f%% of its code changed since, so prefer the code where they differ", d.Changed*100)
+				}
+				b.WriteString(".\n\n> " + d.AtAGlance + "\n\n")
+				for _, s := range d.Sections {
+					fmt.Fprintf(&b, "## %s\n", s.Title)
+					if s.Label != "" && s.Label != "high" {
+						fmt.Fprintf(&b, "(Check against the code: %s confidence%s.)\n", s.Label, whyText(s.Why))
+					}
+					b.WriteString(s.Markdown + "\n\n")
+				}
+				if len(d.Gaps) > 0 {
+					b.WriteString("## Not determined from the code\n- " + strings.Join(d.Gaps, "\n- ") + "\n")
+				}
+				return clip(b.String()), nil
+			}},
 		{Name: "read_doc", Title: "Read a doc", Annotations: readOnly,
 			Description: "Read one docs Tree node (a generated or imported doc file or section) as Markdown. Ids come from library or ask citations.",
 			InputSchema: obj(map[string]any{"id": str("Doc node id.")}, "id"),
@@ -266,4 +379,18 @@ func orInt(v, d int) int {
 		return v
 	}
 	return d
+}
+
+func shortSHA(s string) string {
+	if len(s) > 7 {
+		return s[:7]
+	}
+	return s
+}
+
+func whyText(why []string) string {
+	if len(why) == 0 {
+		return ""
+	}
+	return ": " + strings.Join(why, "; ")
 }

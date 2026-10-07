@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/GokulMV/DocTheRepo/internal/core/llmgateway"
 	"github.com/GokulMV/DocTheRepo/internal/core/manifest"
@@ -98,6 +100,10 @@ func (p *Pipeline) RepoDocs(ctx context.Context, job ports.Job) (ports.Outcome, 
 			facts.AllPaths = append(facts.AllPaths, t)
 		}
 	}
+	// Recent history, for Recent changes and Decision records (best effort: docs do not need it).
+	if cs, err := host.CommitsForPath(ctx, repo.FullName, "", time.Now().AddDate(0, 0, -90)); err == nil {
+		facts.Commits = cs
+	}
 	var mu sync.Mutex
 	cache := map[string][]byte{}
 	read := func(ctx context.Context, path string) ([]byte, error) {
@@ -181,6 +187,9 @@ func (p *Pipeline) RepoDocs(ctx context.Context, job ports.Job) (ports.Outcome, 
 	if err := p.indexDocs(ctx, repo, meta, res); err != nil {
 		return ports.Outcome{}, err
 	}
+	if len(res.Changed) > 0 || len(res.Removed) > 0 {
+		p.queueSystemDocs(ctx, "documents of "+repo.FullName+" changed")
+	}
 	msg := fmt.Sprintf("%d documents written, %d unchanged", len(res.Written), res.Unchanged)
 	if len(res.Failed) > 0 {
 		msg += fmt.Sprintf(", %d failed", len(res.Failed))
@@ -229,4 +238,121 @@ func (p *Pipeline) indexDocs(ctx context.Context, repo ports.RepoConfig, meta ll
 		return nil // searchable by text until the reindex
 	}
 	return err
+}
+
+// SystemStore reads how repositories link and keeps the System architecture.
+type SystemStore interface {
+	SystemLinks(ctx context.Context) ([]repodocs.SystemLink, error)
+	SystemDoc(ctx context.Context) (repodocs.Doc, error)
+	DeleteSystemDoc(ctx context.Context) error
+	PutDoc(ctx context.Context, d repodocs.Doc) (repodocs.Doc, error)
+	Docs(ctx context.Context, repoID string) ([]repodocs.Doc, error)
+}
+
+// SystemDocsPayload is the system_docs job payload.
+type SystemDocsPayload struct {
+	Full   bool   `json:"full,omitempty"`
+	Reason string `json:"reason,omitempty"`
+}
+
+// queueSystemDocs asks for the System architecture to be brought up to date (after a repository's
+// documents changed).
+func (p *Pipeline) queueSystemDocs(ctx context.Context, reason string) {
+	if p.Enqueue == nil || p.SystemStore == nil {
+		return
+	}
+	_ = p.Enqueue(ctx, ports.NewJob{Type: ports.JobSystemDocs, SerialKey: "system", DedupeKey: "system-docs", Payload: SystemDocsPayload{Reason: reason}})
+}
+
+// SystemDocs handles a system_docs job: when tracked repositories talk to each other (APIs, events,
+// shared packages), it writes the System architecture from their documents and those links; when they no
+// longer do, it removes it.
+func (p *Pipeline) SystemDocs(ctx context.Context, job ports.Job) (ports.Outcome, error) {
+	var pl SystemDocsPayload
+	_ = json.Unmarshal(job.Payload, &pl)
+	if p.SystemStore == nil || p.RepoDocsGen == nil {
+		return ports.Outcome{Status: ports.JobAborted, Message: "Docs v2 is not set up on this Hub"}, nil
+	}
+	links, err := p.SystemStore.SystemLinks(ctx)
+	if err != nil {
+		return ports.Outcome{}, err
+	}
+	if len(links) == 0 {
+		if err := p.SystemStore.DeleteSystemDoc(ctx); err != nil {
+			return ports.Outcome{}, err
+		}
+		return ports.Outcome{Status: ports.JobAborted, Message: "the tracked repositories do not talk to each other"}, nil
+	}
+	ids := map[string]string{}
+	for _, l := range links {
+		ids[l.FromRepo], ids[l.ToRepo] = l.FromName, l.ToName
+	}
+	var in repodocs.SystemInput
+	var heads []string
+	for _, id := range sortedIDs(ids) {
+		docs, err := p.SystemStore.Docs(ctx, id)
+		if err != nil {
+			return ports.Outcome{}, err
+		}
+		r := repodocs.SystemRepo{ID: id, Name: ids[id]}
+		var hashes []string
+		for _, d := range docs {
+			if d.Status != "ok" {
+				continue
+			}
+			switch d.Type {
+			case "overview":
+				r.Overview = d.AtAGlance
+				if s := d.Section("what"); s != nil {
+					r.Overview += "\n\n" + s.Markdown
+				}
+				hashes = append(hashes, d.InputsHash)
+				heads = append(heads, d.SourceSHA)
+			case "architecture":
+				for _, k := range []string{"style", "components", "flow", "integrations"} {
+					if s := d.Section(k); s != nil {
+						r.Architecture += "**" + s.Title + ".** " + s.Markdown + "\n\n"
+					}
+				}
+				hashes = append(hashes, d.InputsHash)
+			}
+		}
+		r.Hash = repodocs.Hash(hashes...)
+		in.Repos = append(in.Repos, r)
+	}
+	in.Links, in.Head = links, repodocs.Hash(heads...)
+	prev, err := p.SystemStore.SystemDoc(ctx)
+	var prevPtr *repodocs.Doc
+	if err == nil {
+		prevPtr = &prev
+		if !pl.Full && prev.Status == "ok" && prev.InputsHash == repodocs.SystemHash(in) {
+			return ports.Outcome{Status: ports.JobDone, Message: "the System architecture is current"}, nil
+		}
+	} else if !errors.Is(err, ports.ErrNotFound) {
+		return ports.Outcome{}, err
+	}
+	d, werr := p.RepoDocsGen.WriteSystem(ctx, in, prevPtr, repodocs.RunOptions{Meta: llmgateway.CallMeta{JobID: job.ID}})
+	var sb *ports.SpendBlockedError
+	if errors.As(werr, &sb) {
+		return ports.Outcome{Status: ports.JobSpendBlocked, Message: sb.Error()}, nil
+	}
+	if werr != nil && prevPtr != nil && prevPtr.Status == "ok" {
+		return ports.Outcome{}, werr // keep the last good version; the job retries
+	}
+	if _, err := p.SystemStore.PutDoc(ctx, d); err != nil {
+		return ports.Outcome{}, err
+	}
+	if werr != nil {
+		return ports.Outcome{}, werr
+	}
+	return ports.Outcome{Status: ports.JobDone, Message: fmt.Sprintf("System architecture written for %d repositories and %d links", len(in.Repos), len(links))}, nil
+}
+
+func sortedIDs(m map[string]string) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Slice(out, func(i, j int) bool { return m[out[i]] < m[out[j]] })
+	return out
 }

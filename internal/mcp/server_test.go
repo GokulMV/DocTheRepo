@@ -93,7 +93,7 @@ func TestProtocol(t *testing.T) {
 		t.Errorf("initialize = %v", init)
 	}
 	tools := got["2"]["result"].(map[string]any)["tools"].([]any)
-	if len(tools) != 8 || tools[0].(map[string]any)["inputSchema"] == nil {
+	if len(tools) != 10 || tools[0].(map[string]any)["inputSchema"] == nil {
 		t.Errorf("tools = %v", tools)
 	}
 	if got["3"]["error"].(map[string]any)["code"].(float64) != codeMethodNotFound {

@@ -79,6 +79,8 @@ type askResponse struct {
 	Usage        map[string]any `json:"usage"`
 	// Sift: how the sources were picked before answering (absent when the picker did not run).
 	Sift *rag.SiftSummary `json:"sift,omitempty"`
+	// Confidence: how far the answer can be trusted, and why.
+	Confidence *rag.Confidence `json:"confidence,omitempty"`
 }
 
 // sse writes server-sent events.
@@ -176,7 +178,7 @@ func (h *askHandlers) ask(w http.ResponseWriter, r *http.Request) {
 		h.askErr(w, r, stream, err)
 		return
 	}
-	resp := askResponse{ThreadID: threadID, MessageID: mid, Answer: ans.Text, Citations: ans.Citations, Cached: ans.Cached, Investigated: ans.Investigated, Sift: ans.Sift,
+	resp := askResponse{ThreadID: threadID, MessageID: mid, Answer: ans.Text, Citations: ans.Citations, Cached: ans.Cached, Investigated: ans.Investigated, Sift: ans.Sift, Confidence: ans.Confidence,
 		Usage: map[string]any{"input_tokens": ans.Usage.InputTokens, "output_tokens": ans.Usage.OutputTokens, "cost_usd": ans.CostUSD}}
 	if stream != nil {
 		for _, c := range ans.Citations {

@@ -1,9 +1,43 @@
 package repodocs
 
 import (
+	"fmt"
 	"path"
+	"regexp"
 	"strings"
+
+	"github.com/GokulMV/DocTheRepo/internal/ports"
 )
+
+// decisionRE spots commits that record a decision: adopting, replacing or removing something.
+var decisionRE = regexp.MustCompile(`(?i)\b(adr|decision|decide[ds]?|migrat(e|ed|ion)|replac(e|ed|es)|switch(ed)? (to|from)|adopt(ed)?|deprecat(e|ed|ion)|introduc(e|ed)|remov(e|ed) (the )?(support|dependency)|move[ds]? (to|from)|rewrit(e|ten))\b`)
+
+// IsDecisionCommit reports a commit whose message records a decision.
+func IsDecisionCommit(c ports.Commit) bool { return decisionRE.MatchString(c.Message) }
+
+// IsADR reports architecture decision record files.
+func IsADR(p string) bool {
+	l := strings.ToLower(p)
+	return strings.HasSuffix(l, ".md") && (strings.Contains(l, "/adr/") || strings.HasPrefix(l, "adr/") || strings.Contains(l, "/decisions/") || strings.Contains(l, "architecture-decision"))
+}
+
+func hasDecisions(f *Facts) bool {
+	for _, c := range f.Commits {
+		if IsDecisionCommit(c) {
+			return true
+		}
+	}
+	return hasPath(IsADR)(f)
+}
+
+// weekOf is the ISO year-week of the newest commit: Recent changes is rewritten at most once a week.
+func weekOf(cs []ports.Commit) string {
+	if len(cs) == 0 {
+		return ""
+	}
+	y, w := cs[0].At.ISOWeek()
+	return fmt.Sprintf("%d-W%02d", y, w)
+}
 
 // Section is one part of a document.
 type Section struct {
@@ -281,6 +315,31 @@ var Catalog = []Spec{
 		},
 	},
 }
+
+// History documents, written from commits (and decision record files).
+var historySpecs = []Spec{
+	{
+		Type: "changes", Title: "Recent changes", Group: "People", Order: 180, Applies: func(f *Facts) bool { return len(f.Commits) > 0 },
+		Audience: "everyone, including non-engineers", Purpose: "What changed recently, in plain words.",
+		Needs: []string{"commits", "modules"},
+		Sections: []Section{
+			s("summary", "This period in short", 150, true, false, "What changed and why it matters, for someone who was away. No commit hashes."),
+			s("areas", "Changes by area", 0, true, false, "A table: Area (module) | What changed | When. Group related commits."),
+			s("notable", "Worth knowing", 150, false, false, "Breaking changes, new features, removals and risky changes, as bullets."),
+		},
+	},
+	{
+		Type: "decisions", Title: "Decision records", Group: "People", Order: 190, Applies: hasDecisions,
+		Audience: "engineers and technical leads", Purpose: "The technical decisions visible in the history, with their context and consequences. Inferred from commits unless a decision record file exists.",
+		Needs: []string{"decisions", "modules"},
+		Sections: []Section{
+			s("list", "Decisions", 0, true, false, "A table: Decision | When | Source (commit short hash or record file) | Inferred? (yes when only a commit message supports it)."),
+			s("records", "Records", 700, true, false, "For each decision a ### heading, then Context, Decision, Consequences. Say \"(inferred from the commit message)\" when it is not written down anywhere."),
+		},
+	},
+}
+
+func init() { Catalog = append(Catalog, historySpecs...) }
 
 // SpecByType finds a document type.
 func SpecByType(t string) (Spec, bool) {

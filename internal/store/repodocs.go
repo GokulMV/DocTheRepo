@@ -226,7 +226,7 @@ func (r *RepoDocs) PutCards(ctx context.Context, repoID string, cards []repodocs
 	return r.s.Pool.SendBatch(ctx, b).Close()
 }
 
-const docCols = `id::text, repo_id::text, doc_type, doc_key, title, grp, ord, at_a_glance, sections, gaps, confidence, why, calibrated,
+const docCols = `id::text, coalesce(repo_id::text, ''), doc_type, doc_key, title, grp, ord, at_a_glance, sections, gaps, confidence, why, calibrated,
 	inputs_hash, file_hashes, changed, source_sha, model, tokens_in, tokens_out, cost_usd, status, error, updated_at`
 
 func scanDoc(row pgx.Row) (repodocs.Doc, error) {
@@ -287,6 +287,11 @@ func (r *RepoDocs) PutDoc(ctx context.Context, d repodocs.Doc) (repodocs.Doc, er
 		}
 		return b
 	}
+	conflict := "(repo_id, doc_type, doc_key)"
+	var repoID any = d.RepoID
+	if d.RepoID == "" {
+		conflict, repoID = "(doc_type, doc_key) WHERE repo_id IS NULL", nil // a system-wide document
+	}
 	hashes, _ := json.Marshal(d.FileHashes)
 	if d.FileHashes == nil {
 		hashes = []byte("{}")
@@ -295,14 +300,14 @@ func (r *RepoDocs) PutDoc(ctx context.Context, d repodocs.Doc) (repodocs.Doc, er
 		INSERT INTO repo_docs (id, repo_id, doc_type, doc_key, title, grp, ord, at_a_glance, sections, gaps, confidence, why, calibrated,
 			inputs_hash, file_hashes, changed, source_sha, model, tokens_in, tokens_out, cost_usd, status, error, updated_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
-		ON CONFLICT (repo_id, doc_type, doc_key) DO UPDATE SET title = EXCLUDED.title, grp = EXCLUDED.grp, ord = EXCLUDED.ord,
+		ON CONFLICT `+conflict+` DO UPDATE SET title = EXCLUDED.title, grp = EXCLUDED.grp, ord = EXCLUDED.ord,
 			at_a_glance = EXCLUDED.at_a_glance, sections = EXCLUDED.sections, gaps = EXCLUDED.gaps, confidence = EXCLUDED.confidence,
 			why = EXCLUDED.why, calibrated = EXCLUDED.calibrated, inputs_hash = EXCLUDED.inputs_hash, file_hashes = EXCLUDED.file_hashes,
 			changed = EXCLUDED.changed, source_sha = EXCLUDED.source_sha, model = EXCLUDED.model, tokens_in = EXCLUDED.tokens_in,
 			tokens_out = EXCLUDED.tokens_out, cost_usd = EXCLUDED.cost_usd, status = EXCLUDED.status, error = EXCLUDED.error,
 			updated_at = EXCLUDED.updated_at
 		RETURNING `+docCols,
-		d.ID, d.RepoID, d.Type, d.Key, d.Title, d.Group, d.Order, d.AtAGlance, j(d.Sections), j(d.Gaps), d.Confidence, j(d.Why), d.Calibrated,
+		d.ID, repoID, d.Type, d.Key, d.Title, d.Group, d.Order, d.AtAGlance, j(d.Sections), j(d.Gaps), d.Confidence, j(d.Why), d.Calibrated,
 		d.InputsHash, hashes, d.Changed, d.SourceSHA, d.Model, d.TokensIn, d.TokensOut, d.CostUSD, d.Status, d.Error, d.UpdatedAt))
 }
 

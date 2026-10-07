@@ -266,7 +266,7 @@ func Default() Config {
 		Queue: QueueConfig{
 			Concurrency: map[string]int{
 				"code_push": 4, "decode_issue": 4, "knowledge_sync": 2, "security_scan": 1, "security_fix": 1,
-				"import_docs": 1, "reindex": 1, "signal_batch": 8, "pr_review": 2, "repo_docs": 2,
+				"import_docs": 1, "reindex": 1, "signal_batch": 8, "pr_review": 2, "repo_docs": 2, "system_docs": 1,
 			},
 			LeaseTTL: 5 * time.Minute, MaxAttempts: 5, PollInterval: time.Second,
 			BackoffBase: time.Second, BackoffMax: 5 * time.Minute,
@@ -429,7 +429,7 @@ func (c *Config) normalize() {
 		c.Docs.DefaultPath += "/"
 	}
 	// Job types added after a config file was written run with one worker unless the file says otherwise.
-	for t, n := range map[string]int{"security_scan": 1, "security_fix": 1, "repo_docs": 2} {
+	for t, n := range map[string]int{"security_scan": 1, "security_fix": 1, "repo_docs": 2, "system_docs": 1} {
 		if _, set := c.Queue.Concurrency[t]; !set && c.Queue.Concurrency != nil {
 			c.Queue.Concurrency[t] = n
 		}
