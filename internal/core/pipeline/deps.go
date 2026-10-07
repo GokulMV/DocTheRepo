@@ -12,6 +12,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/core/grammars"
 	"github.com/GokulMV/DocTheRepo/internal/core/llmgateway"
 	"github.com/GokulMV/DocTheRepo/internal/core/palace"
+	"github.com/GokulMV/DocTheRepo/internal/core/repodocs"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
 )
 
@@ -83,6 +84,15 @@ type Pipeline struct {
 	DocMode  docrouter.Mode
 	// ModeSetting, if set, returns the mode chosen in the UI ("" keeps DocMode).
 	ModeSetting func(ctx context.Context) string
+	// DocsV2 writes readable documents per repository (repodocs) instead of one doc per source file: a
+	// push indexes the code and queues a repo_docs job.
+	DocsV2        bool
+	RepoDocsGen   *repodocs.Generator
+	RepoDocsFacts RepoDocsFacts
+	// DocsBudget caps what one repository's documents may cost per month (nil: no cap).
+	DocsBudget DocsBudget
+	// Enqueue queues a follow-up job (the repo_docs job after a push).
+	Enqueue func(ctx context.Context, j ports.NewJob) error
 }
 
 func (p *Pipeline) log() *slog.Logger {

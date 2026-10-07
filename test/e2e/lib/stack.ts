@@ -147,6 +147,7 @@ export async function ensureConfigured(api: Api, repos: string[]): Promise<Hub> 
     repoIds[name] = r.id;
   }
   await indexed(api, repoIds);
+  await documented(api, repoIds);
   // Existing Markdown (ADRs, READMEs) enters the index through a docs import, as an admin would run it.
   for (const id of added) {
     const imp = await api.post(`/repos/${id}/import`, {});
@@ -172,4 +173,14 @@ export async function indexed(api: Api, repoIds: Record<string, string>) {
   const conns = (await api.get('/connectors')).data.items as any[];
   await api.post(`/connectors/${conns.find((c) => c.type === 'github').id}/sync`);
   await eventually(async () => (await pending()).length === 0, 'repositories indexed', 120_000);
+}
+
+/** Waits until every repo has its documents (Docs v2 writes them after the code is read). */
+export async function documented(api: Api, repoIds: Record<string, string>) {
+  for (const id of Object.values(repoIds)) {
+    await eventually(async () => {
+      const r = await api.get(`/repo-docs?repo_id=${id}`);
+      return (r.data.items as any[] | undefined)?.some((d) => d.type === 'overview' && d.status === 'ok');
+    }, `documents for ${id}`, 120_000);
+  }
 }

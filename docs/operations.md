@@ -18,7 +18,7 @@ needs a shared disk except `localfile` master keys (below).
 **Sizing to start with:**
 - **Each role:** 1 vCPU and 1 GB RAM.
 - **Workers doing docs generation** spend most of their time waiting on the model provider. Raise
-  `queue.concurrency.code_push` (default 4) before adding CPU.
+  `queue.concurrency.code_push` (default 4) and `queue.concurrency.repo_docs` (default 2) before adding CPU.
 - **Database:** 2 vCPU, 4 GB RAM and 20 GB of storage cover 30 to 40 repositories. Embeddings are the
   largest table.
 
@@ -38,7 +38,8 @@ Unknown keys fail at start.
 | `DTH_AUTH_MODE` | `local` (passwords on by default) or `oidc` (with `DTH_OIDC_*`); sign-in can also be set in the UI or the settings file |
 | `DTH_SETTINGS_FILE`, `DTH_SETTINGS` | Settings applied on start ([settings-file.md](settings-file.md#applied-when-the-hub-starts)) |
 | `DTH_SMTP_URL`, `DTH_EMAIL_FROM` | Email invite and password links ([users-and-sign-in.md](users-and-sign-in.md#email)); without them admins copy the link |
-| `DTH_DOCS_MODE` | Docs generation cost mode: `thorough`, `balanced` (default) or `economy` ([docs-generation.md](docs-generation.md#what-it-costs-and-how-to-spend-less)) |
+| `DTH_DOCS_VERSION` | `2` (default): documents per repository, kept in the Hub; `1`: one doc per source file, landed as a docs PR ([docs-generation.md](docs-generation.md)) |
+| `DTH_DOCS_MODE` | Docs v1 only: cost mode `thorough`, `balanced` (default) or `economy` |
 | `DTH_ASK_SIMILAR_ANSWER` | How alike a reworded question must be to reuse a cached answer (default 0.95, 0 = off; needs an embedding route) |
 | `DTH_ASK_AGENT_STEPS` | How far Ask may look when search finds too little (default 4, 0 = off) |
 | `DTH_ASK_SIFT`, `DTH_ASK_SIFT_KEEP_AT` | Ask's source picker: a cheap judge keeps only the sources an answer needs (`on` by default; skips itself when it would not save) ([ask-sources.md](ask-sources.md)) |

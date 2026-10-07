@@ -8,6 +8,7 @@ import { Markdown } from '@/components/Markdown';
 import { Badge, Button, Card, ErrorNote, PageHeader, Spinner, cx } from '@/components/ui';
 import { relTime, shortSha } from '@/lib/format';
 import { JobProgressBar } from '@/components/JobProgressBar';
+import RepoDocsPage from './RepoDocs';
 
 const rowCls = 'group flex w-full items-center gap-1.5 rounded-md py-1 pr-2 text-left text-[13px] transition-colors';
 
@@ -230,6 +231,12 @@ function NoDocs() {
 }
 
 export default function Docs() {
+  const me = useMe();
+  if (me.data?.features?.docs_v2) return <RepoDocsPage />;
+  return <LegacyDocs />;
+}
+
+function LegacyDocs() {
   const { nodeId } = useParams();
   const nav = useNavigate();
   const roots = useTree();

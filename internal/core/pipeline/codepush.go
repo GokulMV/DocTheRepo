@@ -214,6 +214,9 @@ func (p *Pipeline) CodePush(ctx context.Context, job ports.Job) (ports.Outcome, 
 			return ports.Outcome{}, err
 		}
 	}
+	if p.DocsV2 {
+		return p.codePushV2(ctx, job, repo, head, meta, proceed, pl, res)
+	}
 	if err := p.generate(ctx, host, repo, head, meta, job.ID, proceed, pl.DryRun, &res); err != nil {
 		return p.spendOutcome(err, res)
 	}
@@ -1069,4 +1072,34 @@ func extractGraph(repo ports.RepoConfig, head string, fw *fileWork) palace.Graph
 		g.Merge(palace.ExtractDeployments(repo.FullName, fw.fc.Path, head, fw.fc.New))
 	}
 	return g
+}
+
+// codePushV2 indexes the push's code and queues the repository's documents (Docs v2): documents are
+// written per repository, after the index is current, and live in the Hub instead of a docs PR.
+func (p *Pipeline) codePushV2(ctx context.Context, job ports.Job, repo ports.RepoConfig, head string, meta llmgateway.CallMeta, proceed []*fileWork, pl CodePushPayload, res CodePushResult) (ports.Outcome, error) {
+	if pl.DryRun {
+		dj := job
+		dj.Payload, _ = json.Marshal(RepoDocsPayload{RepoID: repo.ID, Full: pl.Full, DryRun: true})
+		return p.RepoDocs(ctx, dj)
+	}
+	if err := p.persist(ctx, repo, head, meta, proceed, docSet{}, &res); err != nil {
+		return ports.Outcome{}, err
+	}
+	if err := p.Repos.SetLastProcessed(ctx, repo.ID, head); err != nil {
+		return ports.Outcome{}, err
+	}
+	msg := fmt.Sprintf("code indexed at %s", short(head))
+	if p.Enqueue != nil {
+		reason := pl.Reason
+		if reason == "" {
+			reason = "push " + short(head)
+		}
+		if err := p.Enqueue(ctx, ports.NewJob{Type: ports.JobRepoDocs, RepoID: repo.ID, SerialKey: "repo:" + repo.ID, DedupeKey: "repo-docs:" + repo.ID + ":" + head,
+			Payload: RepoDocsPayload{RepoID: repo.ID, Full: pl.Full, Reason: reason, OverrideCeiling: pl.OverrideCeiling}}); err != nil {
+			return ports.Outcome{}, err
+		}
+		msg += "; documents queued"
+	}
+	p.log().Info("code push indexed", "repo", repo.FullName, "files", len(proceed), "chunks_added", res.ChunksAdded, "embedded", res.Embedded)
+	return ports.Outcome{Status: ports.JobDone, Message: msg, Result: res}, nil
 }

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { ensureConfigured, session, type Api } from '../lib/stack';
+import { ensureConfigured, session } from '../lib/stack';
 
 const SECRET_Q = 'What is the Nightingale enterprise discount tier?';
 
@@ -7,19 +7,6 @@ async function ask(page: Page, question: string) {
   await page.goto('/ask');
   await page.getByLabel('Question').fill(question);
   await page.getByRole('button', { name: 'Ask', exact: true }).click();
-}
-
-/** Paths of every doc file in a repo's Tree, walking folders through the API. */
-async function docFiles(api: Api, repoId: string, parentId = ''): Promise<{ id: string; path: string }[]> {
-  const q = parentId ? `&parent_id=${parentId}` : '';
-  const res = await api.get(`/docs/tree?repo_id=${repoId}${q}`);
-  if (res.status !== 200) return [];
-  const out: { id: string; path: string }[] = [];
-  for (const n of res.data.nodes as any[]) {
-    if (n.kind === 'file') out.push({ id: n.id, path: n.path ?? n.title });
-    else if (n.has_children) out.push(...(await docFiles(api, repoId, n.id)));
-  }
-  return out;
 }
 
 // Plan § 10 RBAC: a viewer without access to repo B cannot see B's chunks in answers, graph, or docs; an
@@ -33,8 +20,8 @@ test('viewer without access to acme/billing never sees it', async ({ browser }) 
   await ask(owner.page, SECRET_Q);
   await expect(owner.page.getByText('acme/billing ·').first()).toBeVisible({ timeout: 30_000 });
   await expect(owner.page.getByText(/nightingale/i).first()).toBeVisible();
-  const billingDocs = await docFiles(owner.api, billing);
-  expect(billingDocs.length, 'billing has generated docs').toBeGreaterThan(0);
+  const billingDocs = (await owner.api.get(`/repo-docs?repo_id=${billing}`)).data.items as { id: string }[];
+  expect(billingDocs.length, 'billing has documents').toBeGreaterThan(0);
 
   // A new teammate signs in: SSO users start as viewers with no repository access.
   const viewer = await session(browser, 'vera@acme.test');
@@ -68,14 +55,14 @@ test('viewer without access to acme/billing never sees it', async ({ browser }) 
   const allowed = await viewer.api.post('/ask', { question: 'How are failed refunds retried?' });
   expect(JSON.stringify(allowed.data.citations)).toContain('acme/payments');
 
-  // Docs: the Tree lists only acme/payments; a billing doc cannot be opened by id.
+  // Docs: the viewer reads acme/payments' documents; acme/billing's cannot be listed or opened.
   await viewer.page.goto('/docs');
-  await expect(viewer.page.getByRole('button', { name: 'acme/payments', exact: true })).toBeVisible();
-  await expect(viewer.page.getByRole('button', { name: 'acme/billing', exact: true })).toHaveCount(0);
-  const roots = await viewer.api.get('/docs/tree');
-  expect(JSON.stringify(roots.data)).not.toContain('acme/billing');
-  const node = await viewer.api.get(`/docs/node/${billingDocs[0].id}`);
-  expect(node.status, 'a forbidden doc is indistinguishable from a missing one').toBe(404);
+  await expect(viewer.page.getByRole('heading', { level: 1, name: 'Overview' })).toBeVisible();
+  await expect(viewer.page.getByText('acme/billing')).toHaveCount(0);
+  const listed = await viewer.api.get(`/repo-docs?repo_id=${billing}`);
+  expect(listed.status, 'a forbidden repository looks missing').toBe(404);
+  const node = await viewer.api.get(`/repo-docs/${billingDocs[0].id}`);
+  expect(node.status, 'a forbidden document is indistinguishable from a missing one').toBe(404);
 
   // Graph: no billing entities, and a billing entity's neighbourhood is not reachable.
   const ownerEnts = (await owner.api.get('/palace/entities?kind=repo')).data.items as any[];

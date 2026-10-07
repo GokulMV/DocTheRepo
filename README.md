@@ -32,7 +32,7 @@ are checked before every paid call.
 
 | Feature | What it does |
 |---|---|
-| **Docs that keep up** | Each push is triaged by syntax tree: cosmetic changes cost nothing, and structural ones regenerate only the affected sections. Docs land directly, as an auto-merged PR, or as a PR for an approver. Hand-written blocks survive regeneration. |
+| **Docs people can read** | Per repository: an Overview, the whole Architecture (style, layers, flow, storage, do's and don'ts), a guide per module, and the flows, API, events, data model, tests, CI, runbooks, security, glossary and more that apply. Every claim cites the code, every section is checked and scored for confidence (calibrated with Jev when routed), and a document is rewritten only when its code changes materially, within a monthly budget per repository. Export them to the repository as a PR when you want. |
 | **Ask** | Hybrid retrieval (vectors + full text + the knowledge graph) over code, docs, Confluence and Jira, scoped to what the person may read. When search finds too little, the model looks further (searches again, reads files) before answering. Answers stream with citations, repeated questions come from a cache, and history is kept per user. |
 | **Architecture** | Every repository gets a generated architecture diagram; diagrams authored with [archify](https://github.com/tt-a1i/archify) appear next to it. |
 | **Issues** (shown once an alert tool is connected) | Sentry, Datadog, PagerDuty, Opsgenie, Grafana, Alertmanager, CloudWatch, GCP, Wiz, Splunk, Kafka/SQS/Pub/Sub/RabbitMQ lag and DLQs. Signals are scrubbed, grouped, matched against known issues and explained with the code behind them. Any source can be marked never-send-to-a-model. |
@@ -181,7 +181,7 @@ Step-by-step guides: [docs/install.md](docs/install.md). Sign-in details: [docs/
 
 | Guide | What it covers |
 |---|---|
-| [How docs are generated](docs/docs-generation.md) | What gets written, what it costs, and `.dthignore` |
+| [How docs are written](docs/docs-generation.md) | The documents per repository, how they are checked and scored, what they cost, and `.dthignore` |
 | [How Ask picks its sources](docs/ask-sources.md) | The cheap judge that trims what the answering model reads |
 | [Architecture tab](docs/architecture-tab.md) | Per-repository architecture diagrams in the Hub |
 | [Security scans](docs/security-scans.md) | Scans powered by kryptonite, and fixes only when you ask |

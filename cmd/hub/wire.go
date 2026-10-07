@@ -6,7 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"os"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -44,6 +47,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/core/manifest"
 	"github.com/GokulMV/DocTheRepo/internal/core/pipeline"
 	"github.com/GokulMV/DocTheRepo/internal/core/rag"
+	"github.com/GokulMV/DocTheRepo/internal/core/repodocs"
 	"github.com/GokulMV/DocTheRepo/internal/core/security"
 	"github.com/GokulMV/DocTheRepo/internal/core/sift"
 	"github.com/GokulMV/DocTheRepo/internal/core/spendguard"
@@ -101,6 +105,7 @@ type app struct {
 	sealKeys      *store.SealKeys
 	archSync      *ingest.ArchitectureSync
 	// MCP connections: other products' MCP servers Ask can call.
+	repoDocs *store.RepoDocs
 	mcpStore *store.MCPServers
 	mcp      *mcpconn.Manager
 }
@@ -281,6 +286,19 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 			v, _ := store.NewAppSettings(st).Get(ctx, api.DocModeKey)
 			return v
 		}}
+	a.repoDocs = store.NewRepoDocs(st)
+	if cfg.Docs.Version != 1 {
+		a.pipe.DocsV2 = true
+		a.pipe.RepoDocsFacts = a.repoDocs
+		a.pipe.RepoDocsGen = &repodocs.Generator{GW: gw, Store: a.repoDocs, Cost: func(kind, model, feature string, in, out int64) (float64, bool) {
+			return a.enforcer.Guard().Cost(kind, model, feature, in, out)
+		}}
+		a.pipe.DocsBudget = a.docsBudget
+		a.pipe.Enqueue = func(ctx context.Context, j ports.NewJob) error {
+			_, _, err := q.Enqueue(ctx, j)
+			return err
+		}
+	}
 	a.arch = store.NewArchitecture(st)
 	a.sealKeys = store.NewSealKeys(st, box)
 	a.archSync = &ingest.ArchitectureSync{Repos: repos, Hosts: a.hosts.Host, Store: a.arch, Log: log.With("component", "architecture")}
@@ -291,6 +309,7 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 // registerHandlers binds job types to their handlers.
 func (a *app) registerHandlers(pool *queue.Pool) {
 	pool.Register(ports.JobCodePush, a.pipe.CodePush)
+	pool.Register(ports.JobRepoDocs, a.pipe.RepoDocs)
 	pool.Register(ports.JobImportDocs, a.pipe.ImportDocs)
 	pool.Register(ports.JobReindex, a.pipe.Reindex)
 	pool.Register(ports.JobSignalBatch, a.polls.Handle)
@@ -411,13 +430,21 @@ func (a *app) v1Routes() []func(chi.Router) {
 			if err != nil {
 				return nil, err
 			}
-			roots, err := a.browse.Roots(ctx, rag.Scope{All: true})
-			if err != nil {
-				return nil, err
-			}
 			has := map[string]bool{}
-			for _, r := range roots {
-				has[r.RepoID] = true
+			if a.pipe.DocsV2 {
+				for _, r := range repos {
+					if ds, err := a.repoDocs.Docs(ctx, r.ID); err == nil && len(ds) > 0 {
+						has[r.ID] = true
+					}
+				}
+			} else {
+				roots, err := a.browse.Roots(ctx, rag.Scope{All: true})
+				if err != nil {
+					return nil, err
+				}
+				for _, r := range roots {
+					has[r.RepoID] = true
+				}
 			}
 			var out []string
 			for _, r := range repos {
@@ -450,6 +477,14 @@ func (a *app) v1Routes() []func(chi.Router) {
 		api.ArchitectureRoutes(api.ArchitectureDeps{Auth: a.auth, Store: a.arch, Scan: a.archSync.Scan}),
 		api.GitHubConnectRoutes(api.GitHubConnectDeps{Auth: a.auth, Connectors: a.conns, Seal: a.box.Seal, Open: a.box.Open,
 			PublicURL: a.cfg.Server.PublicURL, InvalidateHost: a.hosts.Invalidate, SealKeys: a.sealKeys, RequireSealed: a.cfg.Settings.RequireSealed}),
+		api.RepoDocsRoutes(api.RepoDocsDeps{Auth: a.auth, Store: a.repoDocs, Repos: a.repos, Queue: a.q,
+			Budget: func(ctx context.Context, repoID string) (float64, float64, error) {
+				return a.docsBudget(ctx, repoID, nil)
+			},
+			SetCap: func(ctx context.Context, repoID string, c float64) error {
+				return store.NewAppSettings(a.st).Set(ctx, docsCapKey(repoID), strconv.FormatFloat(c, 'f', 2, 64))
+			},
+			Estimate: a.estimateDocs, Export: a.exportDocs}),
 		api.MCPRoutes(api.MCPDeps{Auth: a.auth, Store: a.mcpStore, Manager: a.mcp, SealKeys: a.sealKeys, RequireSealed: a.cfg.Settings.RequireSealed}),
 	}
 }
@@ -553,4 +588,113 @@ func (a *app) securityPlan(ctx context.Context, repoID string, modules []string)
 	}
 	p, _, err := a.securityJobs.Scanner.PlanScan(ctx, security.Target{Repo: repo, Host: host, Commit: head}, modules)
 	return p, err
+}
+
+// docsCapKey is the app setting holding a repository's monthly docs cap in US dollars.
+func docsCapKey(repoID string) string { return "docs_cap:" + repoID }
+
+// docsBudget is a repository's monthly docs cap and this month's docs spend. Without a cap set in the UI
+// or the config, the first run sets one: twice the estimate of writing everything, at least $10.
+func (a *app) docsBudget(ctx context.Context, repoID string, estimate func() (float64, error)) (float64, float64, error) {
+	spent, err := a.repoDocs.MonthCost(ctx, repoID)
+	if err != nil {
+		return 0, 0, err
+	}
+	settings := store.NewAppSettings(a.st)
+	if v, _ := settings.Get(ctx, docsCapKey(repoID)); v != "" {
+		c, _ := strconv.ParseFloat(v, 64)
+		return c, spent, nil
+	}
+	if c := a.cfg.Docs.RepoMonthlyCapUSD; c > 0 {
+		return c, spent, nil
+	}
+	if estimate == nil {
+		return 0, spent, nil
+	}
+	est, err := estimate()
+	if err != nil {
+		return 0, spent, nil // no cap rather than no docs
+	}
+	c := math.Max(10, math.Ceil(est*2))
+	_ = settings.Set(ctx, docsCapKey(repoID), strconv.FormatFloat(c, 'f', 2, 64))
+	return c, spent, nil
+}
+
+// estimateDocs prices writing a repository's missing or outdated documents (a dry run of repo_docs).
+func (a *app) estimateDocs(ctx context.Context, repoID string, full bool) (repodocs.Result, error) {
+	var res repodocs.Result
+	payload, _ := json.Marshal(pipeline.RepoDocsPayload{RepoID: repoID, Full: full, DryRun: true})
+	out, err := a.pipe.RepoDocs(ctx, ports.Job{ID: "estimate", RepoID: repoID, Payload: payload})
+	if err != nil {
+		return res, err
+	}
+	if out.Status == ports.JobAborted {
+		return res, errors.New(out.Message)
+	}
+	if r, ok := out.Result.(repodocs.Result); ok {
+		res = r
+	}
+	return res, nil
+}
+
+// exportDocs opens a pull request that writes the repository's documents as Markdown under its docs path.
+func (a *app) exportDocs(ctx context.Context, repoID string) (ports.PullRequest, error) {
+	repo, err := a.repos.Get(ctx, repoID)
+	if err != nil {
+		return ports.PullRequest{}, err
+	}
+	docs, err := a.repoDocs.Docs(ctx, repoID)
+	if err != nil {
+		return ports.PullRequest{}, err
+	}
+	if len(docs) == 0 {
+		return ports.PullRequest{}, errors.New("there are no documents to export yet")
+	}
+	host, err := a.hosts.Host(ctx, repo.ConnectorID)
+	if err != nil {
+		return ports.PullRequest{}, err
+	}
+	head, err := host.BranchHead(ctx, repo.FullName, repo.Branch())
+	if err != nil {
+		return ports.PullRequest{}, err
+	}
+	dir := strings.TrimSuffix(repo.DocsPath, "/")
+	if dir == "" {
+		dir = strings.TrimSuffix(a.cfg.Docs.DefaultPath, "/")
+	}
+	files := api.ExportMarkdown(docs, nil, dir)
+	var changes []ports.FileChange
+	for _, p := range sortedKeys(files) {
+		depth := strings.Count(strings.TrimPrefix(p, dir+"/"), "/") + strings.Count(dir, "/") + 1
+		up := strings.Repeat("../", depth)
+		body := api.LinkCitationsRelative(files[p], up)
+		changes = append(changes, ports.FileChange{Path: p, Content: []byte(body)})
+	}
+	bot, err := host.BotIdentity(ctx)
+	if err != nil {
+		return ports.PullRequest{}, err
+	}
+	short := head
+	if len(short) > 7 {
+		short = short[:7]
+	}
+	branch := "dth/docs-export-" + short + "-" + strconv.FormatInt(time.Now().Unix(), 36)
+	if err := host.CreateBranch(ctx, repo.FullName, branch, head); err != nil {
+		return ports.PullRequest{}, fmt.Errorf("create branch: %w", err)
+	}
+	if _, err := host.CommitFiles(ctx, repo.FullName, ports.CommitRequest{Branch: branch, ParentSHA: head, Author: bot, Files: changes,
+		Message: "docs: export documentation from DocTheRepo Hub\n\nWritten from " + short + "."}); err != nil {
+		return ports.PullRequest{}, fmt.Errorf("commit: %w", err)
+	}
+	return host.OpenPR(ctx, repo.FullName, ports.PRRequest{Head: branch, Base: repo.Branch(), Title: "docs: export documentation from DocTheRepo Hub",
+		Body: fmt.Sprintf("Documentation for `%s` written by DocTheRepo Hub from %s: %d documents under `%s/`.\n\nCitations link to the code. Edits here are replaced on the next export; change the code or the Hub instead.", repo.FullName, short, len(docs), dir)})
+}
+
+func sortedKeys(m map[string]string) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }

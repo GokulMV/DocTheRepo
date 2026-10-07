@@ -198,6 +198,13 @@ type DocsConfig struct {
 	// GenerationMode trades thoroughness for cost (DTH_DOCS_MODE): thorough, balanced (default) or
 	// economy. See docs/docs-generation.md.
 	GenerationMode string `yaml:"generation_mode"`
+	// Version picks how docs are written (DTH_DOCS_VERSION): 2 (default) writes readable documents per
+	// repository (overview, architecture, module guides and more) kept in the Hub; 1 writes one doc per
+	// source file and lands it as a docs PR.
+	Version int `yaml:"version"`
+	// RepoMonthlyCapUSD caps what writing one repository's documents may cost per calendar month
+	// (0: the cap is set from the first estimate). Docs pause when it is reached.
+	RepoMonthlyCapUSD float64 `yaml:"repo_monthly_cap_usd"`
 }
 
 // SpendConfig holds the acknowledgements that guard the spend ceilings (limits themselves live in the DB).
@@ -259,14 +266,14 @@ func Default() Config {
 		Queue: QueueConfig{
 			Concurrency: map[string]int{
 				"code_push": 4, "decode_issue": 4, "knowledge_sync": 2, "security_scan": 1, "security_fix": 1,
-				"import_docs": 1, "reindex": 1, "signal_batch": 8, "pr_review": 2,
+				"import_docs": 1, "reindex": 1, "signal_batch": 8, "pr_review": 2, "repo_docs": 2,
 			},
 			LeaseTTL: 5 * time.Minute, MaxAttempts: 5, PollInterval: time.Second,
 			BackoffBase: time.Second, BackoffMax: 5 * time.Minute,
 		},
 		Logging:   LoggingConfig{Format: "json", Level: "info"},
 		Tracing:   TracingConfig{ServiceName: "dth-hub"},
-		Docs:      DocsConfig{DefaultPath: "docs/generated/", PRSweepInterval: 5 * time.Minute},
+		Docs:      DocsConfig{DefaultPath: "docs/generated/", PRSweepInterval: 5 * time.Minute, Version: 2},
 		Vector:    VectorConfig{Backend: "pgvector", QdrantKeyEnv: "DTH_QDRANT_API_KEY"},
 		Retention: RetentionConfig{EventDays: 30, ChunkGCDays: 14},
 		Grammars:  GrammarsConfig{LoadDir: "./grammars"},
@@ -350,6 +357,11 @@ func applyEnv(cfg *Config) error {
 	if v, ok := os.LookupEnv("DTH_OIDC_ALLOWED_DOMAINS"); ok {
 		cfg.Auth.OIDC.AllowedDomains = splitList(v)
 	}
+	if v, ok := os.LookupEnv("DTH_DOCS_VERSION"); ok {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.Docs.Version = n
+		}
+	}
 	if v, ok := os.LookupEnv("DTH_DOCS_MODE"); ok {
 		cfg.Docs.GenerationMode = v
 	}
@@ -417,7 +429,7 @@ func (c *Config) normalize() {
 		c.Docs.DefaultPath += "/"
 	}
 	// Job types added after a config file was written run with one worker unless the file says otherwise.
-	for t, n := range map[string]int{"security_scan": 1, "security_fix": 1} {
+	for t, n := range map[string]int{"security_scan": 1, "security_fix": 1, "repo_docs": 2} {
 		if _, set := c.Queue.Concurrency[t]; !set && c.Queue.Concurrency != nil {
 			c.Queue.Concurrency[t] = n
 		}

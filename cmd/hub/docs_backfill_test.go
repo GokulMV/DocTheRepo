@@ -24,8 +24,9 @@ import (
 	"github.com/GokulMV/DocTheRepo/test/mocks/stubllm"
 )
 
-// TestDocsForCodeSyncedBeforeDocgen: a repository tracked before docgen had a route is indexed without docs.
-// Routing docgen documents it then, and "Generate docs" does so on request; without a route it explains why.
+// TestDocsForCodeSyncedBeforeDocgen (Docs v1): a repository tracked before docgen had a route is indexed
+// without docs. Routing docgen documents it then, and "Generate docs" does so on request; without a route
+// it explains why.
 func TestDocsForCodeSyncedBeforeDocgen(t *testing.T) {
 	ctx := context.Background()
 	st := storetest.New(t)
@@ -33,6 +34,7 @@ func TestDocsForCodeSyncedBeforeDocgen(t *testing.T) {
 	require.NoError(t, err)
 	cfg := config.Default()
 	cfg.Auth.Mode = "local"
+	cfg.Docs.Version = 1
 	log := slog.New(slog.DiscardHandler)
 	m := observability.NewMetrics()
 	q := queue.New(st, queue.Options{})

@@ -163,7 +163,7 @@ export default function Repos() {
       <PageHeader title="Repositories" description="Repositories whose pushes keep docs and the index up to date." actions={admin && <AddRepo onAdded={(name, webhook) => setAdded({ name, webhook })} />} />
       {added && (
         <div role="status" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
-          Tracking {added.name}. Its docs are being written now and appear under Docs as files finish; after that they update on every commit.
+          Tracking {added.name}. Its docs are being written now and appear under Docs when they finish; after that they update when the code changes.
           {added.webhook && <span className="block text-xs opacity-80">Webhook: {added.webhook}</span>}
         </div>
       )}
