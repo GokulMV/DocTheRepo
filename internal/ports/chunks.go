@@ -36,6 +36,9 @@ type Chunk struct {
 	EndLine     int         `json:"end_line,omitempty"`
 	UpdatedAt   time.Time   `json:"updated_at,omitempty"`
 	DeletedAt   *time.Time  `json:"deleted_at,omitempty"`
+	// RequiresRepos: a piece written from several repositories is found only by someone who can read all of
+	// them (the System architecture); empty means its own repository decides.
+	RequiresRepos []string `json:"requires_repos,omitempty"`
 }
 
 // Live reports whether the chunk has not been soft-deleted.

@@ -12,10 +12,11 @@ import (
 )
 
 const chunksByIDsScoped = `-- name: ChunksByIDsScoped :many
-SELECT chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url, tsv, created_at, updated_at, deleted_at FROM chunks
+SELECT chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url, tsv, created_at, updated_at, deleted_at, requires_repos FROM chunks
 WHERE chunk_id = ANY($1::text[]) AND deleted_at IS NULL
   AND ($2::boolean OR repo_id = ANY($3::uuid[])
        OR (repo_id IS NULL AND source IN ('confluence', 'jira', 'notion', 'upload')))
+  AND ($2::boolean OR requires_repos IS NULL OR requires_repos <@ $3::uuid[])
 `
 
 type ChunksByIDsScopedParams struct {
@@ -50,6 +51,7 @@ func (q *Queries) ChunksByIDsScoped(ctx context.Context, arg ChunksByIDsScopedPa
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.RequiresRepos,
 		); err != nil {
 			return nil, err
 		}
@@ -62,11 +64,12 @@ func (q *Queries) ChunksByIDsScoped(ctx context.Context, arg ChunksByIDsScopedPa
 }
 
 const chunksForPath = `-- name: ChunksForPath :many
-SELECT chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url, tsv, created_at, updated_at, deleted_at FROM chunks c
+SELECT chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url, tsv, created_at, updated_at, deleted_at, requires_repos FROM chunks c
 WHERE c.deleted_at IS NULL AND (c.path = $1::text OR c.path LIKE '%/' || $1::text)
   AND ($2::boolean OR c.repo_id = ANY($3::uuid[])
        OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira', 'notion', 'upload')))
   AND (cardinality($4::text[]) = 0 OR c.source::text = ANY($4::text[]))
+  AND ($2::boolean OR c.requires_repos IS NULL OR c.requires_repos <@ $3::uuid[])
 ORDER BY c.scope, c.path, c.chunk_id
 LIMIT $5
 `
@@ -112,6 +115,7 @@ func (q *Queries) ChunksForPath(ctx context.Context, arg ChunksForPathParams) ([
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.RequiresRepos,
 		); err != nil {
 			return nil, err
 		}
@@ -276,6 +280,7 @@ WHERE c.deleted_at IS NULL AND c.path ILIKE '%' || $1::text || '%'
   AND ($2::boolean OR c.repo_id = ANY($3::uuid[])
        OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira', 'notion', 'upload')))
   AND (cardinality($4::text[]) = 0 OR c.source::text = ANY($4::text[]))
+  AND ($2::boolean OR c.requires_repos IS NULL OR c.requires_repos <@ $3::uuid[])
 GROUP BY c.scope, c.path
 ORDER BY c.scope, c.path
 LIMIT $5
@@ -371,6 +376,7 @@ FROM chunks c
 WHERE c.deleted_at IS NULL
   AND ($1::boolean OR c.repo_id = ANY($2::uuid[]))
   AND (cardinality($3::text[]) = 0 OR c.source::text = ANY($3::text[]))
+  AND ($1::boolean OR c.requires_repos IS NULL OR c.requires_repos <@ $2::uuid[])
   AND (c.path IN ('@docs/overview/overview', '@docs/architecture/architecture')
        OR lower(c.path) ~ '(^|/)readme'
        OR lower(c.path) ~ '(architecture|overview|design|getting[-_]started|introduction)'
@@ -452,6 +458,7 @@ WHERE c.deleted_at IS NULL AND c.tsv @@ q.query
   AND ($2::boolean OR c.repo_id = ANY($3::uuid[])
        OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira', 'notion', 'upload')))
   AND (cardinality($4::text[]) = 0 OR c.source::text = ANY($4::text[]))
+  AND ($2::boolean OR c.requires_repos IS NULL OR c.requires_repos <@ $3::uuid[])
 ORDER BY rank DESC, c.chunk_id
 LIMIT $5
 `

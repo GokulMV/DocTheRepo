@@ -1308,22 +1308,23 @@ type AuthSetting struct {
 }
 
 type Chunk struct {
-	ChunkID     string      `json:"chunk_id"`
-	RepoID      *string     `json:"repo_id"`
-	Scope       string      `json:"scope"`
-	Source      ChunkSource `json:"source"`
-	Path        string      `json:"path"`
-	Symbol      string      `json:"symbol"`
-	Language    string      `json:"language"`
-	Content     string      `json:"content"`
-	ContentHash string      `json:"content_hash"`
-	Signature   string      `json:"signature"`
-	CommitSha   string      `json:"commit_sha"`
-	Url         string      `json:"url"`
-	Tsv         interface{} `json:"tsv"`
-	CreatedAt   time.Time   `json:"created_at"`
-	UpdatedAt   time.Time   `json:"updated_at"`
-	DeletedAt   *time.Time  `json:"deleted_at"`
+	ChunkID       string      `json:"chunk_id"`
+	RepoID        *string     `json:"repo_id"`
+	Scope         string      `json:"scope"`
+	Source        ChunkSource `json:"source"`
+	Path          string      `json:"path"`
+	Symbol        string      `json:"symbol"`
+	Language      string      `json:"language"`
+	Content       string      `json:"content"`
+	ContentHash   string      `json:"content_hash"`
+	Signature     string      `json:"signature"`
+	CommitSha     string      `json:"commit_sha"`
+	Url           string      `json:"url"`
+	Tsv           interface{} `json:"tsv"`
+	CreatedAt     time.Time   `json:"created_at"`
+	UpdatedAt     time.Time   `json:"updated_at"`
+	DeletedAt     *time.Time  `json:"deleted_at"`
+	RequiresRepos []string    `json:"requires_repos"`
 }
 
 type Connector struct {

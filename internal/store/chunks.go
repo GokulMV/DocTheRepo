@@ -64,7 +64,7 @@ func (c *Chunks) Apply(ctx context.Context, w ChunkWrite) (int64, error) {
 		for _, ch := range w.Upserts {
 			if err := q.UpsertChunk(ctx, gen.UpsertChunkParams{ChunkID: ch.ID, RepoID: strPtr(ch.RepoID), Scope: ch.Scope,
 				Source: gen.ChunkSource(ch.Source), Path: ch.Path, Symbol: ch.Symbol, Language: ch.Language, Content: ch.Content,
-				ContentHash: ch.ContentHash, Signature: ch.Signature, CommitSha: ch.CommitSHA, Url: ch.URL}); err != nil {
+				ContentHash: ch.ContentHash, Signature: ch.Signature, CommitSha: ch.CommitSHA, Url: ch.URL, RequiresRepos: ch.RequiresRepos}); err != nil {
 				return fmt.Errorf("upsert chunk %s: %w", ch.ID, err)
 			}
 		}
@@ -98,7 +98,7 @@ func toChunks(rows []gen.Chunk) []ports.Chunk {
 	for i, r := range rows {
 		ch := ports.Chunk{ID: r.ChunkID, Scope: r.Scope, Source: ports.ChunkSource(r.Source), Path: r.Path, Symbol: r.Symbol,
 			Language: r.Language, Content: r.Content, ContentHash: r.ContentHash, Signature: r.Signature, CommitSHA: r.CommitSha,
-			URL: r.Url, UpdatedAt: r.UpdatedAt, DeletedAt: r.DeletedAt}
+			URL: r.Url, UpdatedAt: r.UpdatedAt, DeletedAt: r.DeletedAt, RequiresRepos: r.RequiresRepos}
 		if r.RepoID != nil {
 			ch.RepoID = *r.RepoID
 		}

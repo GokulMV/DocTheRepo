@@ -152,7 +152,7 @@ func (q *Queries) DeleteMinuteCountsBefore(ctx context.Context, before time.Time
 }
 
 const frameChunk = `-- name: FrameChunk :many
-SELECT chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url, tsv, created_at, updated_at, deleted_at FROM chunks
+SELECT chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url, tsv, created_at, updated_at, deleted_at, requires_repos FROM chunks
 WHERE deleted_at IS NULL AND source = 'code'
   AND (cardinality($1::uuid[]) = 0 OR repo_id = ANY($1::uuid[]))
   AND (path = $2::text OR right($2::text, length(path) + 1) = '/' || path OR path LIKE '%/' || $2::text)
@@ -201,6 +201,7 @@ func (q *Queries) FrameChunk(ctx context.Context, arg FrameChunkParams) ([]Chunk
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.RequiresRepos,
 		); err != nil {
 			return nil, err
 		}

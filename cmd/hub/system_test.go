@@ -20,6 +20,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/ports"
 	"github.com/GokulMV/DocTheRepo/internal/queue"
 	"github.com/GokulMV/DocTheRepo/internal/secrets"
+	"github.com/GokulMV/DocTheRepo/internal/store"
 	"github.com/GokulMV/DocTheRepo/internal/store/storetest"
 	"github.com/GokulMV/DocTheRepo/test/mocks/githubmock"
 	"github.com/GokulMV/DocTheRepo/test/mocks/stubllm"
@@ -113,6 +114,15 @@ func TestSystemDocs(t *testing.T) {
 	assert.True(t, strings.HasPrefix(doc["sections"].([]any)[1].(map[string]any)["markdown"].(string), "```mermaid"), "the diagram is drawn from the links")
 	_, me := c.call("GET", "/me", nil)
 	assert.Equal(t, true, me["features"].(map[string]any)["system"])
+
+	// The write-up is searchable in Ask, but only by someone who reads every repository it covers.
+	pieces, err := store.NewRepoDocs(st).SystemChunks(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, pieces, "the System architecture is indexed for Ask")
+	for _, p := range pieces {
+		assert.Len(t, p.RequiresRepos, 2, p.Path)
+		assert.Equal(t, ports.SourceGeneratedDoc, p.Source)
+	}
 
 	// Nothing changed: writing it again costs nothing.
 	before := llm.Calls(stubllm.RepoDocs)

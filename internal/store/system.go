@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/GokulMV/DocTheRepo/internal/core/repodocs"
+	"github.com/GokulMV/DocTheRepo/internal/ports"
 )
 
 // SystemLinks lists how the tracked repositories talk to each other: events one publishes and another
@@ -144,4 +145,13 @@ func (r *RepoDocs) SystemDoc(ctx context.Context) (repodocs.Doc, error) {
 func (r *RepoDocs) DeleteSystemDoc(ctx context.Context) error {
 	_, err := r.s.Pool.Exec(ctx, `DELETE FROM repo_docs WHERE repo_id IS NULL AND doc_type = 'system'`)
 	return err
+}
+
+// SystemChunks returns the System architecture's stored search pieces (live and removed), wherever they sit.
+func (r *RepoDocs) SystemChunks(ctx context.Context) ([]ports.Chunk, error) {
+	rows, err := r.s.Q.ChunksAtPathAnyRepo(ctx, repodocs.SystemPath)
+	if err != nil {
+		return nil, err
+	}
+	return toChunks(rows), nil
 }

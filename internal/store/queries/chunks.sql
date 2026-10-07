@@ -11,14 +11,14 @@ SELECT * FROM chunks WHERE deleted_at IS NULL AND chunk_id > sqlc.arg(after) ORD
 
 -- name: UpsertChunk :exec
 INSERT INTO chunks (chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url,
-                    updated_at, deleted_at)
+                    requires_repos, updated_at, deleted_at)
 VALUES (sqlc.arg(chunk_id), sqlc.narg(repo_id), sqlc.arg(scope), sqlc.arg(source), sqlc.arg(path), sqlc.arg(symbol),
         sqlc.arg(language), sqlc.arg(content), sqlc.arg(content_hash), sqlc.arg(signature), sqlc.arg(commit_sha), sqlc.arg(url),
-        now(), NULL)
+        sqlc.narg(requires_repos)::uuid[], now(), NULL)
 ON CONFLICT (chunk_id) DO UPDATE SET repo_id = EXCLUDED.repo_id, scope = EXCLUDED.scope, source = EXCLUDED.source,
     path = EXCLUDED.path, symbol = EXCLUDED.symbol, language = EXCLUDED.language, content = EXCLUDED.content,
     content_hash = EXCLUDED.content_hash, signature = EXCLUDED.signature, commit_sha = EXCLUDED.commit_sha,
-    url = EXCLUDED.url, updated_at = now(), deleted_at = NULL;
+    url = EXCLUDED.url, requires_repos = EXCLUDED.requires_repos, updated_at = now(), deleted_at = NULL;
 
 -- name: SoftDeleteChunks :execrows
 UPDATE chunks SET deleted_at = now(), updated_at = now() WHERE chunk_id = ANY(sqlc.arg(ids)::text[]) AND deleted_at IS NULL;
@@ -45,3 +45,8 @@ SELECT * FROM chunks WHERE repo_id IS NULL AND source = sqlc.arg(source) AND pat
 -- name: SoftDeleteSharedPath :execrows
 UPDATE chunks SET deleted_at = now(), updated_at = now()
 WHERE repo_id IS NULL AND source = sqlc.arg(source) AND path = sqlc.arg(path) AND deleted_at IS NULL;
+
+-- name: ChunksAtPathAnyRepo :many
+-- Stored chunks (live and soft-deleted) at one path whatever their repository (the System architecture,
+-- whose pieces move when the set of linked repositories changes).
+SELECT * FROM chunks WHERE path = sqlc.arg(path) AND source = 'generated_doc';

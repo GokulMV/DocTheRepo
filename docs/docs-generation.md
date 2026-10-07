@@ -69,6 +69,8 @@ The page shows:
 
 The write-up is rewritten when the links or the repositories' own documents change. It spans every linked repository, so only someone who can read all of them sees it. Others see the map and the links between the repositories they can read.
 
+The write-up is also searchable in **Ask** under the same rule. Each searchable piece records every repository the write-up covers. Search, citations and the Ask agent return a piece only to someone who can read all of those repositories, or who can read every repository. Issue decodes never use it. When the set of linked repositories changes, the pieces are re-indexed with the new set.
+
 ## How a repository is split into modules
 
 **The split:**
