@@ -190,6 +190,7 @@ func (x *Index) Search(ctx context.Context, vec []float32, k int, f ports.Vector
 			FROM %s e JOIN chunks c ON c.chunk_id = e.chunk_id AND c.deleted_at IS NULL
 			WHERE (cardinality($2::uuid[]) = 0 OR e.repo_id = ANY($2::uuid[]) OR (e.repo_id IS NULL AND e.source::text IN ('confluence', 'jira', 'notion', 'upload')))
 			  AND (cardinality($3::text[]) = 0 OR e.source::text = ANY($3::text[]))
+			  AND (cardinality($2::uuid[]) = 0 OR c.requires_repos IS NULL OR c.requires_repos <@ $2::uuid[])
 			ORDER BY e.embedding <=> $1::vector LIMIT $4`, viewName), Encode(vec), nonNil(repos), nonNil(sources), k)
 		if err != nil {
 			return err

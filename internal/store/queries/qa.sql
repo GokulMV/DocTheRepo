@@ -8,6 +8,7 @@ WHERE c.deleted_at IS NULL AND c.tsv @@ q.query
   AND (sqlc.arg(all_repos)::boolean OR c.repo_id = ANY(sqlc.arg(repo_ids)::uuid[])
        OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira', 'notion', 'upload')))
   AND (cardinality(sqlc.arg(sources)::text[]) = 0 OR c.source::text = ANY(sqlc.arg(sources)::text[]))
+  AND (sqlc.arg(all_repos)::boolean OR c.requires_repos IS NULL OR c.requires_repos <@ sqlc.arg(repo_ids)::uuid[])
 ORDER BY rank DESC, c.chunk_id
 LIMIT sqlc.arg(lim);
 
@@ -15,7 +16,8 @@ LIMIT sqlc.arg(lim);
 SELECT * FROM chunks
 WHERE chunk_id = ANY(sqlc.arg(ids)::text[]) AND deleted_at IS NULL
   AND (sqlc.arg(all_repos)::boolean OR repo_id = ANY(sqlc.arg(repo_ids)::uuid[])
-       OR (repo_id IS NULL AND source IN ('confluence', 'jira', 'notion', 'upload')));
+       OR (repo_id IS NULL AND source IN ('confluence', 'jira', 'notion', 'upload')))
+  AND (sqlc.arg(all_repos)::boolean OR requires_repos IS NULL OR requires_repos <@ sqlc.arg(repo_ids)::uuid[]);
 
 -- name: SymbolNeighbors :many
 -- One-hop symbol neighbours (callers and callees) of the given symbol entity keys.
@@ -110,6 +112,7 @@ FROM chunks c
 WHERE c.deleted_at IS NULL
   AND (sqlc.arg(all_repos)::boolean OR c.repo_id = ANY(sqlc.arg(repo_ids)::uuid[]))
   AND (cardinality(sqlc.arg(sources)::text[]) = 0 OR c.source::text = ANY(sqlc.arg(sources)::text[]))
+  AND (sqlc.arg(all_repos)::boolean OR c.requires_repos IS NULL OR c.requires_repos <@ sqlc.arg(repo_ids)::uuid[])
   AND (c.path IN ('@docs/overview/overview', '@docs/architecture/architecture')
        OR lower(c.path) ~ '(^|/)readme'
        OR lower(c.path) ~ '(architecture|overview|design|getting[-_]started|introduction)'
@@ -124,6 +127,7 @@ WHERE c.deleted_at IS NULL AND (c.path = sqlc.arg(path)::text OR c.path LIKE '%/
   AND (sqlc.arg(all_repos)::boolean OR c.repo_id = ANY(sqlc.arg(repo_ids)::uuid[])
        OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira', 'notion', 'upload')))
   AND (cardinality(sqlc.arg(sources)::text[]) = 0 OR c.source::text = ANY(sqlc.arg(sources)::text[]))
+  AND (sqlc.arg(all_repos)::boolean OR c.requires_repos IS NULL OR c.requires_repos <@ sqlc.arg(repo_ids)::uuid[])
 ORDER BY c.scope, c.path, c.chunk_id
 LIMIT sqlc.arg(lim);
 
@@ -134,6 +138,7 @@ WHERE c.deleted_at IS NULL AND c.path ILIKE '%' || sqlc.arg(contains)::text || '
   AND (sqlc.arg(all_repos)::boolean OR c.repo_id = ANY(sqlc.arg(repo_ids)::uuid[])
        OR (c.repo_id IS NULL AND c.source IN ('confluence', 'jira', 'notion', 'upload')))
   AND (cardinality(sqlc.arg(sources)::text[]) = 0 OR c.source::text = ANY(sqlc.arg(sources)::text[]))
+  AND (sqlc.arg(all_repos)::boolean OR c.requires_repos IS NULL OR c.requires_repos <@ sqlc.arg(repo_ids)::uuid[])
 GROUP BY c.scope, c.path
 ORDER BY c.scope, c.path
 LIMIT sqlc.arg(lim);

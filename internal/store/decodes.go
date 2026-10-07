@@ -173,7 +173,19 @@ func (d *Decodes) Chunks(ctx context.Context, ids []string) ([]ports.Chunk, erro
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	return d.chunks.ByIDs(ctx, ids)
+	cs, err := d.chunks.ByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+	// An issue's explanation is shown to everyone who can see the issue: leave out pieces written from
+	// several repositories (the System architecture), whatever the search backend returned.
+	out := cs[:0]
+	for _, c := range cs {
+		if len(c.RequiresRepos) == 0 {
+			out = append(out, c)
+		}
+	}
+	return out, nil
 }
 
 // LatestDecode implements decode.Store.

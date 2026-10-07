@@ -247,6 +247,7 @@ type SystemStore interface {
 	DeleteSystemDoc(ctx context.Context) error
 	PutDoc(ctx context.Context, d repodocs.Doc) (repodocs.Doc, error)
 	Docs(ctx context.Context, repoID string) ([]repodocs.Doc, error)
+	SystemChunks(ctx context.Context) ([]ports.Chunk, error)
 }
 
 // SystemDocsPayload is the system_docs job payload.
@@ -279,6 +280,9 @@ func (p *Pipeline) SystemDocs(ctx context.Context, job ports.Job) (ports.Outcome
 	}
 	if len(links) == 0 {
 		if err := p.SystemStore.DeleteSystemDoc(ctx); err != nil {
+			return ports.Outcome{}, err
+		}
+		if err := p.indexSystem(ctx, nil, nil); err != nil {
 			return ports.Outcome{}, err
 		}
 		return ports.Outcome{Status: ports.JobAborted, Message: "the tracked repositories do not talk to each other"}, nil
@@ -326,6 +330,9 @@ func (p *Pipeline) SystemDocs(ctx context.Context, job ports.Job) (ports.Outcome
 	if err == nil {
 		prevPtr = &prev
 		if !pl.Full && prev.Status == "ok" && prev.InputsHash == repodocs.SystemHash(in) {
+			if err := p.indexSystem(ctx, &prev, sortedIDs(ids)); err != nil {
+				return ports.Outcome{}, err
+			}
 			return ports.Outcome{Status: ports.JobDone, Message: "the System architecture is current"}, nil
 		}
 	} else if !errors.Is(err, ports.ErrNotFound) {
@@ -339,11 +346,15 @@ func (p *Pipeline) SystemDocs(ctx context.Context, job ports.Job) (ports.Outcome
 	if werr != nil && prevPtr != nil && prevPtr.Status == "ok" {
 		return ports.Outcome{}, werr // keep the last good version; the job retries
 	}
-	if _, err := p.SystemStore.PutDoc(ctx, d); err != nil {
+	saved, err := p.SystemStore.PutDoc(ctx, d)
+	if err != nil {
 		return ports.Outcome{}, err
 	}
 	if werr != nil {
 		return ports.Outcome{}, werr
+	}
+	if err := p.indexSystem(ctx, &saved, sortedIDs(ids)); err != nil {
+		return ports.Outcome{}, err
 	}
 	return ports.Outcome{Status: ports.JobDone, Message: fmt.Sprintf("System architecture written for %d repositories and %d links", len(in.Repos), len(links))}, nil
 }
@@ -355,4 +366,37 @@ func sortedIDs(m map[string]string) []string {
 	}
 	sort.Slice(out, func(i, j int) bool { return m[out[i]] < m[out[j]] })
 	return out
+}
+
+// indexSystem puts the System architecture in Ask's index, one piece per section, each requiring every
+// repository it covers (nil d removes it).
+func (p *Pipeline) indexSystem(ctx context.Context, d *repodocs.Doc, repoIDs []string) error {
+	var fresh []ports.Chunk
+	if d != nil {
+		fresh = repodocs.SystemChunks(*d, repoIDs)
+	}
+	stored, err := p.SystemStore.SystemChunks(ctx)
+	if err != nil {
+		return err
+	}
+	dd := manifest.Diff(stored, fresh, []string{repodocs.SystemPath})
+	w := ports.ChunkWrite{Upserts: append(append([]ports.Chunk{}, dd.Added...), dd.Changed...), Revive: dd.Revived, Remove: dd.Removed}
+	if len(w.Upserts)+len(w.Revive)+len(w.Remove) == 0 {
+		return nil
+	}
+	if _, err := p.Chunks.Apply(ctx, w); err != nil {
+		return err
+	}
+	if p.Indexer == nil {
+		return nil
+	}
+	if len(dd.Removed) > 0 && p.Indexer.Index != nil {
+		_ = p.Indexer.Index.Delete(ctx, dd.Removed)
+	}
+	_, err = p.Indexer.Embed(ctx, llmgateway.CallMeta{}, dd.NeedsEmbedding())
+	var sb *ports.SpendBlockedError
+	if errors.As(err, &sb) || errors.Is(err, ports.ErrEmbeddingMismatch) {
+		return nil
+	}
+	return err
 }

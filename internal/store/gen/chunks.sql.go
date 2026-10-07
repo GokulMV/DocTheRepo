@@ -21,8 +21,52 @@ func (q *Queries) BumpIndexVersion(ctx context.Context) (int64, error) {
 	return version, err
 }
 
+const chunksAtPathAnyRepo = `-- name: ChunksAtPathAnyRepo :many
+SELECT chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url, tsv, created_at, updated_at, deleted_at, requires_repos FROM chunks WHERE path = $1 AND source = 'generated_doc'
+`
+
+// Stored chunks (live and soft-deleted) at one path whatever their repository (the System architecture,
+// whose pieces move when the set of linked repositories changes).
+func (q *Queries) ChunksAtPathAnyRepo(ctx context.Context, path string) ([]Chunk, error) {
+	rows, err := q.db.Query(ctx, chunksAtPathAnyRepo, path)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Chunk{}
+	for rows.Next() {
+		var i Chunk
+		if err := rows.Scan(
+			&i.ChunkID,
+			&i.RepoID,
+			&i.Scope,
+			&i.Source,
+			&i.Path,
+			&i.Symbol,
+			&i.Language,
+			&i.Content,
+			&i.ContentHash,
+			&i.Signature,
+			&i.CommitSha,
+			&i.Url,
+			&i.Tsv,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+			&i.RequiresRepos,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const chunksByIDs = `-- name: ChunksByIDs :many
-SELECT chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url, tsv, created_at, updated_at, deleted_at FROM chunks WHERE chunk_id = ANY($1::text[])
+SELECT chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url, tsv, created_at, updated_at, deleted_at, requires_repos FROM chunks WHERE chunk_id = ANY($1::text[])
 `
 
 func (q *Queries) ChunksByIDs(ctx context.Context, ids []string) ([]Chunk, error) {
@@ -51,6 +95,7 @@ func (q *Queries) ChunksByIDs(ctx context.Context, ids []string) ([]Chunk, error
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.RequiresRepos,
 		); err != nil {
 			return nil, err
 		}
@@ -63,7 +108,7 @@ func (q *Queries) ChunksByIDs(ctx context.Context, ids []string) ([]Chunk, error
 }
 
 const chunksForPaths = `-- name: ChunksForPaths :many
-SELECT chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url, tsv, created_at, updated_at, deleted_at FROM chunks WHERE repo_id = $1 AND source = $2 AND path = ANY($3::text[])
+SELECT chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url, tsv, created_at, updated_at, deleted_at, requires_repos FROM chunks WHERE repo_id = $1 AND source = $2 AND path = ANY($3::text[])
 `
 
 type ChunksForPathsParams struct {
@@ -99,6 +144,7 @@ func (q *Queries) ChunksForPaths(ctx context.Context, arg ChunksForPathsParams) 
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.RequiresRepos,
 		); err != nil {
 			return nil, err
 		}
@@ -155,7 +201,7 @@ func (q *Queries) GetIndexVersion(ctx context.Context) (int64, error) {
 }
 
 const liveChunks = `-- name: LiveChunks :many
-SELECT chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url, tsv, created_at, updated_at, deleted_at FROM chunks WHERE deleted_at IS NULL AND chunk_id > $1 ORDER BY chunk_id LIMIT $2
+SELECT chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url, tsv, created_at, updated_at, deleted_at, requires_repos FROM chunks WHERE deleted_at IS NULL AND chunk_id > $1 ORDER BY chunk_id LIMIT $2
 `
 
 type LiveChunksParams struct {
@@ -190,6 +236,7 @@ func (q *Queries) LiveChunks(ctx context.Context, arg LiveChunksParams) ([]Chunk
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.RequiresRepos,
 		); err != nil {
 			return nil, err
 		}
@@ -214,7 +261,7 @@ func (q *Queries) ReviveChunks(ctx context.Context, ids []string) (int64, error)
 }
 
 const sharedChunksForPath = `-- name: SharedChunksForPath :many
-SELECT chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url, tsv, created_at, updated_at, deleted_at FROM chunks WHERE repo_id IS NULL AND source = $1 AND path = $2
+SELECT chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url, tsv, created_at, updated_at, deleted_at, requires_repos FROM chunks WHERE repo_id IS NULL AND source = $1 AND path = $2
 `
 
 type SharedChunksForPathParams struct {
@@ -249,6 +296,7 @@ func (q *Queries) SharedChunksForPath(ctx context.Context, arg SharedChunksForPa
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.DeletedAt,
+			&i.RequiresRepos,
 		); err != nil {
 			return nil, err
 		}
@@ -292,29 +340,30 @@ func (q *Queries) SoftDeleteSharedPath(ctx context.Context, arg SoftDeleteShared
 
 const upsertChunk = `-- name: UpsertChunk :exec
 INSERT INTO chunks (chunk_id, repo_id, scope, source, path, symbol, language, content, content_hash, signature, commit_sha, url,
-                    updated_at, deleted_at)
+                    requires_repos, updated_at, deleted_at)
 VALUES ($1, $2, $3, $4, $5, $6,
         $7, $8, $9, $10, $11, $12,
-        now(), NULL)
+        $13::uuid[], now(), NULL)
 ON CONFLICT (chunk_id) DO UPDATE SET repo_id = EXCLUDED.repo_id, scope = EXCLUDED.scope, source = EXCLUDED.source,
     path = EXCLUDED.path, symbol = EXCLUDED.symbol, language = EXCLUDED.language, content = EXCLUDED.content,
     content_hash = EXCLUDED.content_hash, signature = EXCLUDED.signature, commit_sha = EXCLUDED.commit_sha,
-    url = EXCLUDED.url, updated_at = now(), deleted_at = NULL
+    url = EXCLUDED.url, requires_repos = EXCLUDED.requires_repos, updated_at = now(), deleted_at = NULL
 `
 
 type UpsertChunkParams struct {
-	ChunkID     string      `json:"chunk_id"`
-	RepoID      *string     `json:"repo_id"`
-	Scope       string      `json:"scope"`
-	Source      ChunkSource `json:"source"`
-	Path        string      `json:"path"`
-	Symbol      string      `json:"symbol"`
-	Language    string      `json:"language"`
-	Content     string      `json:"content"`
-	ContentHash string      `json:"content_hash"`
-	Signature   string      `json:"signature"`
-	CommitSha   string      `json:"commit_sha"`
-	Url         string      `json:"url"`
+	ChunkID       string      `json:"chunk_id"`
+	RepoID        *string     `json:"repo_id"`
+	Scope         string      `json:"scope"`
+	Source        ChunkSource `json:"source"`
+	Path          string      `json:"path"`
+	Symbol        string      `json:"symbol"`
+	Language      string      `json:"language"`
+	Content       string      `json:"content"`
+	ContentHash   string      `json:"content_hash"`
+	Signature     string      `json:"signature"`
+	CommitSha     string      `json:"commit_sha"`
+	Url           string      `json:"url"`
+	RequiresRepos []string    `json:"requires_repos"`
 }
 
 func (q *Queries) UpsertChunk(ctx context.Context, arg UpsertChunkParams) error {
@@ -331,6 +380,7 @@ func (q *Queries) UpsertChunk(ctx context.Context, arg UpsertChunkParams) error 
 		arg.Signature,
 		arg.CommitSha,
 		arg.Url,
+		arg.RequiresRepos,
 	)
 	return err
 }
