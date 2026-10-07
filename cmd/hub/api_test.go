@@ -301,6 +301,8 @@ func runJob(t *testing.T, a *app, q *queue.Queue, typ ports.JobType) string {
 		out, err = a.knowledge.Handle(ctx, *job)
 	case ports.JobRepoDocs:
 		out, err = a.pipe.RepoDocs(ctx, *job)
+	case ports.JobSystemDocs:
+		out, err = a.pipe.SystemDocs(ctx, *job)
 	case security.JobScan:
 		out, err = a.securityJobs.HandleScan(ctx, *job)
 	case security.JobFix:

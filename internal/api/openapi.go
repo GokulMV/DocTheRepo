@@ -89,6 +89,8 @@ var Operations = []op{
 	{"POST", "/api/v1/repos/{id}/docs/write", "Docs", "Write documents now: changed ones, everything (full) or some (only)", "admin", true, false},
 	{"PUT", "/api/v1/repos/{id}/docs/budget", "Docs", "Set the repository's monthly docs budget", "admin", true, false},
 	{"POST", "/api/v1/repos/{id}/docs/export", "Docs", "Open a pull request with the documents as Markdown", "admin", false, false},
+	{"GET", "/api/v1/system", "Docs", "How the repositories you can read talk to each other, and the System architecture when you can read all of them", "viewer", false, false},
+	{"POST", "/api/v1/system/write", "Docs", "Write the System architecture again", "admin", false, false},
 	{"GET", "/api/v1/mcp/servers", "MCP connections", "MCP connections (secrets never returned) and the OAuth callback address", "admin", false, false},
 	{"POST", "/api/v1/mcp/servers", "MCP connections", "Add an MCP connection; connects and lists its tools unless it needs sign-in", "admin", true, false},
 	{"PATCH", "/api/v1/mcp/servers/{id}", "MCP connections", "Edit a connection: address, key (write-only), who may use it, which tools are on", "admin", true, false},

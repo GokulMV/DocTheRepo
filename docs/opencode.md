@@ -64,13 +64,15 @@ you can see in the UI.
 
 | Tool | What it does |
 |---|---|
-| `ask` | Q&A over code, docs, Confluence/Jira, and decoded issues, with citations; optional `repos` / `include` |
+| `ask` | Q&A over code, docs, Confluence/Jira, and decoded issues, with citations and the answer's confidence; optional `repos` / `include` |
 | `search_entities` | Find services, endpoints, topics, env vars, datastores, dependencies, owners by name |
 | `entity_graph` | What an entity calls, exposes, publishes, subscribes to, reads, depends on, is owned by (1–3 hops) |
 | `list_issues` / `get_issue` | Production issues, and one issue with its decode (cause, impact, affected code, next steps) |
 | `list_known_issues` | Problems already understood, and why they are suppressed or labelled |
 | `library` | Library shelves, or the items on one (`runbooks`, `decisions`, `apis`, …) |
-| `read_doc` | One generated or imported doc as Markdown |
+| `list_docs` | A repository's documents (overview, architecture, module guides, API, flows, data model, …) with their confidence |
+| `read_document` | One of those documents as Markdown, with its confidence, why, and which sections to check against the code |
+| `read_doc` | One imported doc (or a Docs v1 generated file) as Markdown |
 
 All tools are read-only. Sign the CLI in once (`dth login --server https://hub.example.com --token dth_pat_…`,
 or `dth up` locally), or pass `DTH_SERVER` and `DTH_TOKEN` in the client's MCP config.

@@ -69,4 +69,20 @@ describe('Ask', () => {
     expect(screen.getByText('Source picking saved 15.5k tokens ($0.08) in this conversation')).toBeInTheDocument();
     expect(screen.getByText('Read 3 of 20 sources · 9.4k tokens saved ($0.05)').parentElement).toHaveAttribute('title', expect.stringContaining('Judge (jev-latest): 3,000 tokens'));
   });
+
+  it('shows how far each answer can be trusted, and why', async () => {
+    mockApi({
+      'GET /me': me('viewer'),
+      'GET /repos': { items: [] },
+      'GET /threads': { items: [], next_cursor: null },
+      'GET /threads/t1': { id: 't1', title: 'Refunds', messages: [
+        { id: 'u1', role: 'user', content: 'how are refunds approved?', citations: [], cached: false, created_at: '2026-10-03T10:00:00Z' },
+        { id: 'a1', role: 'assistant', content: 'Finance approves them [1].', citations: [], cached: false, created_at: '2026-10-03T10:00:00Z',
+          confidence: { score: 0.52, label: 'low', why: ['it cites a document of low confidence', 'it rests on a single source'] } },
+      ] },
+    });
+    renderAt('/ask/t1', <Route path="/ask/:threadId" element={<Ask />} />);
+    const badge = await screen.findByText('Low confidence');
+    expect(badge.parentElement).toHaveAttribute('title', 'Why: it cites a document of low confidence; it rests on a single source');
+  });
 });

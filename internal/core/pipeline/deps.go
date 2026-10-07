@@ -89,6 +89,8 @@ type Pipeline struct {
 	DocsV2        bool
 	RepoDocsGen   *repodocs.Generator
 	RepoDocsFacts RepoDocsFacts
+	// SystemStore keeps the System architecture (documents across repositories); nil turns it off.
+	SystemStore SystemStore
 	// DocsBudget caps what one repository's documents may cost per month (nil: no cap).
 	DocsBudget DocsBudget
 	// Enqueue queues a follow-up job (the repo_docs job after a push).

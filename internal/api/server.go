@@ -59,6 +59,8 @@ type Deps struct {
 	HasIssues func(ctx context.Context) bool
 	// DocsV2 says docs are written per repository (the Docs page shows documents, not a file tree).
 	DocsV2 bool
+	// HasSystem reports whether tracked repositories talk to each other (the System page applies).
+	HasSystem func(ctx context.Context) bool
 	// Settings is the secret-reference policy for /settings/apply (nil: the settings endpoints are off).
 	Settings *SettingsPolicy
 }
@@ -90,7 +92,7 @@ func NewRouter(d Deps) http.Handler {
 		if d.OIDC != nil && d.Auth.OIDC() == nil {
 			d.Auth.UseConfigOIDC(d.OIDC) // the caller did not run LoadSignIn (tests)
 		}
-		ah := &authHandlers{svc: d.Auth, secure: d.SecureCookies, publicURL: d.PublicURL, sealKeys: d.SealKeys, requireSealed: d.RequireSealed, mailer: d.Mailer, environment: d.Environment, hasIssues: d.HasIssues, docsV2: d.DocsV2}
+		ah := &authHandlers{svc: d.Auth, secure: d.SecureCookies, publicURL: d.PublicURL, sealKeys: d.SealKeys, requireSealed: d.RequireSealed, mailer: d.Mailer, environment: d.Environment, hasIssues: d.HasIssues, docsV2: d.DocsV2, hasSystem: d.HasSystem}
 		r.Route("/api/v1", func(r chi.Router) {
 			r.Get("/openapi.json", openapiHandler)
 			r.Group(func(r chi.Router) {

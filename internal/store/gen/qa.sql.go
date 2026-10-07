@@ -228,9 +228,9 @@ func (q *Queries) HitCachedAnswer(ctx context.Context, key string) error {
 }
 
 const insertMessage = `-- name: InsertMessage :exec
-INSERT INTO qa_messages (id, thread_id, role, content, citations, provider, model, input_tokens, output_tokens, cost_usd, cached, investigated, sift)
+INSERT INTO qa_messages (id, thread_id, role, content, citations, provider, model, input_tokens, output_tokens, cost_usd, cached, investigated, sift, confidence)
 VALUES ($1, $2, $3, $4, $5, $6, $7,
-        $8, $9, $10, $11, $12, $13)
+        $8, $9, $10, $11, $12, $13, $14)
 `
 
 type InsertMessageParams struct {
@@ -247,6 +247,7 @@ type InsertMessageParams struct {
 	Cached       bool            `json:"cached"`
 	Investigated bool            `json:"investigated"`
 	Sift         json.RawMessage `json:"sift"`
+	Confidence   json.RawMessage `json:"confidence"`
 }
 
 func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) error {
@@ -264,6 +265,7 @@ func (q *Queries) InsertMessage(ctx context.Context, arg InsertMessageParams) er
 		arg.Cached,
 		arg.Investigated,
 		arg.Sift,
+		arg.Confidence,
 	)
 	return err
 }
@@ -636,7 +638,7 @@ func (q *Queries) SymbolNeighbors(ctx context.Context, arg SymbolNeighborsParams
 }
 
 const threadMessages = `-- name: ThreadMessages :many
-SELECT id, thread_id, role, content, citations, provider, model, input_tokens, output_tokens, cost_usd, cached, feedback, feedback_comment, created_at, investigated, sift FROM qa_messages WHERE thread_id = $1 ORDER BY created_at, (role <> 'user'), id
+SELECT id, thread_id, role, content, citations, provider, model, input_tokens, output_tokens, cost_usd, cached, feedback, feedback_comment, created_at, investigated, sift, confidence FROM qa_messages WHERE thread_id = $1 ORDER BY created_at, (role <> 'user'), id
 `
 
 // A question and its answer are saved in one transaction (same created_at): the question comes first.
@@ -666,6 +668,7 @@ func (q *Queries) ThreadMessages(ctx context.Context, threadID string) ([]QaMess
 			&i.CreatedAt,
 			&i.Investigated,
 			&i.Sift,
+			&i.Confidence,
 		); err != nil {
 			return nil, err
 		}

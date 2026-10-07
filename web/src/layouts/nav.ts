@@ -1,4 +1,4 @@
-import { BookOpen, ChartColumn, FolderGit2, Inbox, Settings, type LucideIcon } from 'lucide-react';
+import { BookOpen, ChartColumn, FolderGit2, Inbox, Network, Settings, type LucideIcon } from 'lucide-react';
 import type { Role } from '@/api/types';
 
 /** Tab is one page inside a section, shown as a tab above the page. */
@@ -10,6 +10,9 @@ export interface Tab {
   also?: string[];
 }
 
+/** Features shown only when the Hub says so (others are shown unless it says no). */
+export const OPT_IN_FEATURES = ['system'];
+
 export interface NavItem {
   to: string;
   label: string;
@@ -20,7 +23,7 @@ export interface NavItem {
   /** Pages in this section; the first is the section's own address. */
   tabs?: Tab[];
   /** Shown only when this feature applies (the Hub reports it in /me). */
-  feature?: 'issues';
+  feature?: 'issues' | 'system';
 }
 
 /** NAV is the sidebar: Ask (the "New question" row) plus these sections. */
@@ -33,6 +36,8 @@ export const NAV: NavItem[] = [
       { to: '/library', label: 'Team docs' },
     ],
   },
+  // Shown only when tracked repositories talk to each other (APIs, events, shared packages).
+  { to: '/system', label: 'System', min: 'viewer', icon: Network, feature: 'system' },
   {
     to: '/inbox', label: 'Issues', min: 'viewer', icon: Inbox, feature: 'issues',
     tabs: [

@@ -33,6 +33,17 @@ type RepoDocsDeps struct {
 	Export func(ctx context.Context, repoID string) (ports.PullRequest, error)
 }
 
+// systemLinksFor keeps the links whose both ends the caller can read.
+func systemLinksFor(links []repodocs.SystemLink, can func(string) bool) []repodocs.SystemLink {
+	out := []repodocs.SystemLink{}
+	for _, l := range links {
+		if can(l.FromRepo) && can(l.ToRepo) {
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
 type repoDocsHandlers struct{ d RepoDocsDeps }
 
 // RepoDocsRoutes mounts /repo-docs and the per-repository docs actions.
@@ -44,6 +55,7 @@ func RepoDocsRoutes(d RepoDocsDeps) func(chi.Router) {
 			r.Get("/repo-docs", h.list)
 			r.Get("/repo-docs/find", h.find)
 			r.Get("/repo-docs/{id}", h.get)
+			r.Get("/system", h.system)
 		})
 		r.Group(func(r chi.Router) {
 			r.Use(requireRole(auth.RoleEditor))
@@ -54,6 +66,7 @@ func RepoDocsRoutes(d RepoDocsDeps) func(chi.Router) {
 			r.Post("/repos/{id}/docs/write", h.write)
 			r.Put("/repos/{id}/docs/budget", h.setBudget)
 			r.Post("/repos/{id}/docs/export", h.export)
+			r.Post("/system/write", h.writeSystem)
 		})
 	}
 }
@@ -315,4 +328,69 @@ func LinkCitationsRelative(md, up string) string {
 		sub := citeLinkRE.FindStringSubmatch(m)
 		return fmt.Sprintf("[%s:%s](%s%s#L%s)", sub[1], sub[2], up, sub[1], sub[2])
 	})
+}
+
+// system is the System architecture: how the repositories the caller can read talk to each other, and the
+// written document when the caller can read every repository it covers.
+func (h *repoDocsHandlers) system(w http.ResponseWriter, r *http.Request) {
+	sc, err := scopeOf(r, h.d.Auth)
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	all, err := h.d.Store.SystemLinks(r.Context())
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	can := func(id string) bool { return allows(sc, id) }
+	links := systemLinksFor(all, can)
+	type repo struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	seen := map[string]bool{}
+	repos := []repo{}
+	for _, l := range links {
+		for _, x := range [][2]string{{l.FromRepo, l.FromName}, {l.ToRepo, l.ToName}} {
+			if !seen[x[0]] {
+				seen[x[0]] = true
+				repos = append(repos, repo{x[0], x[1]})
+			}
+		}
+	}
+	out := map[string]any{"links": links, "repos": repos, "complete": len(links) == len(all)}
+	in := repodocs.SystemInput{Links: links}
+	for _, rp := range repos {
+		in.Repos = append(in.Repos, repodocs.SystemRepo{ID: rp.ID, Name: rp.Name})
+	}
+	out["diagram"] = repodocs.SystemDiagram(in)
+	// The write-up spans every linked repository, so only someone who can read all of them sees it.
+	if len(links) > 0 && len(links) == len(all) {
+		if d, err := h.d.Store.SystemDoc(r.Context()); err == nil {
+			secs := make([]map[string]any, len(d.Sections))
+			for i, s := range d.Sections {
+				secs[i] = map[string]any{"key": s.Key, "title": s.Title, "markdown": s.Markdown, "score": s.Score, "label": repodocs.Label(s.Score), "why": s.Why}
+			}
+			out["doc"] = map[string]any{"id": d.ID, "title": d.Title, "at_a_glance": d.AtAGlance, "sections": secs, "gaps": d.Gaps, "confidence": d.Confidence,
+				"label": repodocs.Label(d.Confidence), "why": d.Why, "status": d.Status, "error": d.Error, "updated_at": d.UpdatedAt}
+		}
+	}
+	if h.d.Queue != nil {
+		if jobs, _, err := h.d.Queue.List(r.Context(), queue.Filter{Type: ports.JobSystemDocs, Limit: 1}); err == nil && len(jobs) > 0 {
+			out["job"] = map[string]any{"id": jobs[0].ID, "status": jobs[0].Status, "error": jobs[0].Error, "updated_at": jobs[0].UpdatedAt}
+		}
+	}
+	WriteJSON(w, http.StatusOK, out)
+}
+
+func (h *repoDocsHandlers) writeSystem(w http.ResponseWriter, r *http.Request) {
+	payload, _ := json.Marshal(map[string]any{"full": true, "reason": "requested in the Hub"})
+	job, _, err := h.d.Queue.Enqueue(r.Context(), ports.NewJob{Type: ports.JobSystemDocs, SerialKey: "system", DedupeKey: "system-docs-manual", Payload: json.RawMessage(payload)})
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	_ = h.d.Auth.Audit(r.Context(), auth.FromContext(r.Context()), "system_docs.write", "system", "system", nil, clientIP(r))
+	WriteJSON(w, http.StatusAccepted, map[string]string{"job_id": job.ID})
 }

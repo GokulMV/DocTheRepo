@@ -1721,6 +1721,7 @@ type QaMessage struct {
 	CreatedAt       time.Time       `json:"created_at"`
 	Investigated    bool            `json:"investigated"`
 	Sift            json.RawMessage `json:"sift"`
+	Confidence      json.RawMessage `json:"confidence"`
 }
 
 type QaThread struct {
@@ -1760,7 +1761,7 @@ type RepoAccess struct {
 
 type RepoDoc struct {
 	ID         string          `json:"id"`
-	RepoID     string          `json:"repo_id"`
+	RepoID     *string         `json:"repo_id"`
 	DocType    string          `json:"doc_type"`
 	DocKey     string          `json:"doc_key"`
 	Title      string          `json:"title"`

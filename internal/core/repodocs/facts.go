@@ -15,6 +15,8 @@ import (
 	"path"
 	"sort"
 	"strings"
+
+	"github.com/GokulMV/DocTheRepo/internal/ports"
 )
 
 // Symbol is a declaration in the code.
@@ -85,6 +87,9 @@ type Facts struct {
 	AllPaths []string          // every path in the tree, including files that are not indexed (tests, docs, config)
 	Special  map[string]string // contents of README, build, deploy and CI files, clipped
 	Diagrams []string          // diagrams authored in the repository
+	// Commits are the recent commits on the documented branch (newest first), for Recent changes and
+	// Decision records.
+	Commits []ports.Commit
 }
 
 // IsTest reports a test file by the usual conventions.
@@ -205,4 +210,17 @@ func sortedKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// SystemLink is one way two repositories talk to each other.
+type SystemLink struct {
+	FromRepo string `json:"from_repo"`
+	FromName string `json:"from_name"`
+	ToRepo   string `json:"to_repo"`
+	ToName   string `json:"to_name"`
+	Kind     string `json:"kind"` // event | api | call | library | other
+	Via      string `json:"via"`  // the topic, endpoint, symbol or package
+	Path     string `json:"path,omitempty"`
+	Line     int    `json:"line,omitempty"`
+	N        int    `json:"n"`
 }

@@ -4,7 +4,8 @@ import { useMemo, useState, type KeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useThreads } from '@/api/hooks';
 import { atLeast, type Role } from '@/api/types';
-import { NAV } from '@/layouts/nav';
+import { NAV, OPT_IN_FEATURES } from '@/layouts/nav';
+import { useMe } from '@/api/hooks';
 import { cx } from '@/components/ui';
 
 interface Entry {
@@ -23,9 +24,11 @@ export function CommandPalette({ open, onOpenChange, role }: { open: boolean; on
   const [active, setActive] = useState(0);
   const nav = useNavigate();
   const threads = useThreads();
+  const features = useMe().data?.features;
   const entries = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    const pages: Entry[] = NAV.filter((i) => atLeast(role, i.min)).flatMap((i) =>
+    const shown = (f?: 'issues' | 'system') => !f || (OPT_IN_FEATURES.includes(f) ? features?.[f] === true : features?.[f] !== false);
+    const pages: Entry[] = NAV.filter((i) => atLeast(role, i.min) && shown(i.feature)).flatMap((i) =>
       (i.tabs ?? [{ to: i.to, label: i.label }])
         .filter((t) => atLeast(role, t.min ?? i.min))
         .map((t) => ({ key: t.to, label: t.label, hint: t.label === i.label ? 'Page' : i.label, icon: i.icon, to: t.to })),
@@ -35,7 +38,7 @@ export function CommandPalette({ open, onOpenChange, role }: { open: boolean; on
     const out = [...pages.filter(match), ...questions.filter(match).slice(0, needle ? 8 : 5)];
     if (needle) out.unshift({ key: 'ask', label: `Ask “${q.trim()}”`, hint: 'New question', icon: Sparkles, to: `/ask?q=${encodeURIComponent(q.trim())}` });
     return out;
-  }, [q, role, threads.data]);
+  }, [q, role, threads.data, features]);
   const go = (e: Entry | undefined) => {
     if (!e) return;
     onOpenChange(false);

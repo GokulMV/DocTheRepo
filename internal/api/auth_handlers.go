@@ -37,6 +37,7 @@ type authHandlers struct {
 	// hasIssues says whether to show the Issues pages (nil: always).
 	hasIssues func(ctx context.Context) bool
 	docsV2    bool
+	hasSystem func(ctx context.Context) bool
 	// loginLimit throttles password attempts per client IP.
 	mu         sync.Mutex
 	loginLimit map[string]*rate.Limiter
@@ -224,7 +225,11 @@ func (h *authHandlers) me(w http.ResponseWriter, r *http.Request) {
 	if h.hasIssues != nil {
 		issues = h.hasIssues(r.Context())
 	}
-	out["features"] = map[string]bool{"issues": issues, "docs_v2": h.docsV2}
+	system := false
+	if h.docsV2 && h.hasSystem != nil {
+		system = h.hasSystem(r.Context())
+	}
+	out["features"] = map[string]bool{"issues": issues, "docs_v2": h.docsV2, "system": system}
 	if p.Via == "session" {
 		out["csrf_token"] = p.CSRF
 	}

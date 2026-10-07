@@ -6,6 +6,8 @@ import (
 	"path"
 	"sort"
 	"strings"
+
+	"github.com/GokulMV/DocTheRepo/internal/ports"
 )
 
 // Reader reads a file at the commit being documented (tests, migrations and CI files are not indexed).
@@ -458,6 +460,17 @@ func (e *env) inputs(ctx context.Context, spec Spec, mod *Module, budget int) st
 			add("Owners", factLines(e.factsOf("owner"), 100), 1)
 		case "module":
 			e.moduleInputs(mod, add)
+		case "commits":
+			add("Recent commits (newest first)", commitLines(e.facts.Commits, 120, false), 1)
+		case "decisions":
+			var ds []ports.Commit
+			for _, c := range e.facts.Commits {
+				if IsDecisionCommit(c) {
+					ds = append(ds, c)
+				}
+			}
+			add("Commits that record decisions", commitLines(ds, 60, true), 1)
+			add("Decision record files", e.readMatching(ctx, IsADR, 20, 5000), 2)
 		}
 	}
 	return render(bl, budget)
@@ -555,4 +568,24 @@ func (e *env) moduleInputs(m *Module, add func(string, string, int)) {
 	if len(m.Tests) > 0 {
 		add("Tests", strings.Join(m.Tests, "\n"), 5)
 	}
+}
+
+func commitLines(cs []ports.Commit, n int, full bool) string {
+	var b strings.Builder
+	for i, c := range cs {
+		if i == n {
+			fmt.Fprintf(&b, "… %d older commits\n", len(cs)-n)
+			break
+		}
+		msg := strings.TrimSpace(c.Message)
+		if !full {
+			msg = strings.SplitN(msg, "\n", 2)[0]
+		}
+		sha := c.SHA
+		if len(sha) > 7 {
+			sha = sha[:7]
+		}
+		fmt.Fprintf(&b, "- %s %s (%s): %s\n", c.At.Format("2006-01-02"), sha, c.Author, clip(msg, 800))
+	}
+	return b.String()
 }
