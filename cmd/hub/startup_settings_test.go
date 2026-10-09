@@ -78,9 +78,8 @@ providers:
 	require.Eventually(t, func() bool { return a.auth.OIDC() != nil }, 10*time.Second, 50*time.Millisecond, "single sign-on is configured")
 	require.Eventually(t, func() bool { n, _ := st.Q.CountUsers(ctx); return n == 2 }, 10*time.Second, 50*time.Millisecond)
 	assert.False(t, a.auth.PasswordEnabled(ctx), "passwords off, as the file says")
-	provs, err := st.Q.ListProviders(ctx)
-	require.NoError(t, err)
-	require.Len(t, provs, 1)
+	// Settings apply in the background, one step after another (auth, users, then providers).
+	require.Eventually(t, func() bool { ps, _ := st.Q.ListProviders(ctx); return len(ps) == 1 }, 10*time.Second, 50*time.Millisecond, "the provider is added")
 
 	// The listed owner signs in through SSO and owns the Hub.
 	jar, _ := cookiejar.New(nil)
