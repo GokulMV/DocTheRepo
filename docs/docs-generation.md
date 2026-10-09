@@ -147,6 +147,27 @@ The first run writes every document, and it is the expensive one: roughly one do
 
 The global spend limits still apply on top.
 
+## A first run on a real model, and the run report
+
+The tests use a stub model, so a run on your own provider is the first real check of the prompts. A safe first run:
+
+1. **Start the Hub** (`./scripts/quickstart.sh`) and add your provider under **Providers**. The key goes into the Hub only; it never leaves your machine.
+2. **Track a repository you don't mind sharing.** A public repository is best for a first run (this one, `GokulMV/DocTheRepo`, works), so the report and the text can be shared for tuning.
+3. **Make a personal access token** on the **Account** page, then sign the CLI in: `dth login --server http://localhost:8080 --token <token>`.
+4. **Price it** (no model is called): `dth docs estimate GokulMV/DocTheRepo`.
+5. **Write it with a cap**, so the run cannot cost more than you chose: `dth docs write GokulMV/DocTheRepo --cap 5 --wait`.
+6. **Get the report:** `dth docs report GokulMV/DocTheRepo -o docs-report.md`, or add `--text` to include the documents themselves (`--json` prints the raw data).
+
+**The report shows:**
+
+- **Totals:** documents written and failed, tokens, cost, and this month's spend against the cap.
+- **What first drafts got wrong:** every check failure that forced a repair call, grouped by kind (for example, citations not in the material, sections too long, unknown names). This is the main input for tuning the prompts: each repair is a second paid call.
+- **Weak sections:** scores below 0.6, with the reasons.
+- **Sections off length:** more than 1.6× or under 0.4× the target words.
+- **Every document:** status, confidence, tokens, cost, and whether it was repaired.
+
+Without `--text`, the report holds no document prose. It still names files and identifiers from the code (in the checks' findings), so read it before sharing it for a private repository.
+
 ## Leaving files out: `.dthignore`
 
 Add a `.dthignore` file to the root of the repository. It uses `.gitignore` syntax, and matching files are

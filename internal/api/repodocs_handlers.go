@@ -60,6 +60,7 @@ func RepoDocsRoutes(d RepoDocsDeps) func(chi.Router) {
 		r.Group(func(r chi.Router) {
 			r.Use(requireRole(auth.RoleEditor))
 			r.Post("/repos/{id}/docs/estimate", h.estimate)
+			r.Get("/repos/{id}/docs/report", h.report)
 		})
 		r.Group(func(r chi.Router) {
 			r.Use(requireRole(auth.RoleAdmin))
@@ -204,6 +205,38 @@ func (h *repoDocsHandlers) estimate(w http.ResponseWriter, r *http.Request) {
 	}
 	WriteJSON(w, http.StatusOK, map[string]any{"would_write": res.WouldWrite, "documents": len(res.WouldWrite), "unchanged": res.Unchanged,
 		"modules": res.Modules, "estimated_tokens": res.EstimatedTokens, "estimated_usd": res.EstimatedUSD})
+}
+
+// report summarises the repository's documents for review and prompt tuning (?text=true keeps the
+// prose, ?format=md renders Markdown).
+func (h *repoDocsHandlers) report(w http.ResponseWriter, r *http.Request) {
+	repoID := chi.URLParam(r, "id")
+	if !h.readable(w, r, repoID) {
+		return
+	}
+	rc, err := h.d.Repos.Get(r.Context(), repoID)
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	docs, err := h.d.Store.Docs(r.Context(), repoID)
+	if err != nil {
+		WriteErr(w, r, err)
+		return
+	}
+	q := r.URL.Query()
+	rep := repodocs.BuildReport(rc.FullName, docs, q.Get("text") == "true")
+	if h.d.Budget != nil {
+		if c, s, err := h.d.Budget(r.Context(), repoID); err == nil {
+			rep.CapUSD, rep.SpentUSD = c, s
+		}
+	}
+	if q.Get("format") == "md" {
+		w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
+		_, _ = w.Write([]byte(rep.Markdown()))
+		return
+	}
+	WriteJSON(w, http.StatusOK, rep)
 }
 
 func (h *repoDocsHandlers) write(w http.ResponseWriter, r *http.Request) {

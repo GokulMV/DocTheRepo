@@ -465,7 +465,7 @@ func (g *Generator) write(ctx context.Context, e *env, j job, prev *Doc, route l
 	user := prompt(e, j, material)
 	r, err := g.GW.ChatJSONResult(ctx, llmgateway.FeatureDocGen, o.Meta, ports.ChatRequest{System: system,
 		Messages: []ports.ChatMessage{{Role: "user", Content: user}}, MaxOutputTokens: maxOut}, docSchema, &w, chk)
-	d.TokensIn, d.TokensOut, d.Model = r.Usage.InputTokens, r.Usage.OutputTokens, r.Model
+	d.TokensIn, d.TokensOut, d.Model, d.DraftProblems = r.Usage.InputTokens, r.Usage.OutputTokens, r.Model, r.Repaired
 	if g.Cost != nil {
 		d.CostUSD, _ = g.Cost(route.ProviderKind, r.Model, llmgateway.FeatureDocGen, r.Usage.InputTokens, r.Usage.OutputTokens)
 	}

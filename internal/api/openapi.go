@@ -86,6 +86,7 @@ var Operations = []op{
 	{"GET", "/api/v1/repo-docs/find", "Docs", "One document by repository, type and key", "viewer", false, false},
 	{"GET", "/api/v1/repo-docs/{id}", "Docs", "One document with its sections, citations and confidence", "viewer", false, false},
 	{"POST", "/api/v1/repos/{id}/docs/estimate", "Docs", "Estimate writing the documents that are missing or outdated (no model calls)", "editor", false, false},
+	{"GET", "/api/v1/repos/{id}/docs/report", "Docs", "Report on the documents for review and prompt tuning: cost, repaired drafts, confidence, weak and off-length sections (?text=true adds the prose, ?format=md renders Markdown)", "editor", false, false},
 	{"POST", "/api/v1/repos/{id}/docs/write", "Docs", "Write documents now: changed ones, everything (full) or some (only)", "admin", true, false},
 	{"PUT", "/api/v1/repos/{id}/docs/budget", "Docs", "Set the repository's monthly docs budget", "admin", true, false},
 	{"POST", "/api/v1/repos/{id}/docs/export", "Docs", "Open a pull request with the documents as Markdown", "admin", false, false},

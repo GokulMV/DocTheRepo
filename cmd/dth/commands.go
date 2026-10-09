@@ -88,7 +88,7 @@ func newRoot(out, errOut io.Writer) *cobra.Command {
 	root.PersistentFlags().StringVar(&a.profile, "profile", "", "named hub to use, e.g. nonlive or production (env DTH_PROFILE; default: the current profile, see dth profile)")
 	root.PersistentFlags().BoolVar(&a.asJSON, "json", false, "print raw JSON")
 	root.AddCommand(a.upCmd(), a.downCmd(), a.loginCmd(), a.statusCmd(), a.askCmd(), a.reposCmd(), a.importCmd(), a.dryRunCmd(),
-		a.jobsCmd(), a.retryCmd(), a.usageCmd(), a.tokenCmd(), a.reindexCmd(), a.adapterTestCmd(), a.migrateCmd(), a.engineCmd(), a.mcpCmd(), a.applyCmd(), a.settingsCmd(), a.initCmd(), a.profileCmd())
+		a.jobsCmd(), a.retryCmd(), a.usageCmd(), a.tokenCmd(), a.reindexCmd(), a.adapterTestCmd(), a.migrateCmd(), a.engineCmd(), a.mcpCmd(), a.applyCmd(), a.settingsCmd(), a.initCmd(), a.profileCmd(), a.docsCmd())
 	return root
 }
 
