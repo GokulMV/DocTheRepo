@@ -34,7 +34,7 @@ func TestParse(t *testing.T) {
 
 func TestSend(t *testing.T) {
 	srv := emailtest.Start(t)
-	srv.User, srv.Pass = "apikey", "s3cr:et"
+	srv.SetAuth("apikey", "s3cr:et")
 	m, err := email.Parse(srv.URL(), "DocTheRepo <docs@example.com>")
 	if err != nil {
 		t.Fatal(err)
@@ -62,7 +62,7 @@ func TestSend(t *testing.T) {
 
 func TestSendErrors(t *testing.T) {
 	srv := emailtest.Start(t)
-	srv.User, srv.Pass = "u", "right"
+	srv.SetAuth("u", "right")
 	bad := strings.Replace(srv.URL(), "u:right@", "u:wrong@", 1)
 	m, _ := email.Parse(bad, "docs@example.com")
 	if err := m.Send(context.Background(), email.Message{To: "a@example.com", Subject: "s", Text: "t"}); err == nil || !strings.Contains(err.Error(), "sign-in") {
@@ -73,7 +73,7 @@ func TestSendErrors(t *testing.T) {
 	if err := strict.Send(context.Background(), email.Message{To: "a@example.com", Subject: "s", Text: "t"}); err == nil || !strings.Contains(err.Error(), "STARTTLS") {
 		t.Fatalf("no STARTTLS: %v", err)
 	}
-	srv.Reject = "no such user"
+	srv.SetReject("no such user")
 	ok, _ := email.Parse(srv.URL(), "docs@example.com")
 	if err := ok.Send(context.Background(), email.Message{To: "a@example.com", Subject: "s", Text: "t"}); err == nil || !strings.Contains(err.Error(), "refused") {
 		t.Fatalf("rejected: %v", err)

@@ -83,7 +83,7 @@ export function RuleTester({ match }: { match: Match }) {
     }
   };
   return (
-    <div className="space-y-2 rounded border border-slate-200 p-3 dark:border-slate-800">
+    <div className="space-y-2 rounded-sm border border-slate-200 p-3 dark:border-slate-800">
       <div className="flex items-center gap-3">
         <Button type="button" size="sm" variant="secondary" onClick={run} disabled={busy}>Test against the last 7 days</Button>
         {res && <span className="text-sm" role="status">Would match <strong>{res.would_match_last_7d}</strong> issue{res.would_match_last_7d === 1 ? '' : 's'}.</span>}

@@ -221,7 +221,7 @@ export default function KnownIssues() {
         <div className="mb-4 flex gap-1" role="tablist">
           {TABS.map((t) => (
             <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}
-              className={cx('rounded px-3 py-1.5 text-sm', tab === t ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800')}>
+              className={cx('rounded-sm px-3 py-1.5 text-sm', tab === t ? 'bg-brand-600 text-white' : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800')}>
               {t}
             </button>
           ))}

@@ -47,7 +47,7 @@ function Snippets({ token }: { token: string }) {
       <div role="tablist" aria-label="How to use the token" className="flex gap-1 text-xs">
         {([['cli', 'dth CLI'], ['claude', 'Claude Code (MCP)'], ['curl', 'curl']] as const).map(([k, l]) => (
           <button key={k} role="tab" type="button" aria-selected={tab === k} onClick={() => setTab(k)}
-            className={cx('rounded-md px-2.5 py-1 font-medium', tab === k ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-white/[0.06]')}>
+            className={cx('rounded-md px-2.5 py-1 font-medium', tab === k ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-white/6')}>
             {l}
           </button>
         ))}

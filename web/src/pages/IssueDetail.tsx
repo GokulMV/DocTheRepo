@@ -68,9 +68,9 @@ function EventRow({ e }: { e: SignalEvent }) {
       </button>
       {open && (
         <div className="mt-2 space-y-2 text-xs">
-          {e.message && e.message !== e.title && <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-slate-100 p-2 dark:bg-slate-800">{e.message}</pre>}
+          {e.message && e.message !== e.title && <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-sm bg-slate-100 p-2 dark:bg-slate-800">{e.message}</pre>}
           {!!e.stack?.length && (
-            <pre className="max-h-48 overflow-auto rounded bg-slate-100 p-2 dark:bg-slate-800">
+            <pre className="max-h-48 overflow-auto rounded-sm bg-slate-100 p-2 dark:bg-slate-800">
               {e.stack.map((f) => `${f.in_app ? '→ ' : '  '}${f.module ?? ''} ${f.function ?? ''} (${f.file ?? '?'}:${f.line ?? 0})`).join('\n')}
             </pre>
           )}

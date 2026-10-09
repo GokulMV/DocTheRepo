@@ -30,8 +30,7 @@ jobs:
           go-version-file: go.mod
       - name: sqlc generated code is up to date
         run: |
-          go install github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1
-          sqlc generate
+          GOTOOLCHAIN=auto go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.31.1 generate
           git diff --exit-code -- internal/store/gen
       - name: lint
         run: make lint
@@ -78,14 +77,14 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
       - name: Trivy image scan (fixable HIGH/CRITICAL fail)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: dth-hub:ci
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           exit-code: "1"
       - name: image SBOM (CycloneDX)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: dth-hub:ci
           format: cyclonedx
@@ -155,7 +154,7 @@ jobs:
         env:
           CI: "1"
       - uses: grafana/setup-k6-action@v1
-      - name: k6 scripts parse (the runs themselves are manual: make perf-push, perf-qa, perf-signals)
+      - name: "k6 scripts parse (the runs themselves are manual: make perf-push, perf-qa, perf-signals)"
         run: k6 inspect test/perf/push-burst.js >/dev/null && k6 inspect test/perf/qa.js >/dev/null
       - name: report and hub log on failure
         if: failure()

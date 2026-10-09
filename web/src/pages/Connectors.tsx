@@ -214,7 +214,7 @@ function PickRepos({ connectorId, onDone }: { connectorId: string; onDone: () =>
           </div>
           <div className="grid max-h-72 gap-1 overflow-y-auto sm:grid-cols-2">
             {open.map((i) => (
-              <label key={i.full_name} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50 dark:hover:bg-white/[0.04]">
+              <label key={i.full_name} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50 dark:hover:bg-white/4">
                 <input type="checkbox" checked={sel.includes(i.full_name)} onChange={(e) => setSel((s) => (e.target.checked ? [...s, i.full_name] : s.filter((x) => x !== i.full_name)))} />
                 <span className="truncate">{i.full_name}</span>
               </label>

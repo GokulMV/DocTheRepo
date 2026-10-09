@@ -57,7 +57,7 @@ export const GUIDES: Record<string, Guide> = {
     <>Paste the link above as the {b('Webhook URL')}, turn on {b('Add Alert Description to Payload')}, and save.</>,
   ] },
   alertmanager: { secret: 'link', steps: [
-    <>Add a receiver to your Alertmanager configuration with the link above as its URL:<pre className="mt-1 overflow-x-auto rounded-md bg-slate-100 p-2 font-mono text-[12px] dark:bg-white/[0.06]">{'receivers:\n  - name: dth\n    webhook_configs:\n      - url: <the link above>'}</pre></>,
+    <>Add a receiver to your Alertmanager configuration with the link above as its URL:<pre className="mt-1 overflow-x-auto rounded-md bg-slate-100 p-2 font-mono text-[12px] dark:bg-white/6">{'receivers:\n  - name: dth\n    webhook_configs:\n      - url: <the link above>'}</pre></>,
     <>Route the alerts you want to the {b('dth')} receiver, then reload Alertmanager.</>,
   ] },
   generic: { secret: 'link', steps: [

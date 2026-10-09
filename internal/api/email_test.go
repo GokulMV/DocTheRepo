@@ -52,7 +52,7 @@ func TestInviteAndResetEmails(t *testing.T) {
 	assert.Contains(t, mail[1].Data, "https://hub.acme.com"+out["path"].(string))
 
 	// A refused message is reported, and the link is still there to pass on.
-	smtp.Reject = "mailbox unavailable"
+	smtp.SetReject("mailbox unavailable")
 	code, out, _ = owner.do("POST", "/api/v1/users/"+annID+"/invite", nil)
 	require.Equal(t, http.StatusCreated, code, out)
 	assert.Equal(t, false, out["emailed"])
@@ -60,7 +60,7 @@ func TestInviteAndResetEmails(t *testing.T) {
 	assert.NotEmpty(t, out["path"])
 
 	// Test email goes to the owner.
-	smtp.Reject = ""
+	smtp.SetReject("")
 	code, out, _ = owner.do("POST", "/api/v1/auth/email/test", nil)
 	require.Equal(t, http.StatusOK, code, out)
 	assert.Equal(t, "owner@acme.com", out["sent_to"])

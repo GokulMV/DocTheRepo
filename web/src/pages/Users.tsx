@@ -31,7 +31,7 @@ function LinkResult({ who, email, link }: { who: string; email: string; link: In
       ) : failed ? (
         <>
           <p className="font-medium" role="alert">The email could not be sent. Send this link to {who} yourself.</p>
-          <p className="break-words text-xs text-amber-800 dark:text-amber-200">{link.email_error}</p>
+          <p className="wrap-break-word text-xs text-amber-800 dark:text-amber-200">{link.email_error}</p>
         </>
       ) : (
         <p className="font-medium">Send this link to {who}.</p>
@@ -155,7 +155,7 @@ function RepoAccess({ user, onClose }: { user: User; onClose: () => void }) {
   const seesAll = atLeast(user.role, 'admin');
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()} title={`Repository access: ${user.email}`} description="Direct grants replace the user's previous ones. Access through identity-provider groups is kept.">
-      {seesAll && <p className="mb-2 rounded-lg bg-slate-100 p-2 text-xs text-slate-600 dark:bg-white/[0.05] dark:text-slate-400">As {user.role}, they already see every repository.</p>}
+      {seesAll && <p className="mb-2 rounded-lg bg-slate-100 p-2 text-xs text-slate-600 dark:bg-white/5 dark:text-slate-400">As {user.role}, they already see every repository.</p>}
       <div className="max-h-80 space-y-1 overflow-y-auto">
         {repos.data?.map((r) => (
           <label key={r.id} className="flex items-center gap-2 text-sm">
@@ -178,7 +178,7 @@ function SignInSummary({ sso, password, owner, mail }: { sso: boolean; password:
   const test = useMutation({ mutationFn: () => api.post<{ sent_to: string }>('/auth/email/test', {}) });
   const methods = [sso && 'single sign-on', password && 'email and password'].filter(Boolean).join(' or ');
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200/80 bg-white/70 p-4 text-sm shadow-card dark:border-white/[0.06] dark:bg-slate-900/40">
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-slate-200/80 bg-white/70 p-4 text-sm shadow-card dark:border-white/6 dark:bg-slate-900/40">
       <LogIn className="h-5 w-5 shrink-0 text-brand-500" aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="font-medium">{methods ? `People sign in with ${methods}.` : 'No sign-in method is on.'}</p>

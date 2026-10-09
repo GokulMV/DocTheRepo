@@ -60,11 +60,11 @@ export function CommandPalette({ open, onOpenChange, role }: { open: boolean; on
   return (
     <DialogPrimitive.Root open={open} onOpenChange={(o) => { onOpenChange(o); if (!o) setQ(''); }}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-sm" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-slate-950/40 backdrop-blur-xs" />
         <DialogPrimitive.Content className="fixed left-1/2 top-[12vh] z-50 w-[min(38rem,94vw)] -translate-x-1/2 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl dark:border-white/10 dark:bg-slate-900">
           <DialogPrimitive.Title className="sr-only">Search</DialogPrimitive.Title>
           <DialogPrimitive.Description className="sr-only">Find a page or an earlier question, or ask something new.</DialogPrimitive.Description>
-          <div className="flex items-center gap-3 border-b border-slate-200/80 px-4 dark:border-white/[0.06]">
+          <div className="flex items-center gap-3 border-b border-slate-200/80 px-4 dark:border-white/6">
             <Search className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
             <input
               autoFocus
@@ -73,7 +73,7 @@ export function CommandPalette({ open, onOpenChange, role }: { open: boolean; on
               value={q}
               onChange={(e) => { setQ(e.target.value); setActive(0); }}
               onKeyDown={onKey}
-              className="h-12 w-full bg-transparent text-sm outline-none placeholder:text-slate-400"
+              className="h-12 w-full bg-transparent text-sm outline-hidden placeholder:text-slate-400"
             />
           </div>
           <ul role="listbox" aria-label="Results" className="max-h-[50vh] overflow-y-auto p-2">
@@ -84,7 +84,7 @@ export function CommandPalette({ open, onOpenChange, role }: { open: boolean; on
                   type="button"
                   onMouseEnter={() => setActive(i)}
                   onClick={() => go(e)}
-                  className={cx('flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm', i === active ? 'bg-slate-100 dark:bg-white/[0.06]' : '')}
+                  className={cx('flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm', i === active ? 'bg-slate-100 dark:bg-white/6' : '')}
                 >
                   <e.icon className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
                   <span className="min-w-0 flex-1 truncate">{e.label}</span>

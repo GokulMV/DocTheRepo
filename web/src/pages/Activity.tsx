@@ -17,7 +17,7 @@ function JobDetail({ job, onClose }: { job: Job; onClose: () => void }) {
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()} title={`${jobLabel(job.type)} · ${sentence(job.status)}`} description={`Job ${job.job_id} · correlation ${job.correlation_id}`}>
       {job.error && <p className="mb-2 text-sm text-red-700">{job.error}</p>}
-      <pre className="max-h-96 overflow-auto rounded bg-slate-100 p-2 text-xs dark:bg-slate-800">{JSON.stringify(job.result ?? job.payload, null, 2)}</pre>
+      <pre className="max-h-96 overflow-auto rounded-sm bg-slate-100 p-2 text-xs dark:bg-slate-800">{JSON.stringify(job.result ?? job.payload, null, 2)}</pre>
       {atLeast(me.data?.role, 'admin') && retryable && (
         <div className="mt-3 flex gap-2">
           {job.status === 'spend_blocked' ? (

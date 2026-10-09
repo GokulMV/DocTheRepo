@@ -9,12 +9,12 @@ export function JobProgressBar({ job }: { job: Job }) {
   const pct = Math.min(100, Math.round((p.done / p.total) * 100));
   const what = p.stage === 'writing' ? `${p.total} file${p.total === 1 ? '' : 's'}` : `${p.done} of ${p.total} files`;
   return (
-    <div className="mt-1 min-w-[10rem]" aria-label={`${STAGES[p.stage] ?? p.stage}: ${what}`}>
+    <div className="mt-1 min-w-40" aria-label={`${STAGES[p.stage] ?? p.stage}: ${what}`}>
       <div className="flex justify-between gap-2 text-[11px] text-slate-500">
         <span>{STAGES[p.stage] ?? p.stage} · {what}</span>
         {p.stage !== 'writing' && <span className="tabular-nums">{pct}%</span>}
       </div>
-      <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-white/[0.08]">
+      <div className="mt-0.5 h-1.5 overflow-hidden rounded-full bg-slate-200 dark:bg-white/8">
         <div className={p.stage === 'writing' ? 'h-full w-full animate-pulse rounded-full bg-brand-500' : 'h-full rounded-full bg-brand-500 transition-all'} style={p.stage === 'writing' ? undefined : { width: `${pct}%` }} />
       </div>
     </div>

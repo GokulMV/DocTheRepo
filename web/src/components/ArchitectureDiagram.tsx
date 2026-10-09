@@ -140,11 +140,11 @@ export function ArchitectureDiagram({ nodes, links, selected, onSelect, hidden =
 
   if (nodes.length === 0) return null;
   return (
-    <div className="relative overflow-x-auto rounded-xl border border-slate-200/80 bg-[radial-gradient(circle,rgba(148,163,184,0.18)_1px,transparent_1px)] [background-size:18px_18px] dark:border-white/[0.06]">
-      <div className="absolute right-2 top-2 z-10 flex rounded-md bg-white/90 p-0.5 text-[11px] shadow-sm ring-1 ring-slate-200 dark:bg-slate-900/90 dark:ring-white/10" role="group" aria-label="Zoom">
+    <div className="relative overflow-x-auto rounded-xl border border-slate-200/80 bg-[radial-gradient(circle,rgba(148,163,184,0.18)_1px,transparent_1px)] bg-size-[18px_18px] dark:border-white/6">
+      <div className="absolute right-2 top-2 z-10 flex rounded-md bg-white/90 p-0.5 text-[11px] shadow-xs ring-1 ring-slate-200 dark:bg-slate-900/90 dark:ring-white/10" role="group" aria-label="Zoom">
         {([['Fit', true], ['100%', false]] as const).map(([label, v]) => (
           <button key={label} type="button" aria-pressed={fit === v} onClick={() => setFit(v)}
-            className={cx('rounded px-2 py-0.5 font-medium', fit === v ? 'bg-slate-900 text-white dark:bg-white/15' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200')}>
+            className={cx('rounded-sm px-2 py-0.5 font-medium', fit === v ? 'bg-slate-900 text-white dark:bg-white/15' : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200')}>
             {label}
           </button>
         ))}

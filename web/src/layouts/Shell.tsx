@@ -34,13 +34,13 @@ export function ThemeSwitch({ compact = false }: { compact?: boolean }) {
     const next = THEMES[(i + 1) % THEMES.length];
     return (
       <button type="button" onClick={() => setTheme(next.value)} title={`${cur.label} theme (switch to ${next.label.toLowerCase()})`} aria-label={`${cur.label} theme`}
-        className="mx-auto grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-white/[0.06] dark:hover:text-slate-200">
+        className="mx-auto grid h-8 w-8 place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-white/6 dark:hover:text-slate-200">
         <cur.icon className="h-4 w-4" aria-hidden />
       </button>
     );
   }
   return (
-    <div role="radiogroup" aria-label="Theme" className="flex rounded-lg bg-slate-100 p-0.5 dark:bg-white/[0.05]">
+    <div role="radiogroup" aria-label="Theme" className="flex rounded-lg bg-slate-100 p-0.5 dark:bg-white/5">
       {THEMES.map((t) => (
         <button
           key={t.value}
@@ -53,7 +53,7 @@ export function ThemeSwitch({ compact = false }: { compact?: boolean }) {
           className={cx(
             'flex flex-1 items-center justify-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium transition-colors',
             choice === t.value
-              ? 'bg-white text-slate-900 shadow-sm dark:bg-white/[0.12] dark:text-white'
+              ? 'bg-white text-slate-900 shadow-xs dark:bg-white/12 dark:text-white'
               : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200',
           )}
         >
@@ -103,8 +103,8 @@ function useCollapsed(): [boolean, () => void] {
 }
 
 const rowBase = 'group relative flex w-full items-center rounded-lg text-sm transition-colors';
-const rowIdle = 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/[0.05] dark:hover:text-slate-100';
-const rowActive = 'bg-slate-100 font-medium text-slate-900 dark:bg-white/[0.08] dark:text-white';
+const rowIdle = 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-slate-100';
+const rowActive = 'bg-slate-100 font-medium text-slate-900 dark:bg-white/8 dark:text-white';
 
 /** SideLink is one sidebar row: icon and label (icon with a tooltip when collapsed). It stays active on every
  * page of its section. */
@@ -187,7 +187,7 @@ function Recents({ current }: { current?: string }) {
               aria-label={`Delete “${t.title}”`}
               title="Delete"
               onClick={() => remove(t.id, t.title)}
-              className="absolute right-1.5 top-1/2 hidden -translate-y-1/2 rounded p-1 text-slate-400 hover:bg-slate-200 hover:text-red-600 group-hover/row:block dark:hover:bg-white/10"
+              className="absolute right-1.5 top-1/2 hidden -translate-y-1/2 rounded-sm p-1 text-slate-400 hover:bg-slate-200 hover:text-red-600 group-hover/row:block dark:hover:bg-white/10"
             >
               <Trash2 className="h-3.5 w-3.5" aria-hidden />
             </button>
@@ -241,7 +241,7 @@ export function Shell() {
     <div className="flex min-h-screen">
       <aside
         className={cx(
-          'sticky top-0 flex h-screen shrink-0 flex-col border-r border-slate-200/80 bg-slate-50/90 backdrop-blur transition-[width] duration-200 dark:border-white/[0.06] dark:bg-slate-950/80',
+          'sticky top-0 flex h-screen shrink-0 flex-col border-r border-slate-200/80 bg-slate-50/90 backdrop-blur-sm transition-[width] duration-200 dark:border-white/6 dark:bg-slate-950/80',
           collapsed ? 'w-[64px]' : 'w-[272px]',
         )}
         data-collapsed={collapsed || undefined}
@@ -258,7 +258,7 @@ export function Shell() {
             onClick={toggle}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             title={`${collapsed ? 'Expand' : 'Collapse'} sidebar (Ctrl/⌘+B)`}
-            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-white/[0.06] dark:hover:text-slate-200"
+            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-white/6 dark:hover:text-slate-200"
           >
             {collapsed ? <PanelLeftOpen className="h-[18px] w-[18px]" aria-hidden /> : <PanelLeftClose className="h-[18px] w-[18px]" aria-hidden />}
           </button>
@@ -270,7 +270,7 @@ export function Shell() {
             aria-label="Search"
             title={collapsed ? 'Search (Ctrl/⌘+K)' : undefined}
             className={cx(
-              'flex w-full items-center rounded-lg border border-slate-200 bg-white text-sm text-slate-400 hover:border-slate-300 dark:border-white/10 dark:bg-white/[0.03] dark:hover:border-white/20',
+              'flex w-full items-center rounded-lg border border-slate-200 bg-white text-sm text-slate-400 hover:border-slate-300 dark:border-white/10 dark:bg-white/3 dark:hover:border-white/20',
               collapsed ? 'h-9 justify-center' : 'gap-2.5 px-3 py-2',
             )}
           >
@@ -278,7 +278,7 @@ export function Shell() {
             {!collapsed && (
               <>
                 <span className="flex-1 text-left">Search</span>
-                <kbd className="rounded border border-slate-200 px-1.5 text-[10px] font-medium text-slate-400 dark:border-white/10">⌘K</kbd>
+                <kbd className="rounded-sm border border-slate-200 px-1.5 text-[10px] font-medium text-slate-400 dark:border-white/10">⌘K</kbd>
               </>
             )}
           </button>
@@ -292,7 +292,7 @@ export function Shell() {
               aria-label={collapsed ? 'New question' : undefined}
               className={({ isActive }) => cx(rowBase, collapsed ? 'h-9 justify-center' : 'gap-3 px-3 py-2', isActive ? rowActive : rowIdle)}
             >
-              <span className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full bg-brand-600 text-white shadow-sm shadow-brand-600/30">
+              <span className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-full bg-brand-600 text-white shadow-xs shadow-brand-600/30">
                 <newQuestion.icon className="h-3.5 w-3.5" aria-hidden />
               </span>
               {!collapsed && <span>New question</span>}
@@ -303,11 +303,11 @@ export function Shell() {
           </div>
           {!collapsed && <Recents current={threadId} />}
         </nav>
-        <div className={cx('border-t border-slate-200/80 pt-3 dark:border-white/[0.06]', collapsed ? 'px-2' : 'px-4')}>
+        <div className={cx('border-t border-slate-200/80 pt-3 dark:border-white/6', collapsed ? 'px-2' : 'px-4')}>
           <ThemeSwitch compact={collapsed} />
         </div>
         <div className={cx('flex items-center py-3', collapsed ? 'flex-col gap-2 px-2' : 'gap-3 px-4')}>
-          <NavLink to="/account" title={`${who} (${user.role}): your account`} className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-gradient-to-br from-brand-500 to-violet-600 text-xs font-semibold text-white">
+          <NavLink to="/account" title={`${who} (${user.role}): your account`} className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-linear-to-br from-brand-500 to-violet-600 text-xs font-semibold text-white">
             {initials(who)}
           </NavLink>
           {!collapsed && (
@@ -319,7 +319,7 @@ export function Shell() {
           <button
             type="button"
             onClick={logout}
-            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-white/[0.06] dark:hover:text-slate-200"
+            className="rounded-md p-1.5 text-slate-400 hover:bg-slate-200/70 hover:text-slate-700 dark:hover:bg-white/6 dark:hover:text-slate-200"
             aria-label="Sign out"
             title="Sign out"
           >

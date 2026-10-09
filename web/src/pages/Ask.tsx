@@ -45,7 +45,7 @@ const NOT_FOUND = 'I could not find this in the connected sources.';
 /** NotFoundTips says what to try when no source answered the question. */
 function NotFoundTips() {
   return (
-    <div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-600 dark:bg-white/[0.04] dark:text-slate-400">
+    <div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs text-slate-600 dark:bg-white/4 dark:text-slate-400">
       <p className="font-medium text-slate-700 dark:text-slate-300">Nothing in your sources answered this. Things that help:</p>
       <ul className="mt-1 list-disc space-y-0.5 pl-4">
         <li>Name what you mean: a file, function, endpoint, service or error message.</li>
@@ -100,11 +100,11 @@ function Feedback({ m }: { m: Message }) {
     <div className="mt-2 flex items-center gap-1 text-xs text-slate-500">
       <span className="mr-1">{value ? 'Thanks for the feedback' : 'Was this helpful?'}</span>
       <button type="button" aria-label="Helpful" aria-pressed={value === 'up'} title="Helpful"
-        className={cx('rounded-md p-1.5 hover:bg-slate-100 dark:hover:bg-white/[0.06]', value === 'up' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400')} onClick={() => send('up')}>
+        className={cx('rounded-md p-1.5 hover:bg-slate-100 dark:hover:bg-white/6', value === 'up' ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-400')} onClick={() => send('up')}>
         <ThumbsUp className={cx('h-3.5 w-3.5', value === 'up' && 'fill-current')} aria-hidden />
       </button>
       <button type="button" aria-label="Not helpful" aria-pressed={value === 'down'} title="Not helpful"
-        className={cx('rounded-md p-1.5 hover:bg-slate-100 dark:hover:bg-white/[0.06]', value === 'down' ? 'text-red-600 dark:text-red-400' : 'text-slate-400')} onClick={() => send('down')}>
+        className={cx('rounded-md p-1.5 hover:bg-slate-100 dark:hover:bg-white/6', value === 'down' ? 'text-red-600 dark:text-red-400' : 'text-slate-400')} onClick={() => send('down')}>
         <ThumbsDown className={cx('h-3.5 w-3.5', value === 'down' && 'fill-current')} aria-hidden />
       </button>
       {m.confidence && (
@@ -129,12 +129,12 @@ const STEP_VERB: Record<AgentStatus['action'], string> = { search: 'Searched for
 /** AgentSteps shows how Ask looked further when the first search found too little. */
 function AgentSteps({ steps, done }: { steps: AgentStatus[]; done: boolean }) {
   return (
-    <div className="mb-3 rounded-lg bg-slate-50 p-2.5 text-xs text-slate-600 dark:bg-white/[0.03] dark:text-slate-400">
+    <div className="mb-3 rounded-lg bg-slate-50 p-2.5 text-xs text-slate-600 dark:bg-white/3 dark:text-slate-400">
       <p className="font-medium text-slate-700 dark:text-slate-300">The first search found little, so Ask is looking further{done ? '' : '…'}</p>
       <ol className="mt-1 space-y-0.5">
         {steps.map((s) => (
           <li key={s.step} title={s.reason}>
-            <span className="text-slate-400">{s.step}.</span> {STEP_VERB[s.action] ?? s.action} <code className="rounded bg-white px-1 dark:bg-white/[0.06]">{s.input}</code>
+            <span className="text-slate-400">{s.step}.</span> {STEP_VERB[s.action] ?? s.action} <code className="rounded-sm bg-white px-1 dark:bg-white/6">{s.input}</code>
             {s.reason && <span className="text-slate-400"> · {s.reason}</span>}
           </li>
         ))}
@@ -167,7 +167,7 @@ function ScopePicker({ repos, repoIds, setRepoIds, include, setInclude }: {
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/[0.04]"
+        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 dark:border-white/10 dark:text-slate-300 dark:hover:bg-white/4"
       >
         <FolderGit2 className="h-3.5 w-3.5" aria-hidden />
         {label}
@@ -190,12 +190,12 @@ function ScopePicker({ repos, repoIds, setRepoIds, include, setInclude }: {
             </div>
             <p className="px-2 pb-1 pt-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">Repositories</p>
             <div className="max-h-56 overflow-y-auto">
-              <button type="button" onClick={() => setRepoIds([])} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-100 dark:hover:bg-white/[0.05]">
+              <button type="button" onClick={() => setRepoIds([])} className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-100 dark:hover:bg-white/5">
                 <Check className={cx('h-3.5 w-3.5', repoIds.length ? 'invisible' : 'text-brand-600')} aria-hidden />All you can read
               </button>
               {repos.map((r) => (
                 <button key={r.id} type="button" role="menuitemcheckbox" aria-checked={repoIds.includes(r.id)} onClick={() => setRepoIds(toggle(repoIds, r.id))}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-100 dark:hover:bg-white/[0.05]">
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-slate-100 dark:hover:bg-white/5">
                   <Check className={cx('h-3.5 w-3.5', repoIds.includes(r.id) ? 'text-brand-600' : 'invisible')} aria-hidden />
                   <span className="truncate">{r.full_name}</span>
                 </button>
@@ -288,7 +288,7 @@ export default function Ask() {
   const messages = threadId ? thread.data?.messages ?? [] : [];
   const empty = !threadId && !pending;
   const composer = (
-    <form onSubmit={ask} className="rounded-2xl border border-slate-200/80 bg-white p-2 shadow-card focus-within:border-brand-300 dark:border-white/[0.08] dark:bg-slate-900/80 dark:focus-within:border-brand-500/40">
+    <form onSubmit={ask} className="rounded-2xl border border-slate-200/80 bg-white p-2 shadow-card focus-within:border-brand-300 dark:border-white/8 dark:bg-slate-900/80 dark:focus-within:border-brand-500/40">
       <textarea
         aria-label="Question"
         rows={empty ? 3 : 2}
@@ -299,7 +299,7 @@ export default function Ask() {
         onKeyDown={(e) => {
           if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) ask(e as unknown as FormEvent);
         }}
-        className="block w-full resize-none bg-transparent px-2 py-1.5 text-[15px] outline-none placeholder:text-slate-400"
+        className="block w-full resize-none bg-transparent px-2 py-1.5 text-[15px] outline-hidden placeholder:text-slate-400"
       />
       <div className="flex items-center gap-2 px-1 pt-1">
         <ScopePicker repos={repos.data ?? []} repoIds={repoIds} setRepoIds={setRepoIds} include={include} setInclude={setInclude} />
@@ -317,7 +317,7 @@ export default function Ask() {
           <div className="mx-auto max-w-3xl space-y-4 px-1 pb-4">
             {empty && (
               <div className="pt-[8vh] text-center">
-                <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-brand-500 to-violet-600 text-white shadow-lg shadow-brand-500/30">
+                <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-linear-to-br from-brand-500 to-violet-600 text-white shadow-lg shadow-brand-500/30">
                   <Sparkles className="h-7 w-7" aria-hidden />
                 </span>
                 <h1 className="mt-5 text-2xl font-semibold tracking-tight">Ask about your systems</h1>

@@ -120,7 +120,7 @@ function NewScan({ repoId, onStarted }: { repoId: string; onStarted: () => void 
           ))}
         </fieldset>
         {plan.data && (
-          <div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs dark:bg-white/[0.04]" role="status">
+          <div className="mt-3 rounded-lg bg-slate-50 p-3 text-xs dark:bg-white/4" role="status">
             <p className="font-medium text-slate-700 dark:text-slate-200">
               Reads {plan.data.files_read} files · about {Math.round(plan.data.estimated_tokens / 1000)}k tokens on the security route
               {plan.data.cached?.length ? ` · ${plan.data.cached.length} module(s) reuse an earlier result (unchanged code)` : ''}
@@ -171,14 +171,14 @@ function FindingRow({ f, selected, onSelect }: { f: Finding; selected: boolean; 
       </tr>
       {open && (
         <tr>
-          <td colSpan={6} className="bg-slate-50 px-4 py-3 text-sm dark:bg-white/[0.03]">
+          <td colSpan={6} className="bg-slate-50 px-4 py-3 text-sm dark:bg-white/3">
             {f.surface && <p><b className="font-medium">Where:</b> {f.surface} ({f.file} lines {f.line_start}–{f.line_end})</p>}
             {f.repro?.length > 0 && (
               <div className="mt-2"><b className="font-medium">How it is triggered</b>
                 <ol className="ml-5 list-decimal">{f.repro.map((r, i) => <li key={i}>{r}</li>)}</ol>
               </div>
             )}
-            <div className="mt-2"><b className="font-medium">Evidence</b><pre className="mt-1 whitespace-pre-wrap break-words rounded bg-white p-2 text-xs dark:bg-slate-900">{f.evidence}</pre></div>
+            <div className="mt-2"><b className="font-medium">Evidence</b><pre className="mt-1 whitespace-pre-wrap wrap-break-word rounded-sm bg-white p-2 text-xs dark:bg-slate-900">{f.evidence}</pre></div>
             {f.fix_error && <p className="mt-2 text-amber-700 dark:text-amber-300"><b className="font-medium">Why it was not fixed:</b> {f.fix_error}</p>}
             {f.fix?.risk && <p className="mt-2"><b className="font-medium">Fix risk:</b> {f.fix.risk}</p>}
           </td>

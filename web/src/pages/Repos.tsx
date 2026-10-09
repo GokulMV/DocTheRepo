@@ -135,7 +135,7 @@ function DryRun({ repo, onClose }: { repo: Repo; onClose: () => void }) {
       {res && (
         <div className="mt-3 space-y-2 text-sm">
           <p><Badge>{res.status}</Badge> {res.message}</p>
-          <pre className="max-h-80 overflow-auto rounded bg-slate-100 p-2 text-xs dark:bg-slate-800">{JSON.stringify(res.result, null, 2)}</pre>
+          <pre className="max-h-80 overflow-auto rounded-sm bg-slate-100 p-2 text-xs dark:bg-slate-800">{JSON.stringify(res.result, null, 2)}</pre>
         </div>
       )}
     </Dialog>

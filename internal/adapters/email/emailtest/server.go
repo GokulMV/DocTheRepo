@@ -21,15 +21,35 @@ type Mail struct {
 // Server is a running fake SMTP server.
 type Server struct {
 	Addr string
-	// User and Pass, when set, are required (AUTH PLAIN; the server does not offer STARTTLS, so
-	// clients connect with ?starttls=off).
-	User, Pass string
-	// Reject, when set, makes RCPT TO fail with this text.
-	Reject string
 
-	l    net.Listener
-	mu   sync.Mutex
-	mail []Mail
+	l  net.Listener
+	mu sync.Mutex
+	// user and pass, when set, are required (AUTH PLAIN; the server does not offer STARTTLS, so
+	// clients connect with ?starttls=off).
+	user, pass string
+	// reject, when set, makes RCPT TO fail with this text.
+	reject string
+	mail   []Mail
+}
+
+// SetAuth requires AUTH PLAIN with these credentials (empty user: no sign-in).
+func (s *Server) SetAuth(user, pass string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.user, s.pass = user, pass
+}
+
+// SetReject makes RCPT TO fail with this text (empty: accept).
+func (s *Server) SetReject(text string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.reject = text
+}
+
+func (s *Server) conf() (user, pass, reject string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.user, s.pass, s.reject
 }
 
 // Start runs a server until the test ends.
@@ -56,8 +76,8 @@ func Start(t testing.TB) *Server {
 // URL is the smtp:// URL to reach the server.
 func (s *Server) URL() string {
 	auth := ""
-	if s.User != "" {
-		auth = s.User + ":" + s.Pass + "@"
+	if user, pass, _ := s.conf(); user != "" {
+		auth = user + ":" + pass + "@"
 	}
 	return "smtp://" + auth + s.Addr + "?starttls=off"
 }
@@ -75,7 +95,8 @@ func (s *Server) serve(c net.Conn) {
 	say := func(line string) { _, _ = c.Write([]byte(line + "\r\n")) }
 	say("220 emailtest ready")
 	var cur Mail
-	authed := s.User == ""
+	user, pass, _ := s.conf()
+	authed := user == ""
 	for {
 		line, err := r.ReadString('\n')
 		if err != nil {
@@ -91,7 +112,7 @@ func (s *Server) serve(c net.Conn) {
 		case strings.HasPrefix(cmd, "AUTH PLAIN"):
 			b, _ := base64.StdEncoding.DecodeString(strings.TrimSpace(line[len("AUTH PLAIN"):]))
 			parts := strings.Split(string(b), "\x00")
-			if len(parts) == 3 && parts[1] == s.User && parts[2] == s.Pass {
+			if len(parts) == 3 && parts[1] == user && parts[2] == pass {
 				authed, cur.User = true, parts[1]
 				say("235 ok")
 			} else {
@@ -105,8 +126,8 @@ func (s *Server) serve(c net.Conn) {
 			cur.From = strings.Trim(strings.Fields(line[len("MAIL FROM:"):] + " ")[0], "<>")
 			say("250 ok")
 		case strings.HasPrefix(cmd, "RCPT TO:"):
-			if s.Reject != "" {
-				say("550 " + s.Reject)
+			if _, _, reject := s.conf(); reject != "" {
+				say("550 " + reject)
 				continue
 			}
 			cur.To = strings.Trim(line[len("RCPT TO:"):], "<> ")
