@@ -1,7 +1,7 @@
 <!-- dth:generated source="web/src/pages/Connectors.tsx" — edit only inside dth:human blocks -->
 # `web/src/pages/Connectors.tsx`
 
-Manages UI for connecting external services (GitHub, GitLab, Confluence, monitoring tools) to the Hub.
+Page component for displaying and managing integrations that feed data into the Hub from code repositories, documentation, error tracking, and MCP tools.
 
 <!-- dth:chunk c633fd2cfe165525 -->
 ## `AddGit`
@@ -11,7 +11,7 @@ Modal dialog for manually connecting GitHub or GitLab repositories. Supports Git
 <!-- dth:chunk fb0750ac2bd030ad -->
 ## `Connectors`
 
-Main connectors page displaying three groups: Code repositories (GitHub/GitLab), Team documents (Confluence, Jira, Notion, uploads), and Errors/alerts (Sentry, Datadog, etc.). Manages connection flows, sync operations, enable/disable toggling, deletion with GitHub App uninstall confirmation, and displays setup status cards. The nested `rowActions` function provides per-connector buttons: sync, test, enable/disable, and remove.
+Main page for managing all integrations: code repositories (GitHub/GitLab), team documentation (Confluence, Jira, Notion), error/alert tools (Sentry, Datadog, etc.), and MCP integrations for live lookups. Handles connector lifecycle (create, delete, toggle enable/disable, sync), displays GitHub OAuth flow results, webhook setup instructions, and knowledge base sync status. Organizes connectors into four groups with add buttons and action rows (sync, test, disable/remove), filtering popular alert tools by default with a toggle to show all.
 
 <!-- dth:chunk 8ccb0226705f9f4d -->
 ## `Tile`

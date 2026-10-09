@@ -1,11 +1,9 @@
 <!-- dth:generated source="web/src/components/CommandPalette.tsx" — edit only inside dth:human blocks -->
 # `web/src/components/CommandPalette.tsx`
 
-Provides a keyboard-driven command palette component for navigating pages and searching questions across the application.
+A command palette React component for quick navigation and search across pages and previous questions, with support for creating new questions.
 
 <!-- dth:chunk 4bb76426f2b6b2f5 -->
 ## `CommandPalette`
 
-Renders a keyboard-accessible command palette (Ctrl/⌘+K) for quick navigation and question search. It displays filterable pages from the navigation structure and recent questions from threads, with an option to create a new question from the search text. 
-
-Accepts `open` (visibility state), `onOpenChange` (state callback), and `role` (for permission-based filtering). Filters entries by role using `atLeast()`, maintains keyboard navigation with arrow keys and Enter to select, and clears the search on close. The palette shows matching pages and up to 5-8 questions, prioritizes a "new question" action when searching, and indicates the selected entry with highlighting and an Enter icon.
+A command palette component (triggered with Ctrl/⌘+K) that provides quick navigation and search. It filters navigation pages and previous questions by role and feature flags, displays matching results with keyboard navigation (arrow keys, Enter), and allows users to ask new questions by typing. Results include an "Ask" option prepended when a search query exists. The component uses memoization to recompute entries only when the query, role, threads, or feature flags change. Selection is managed with arrow keys (up/down to navigate, Enter to select), mouse hover, or direct click. The dialog clears the input when closed and navigates to the selected destination.
