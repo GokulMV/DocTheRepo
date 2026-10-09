@@ -1,7 +1,7 @@
 <!-- dth:generated source="internal/core/repodocs/generator.go" — edit only inside dth:human blocks -->
 # `internal/core/repodocs/generator.go`
 
-Generator orchestrates the creation and updating of repository documentation by managing document specs, checking inputs for changes, calling an LLM to produce markdown with citations and confidence scores, and storing the results.
+Generator orchestrates LLM-powered creation and updating of repository documentation, managing costs, batching, and API routing.
 
 <!-- dth:chunk 547f8c5b25080877 -->
 ## `Store`
@@ -11,7 +11,7 @@ Generator orchestrates the creation and updating of repository documentation by 
 <!-- dth:chunk 59b0706cb3d8ce7b -->
 ## `Generator`
 
-**Generator** orchestrates repository documentation creation. It holds the LLM gateway, document store, and configuration for cost pricing, parallelism, and rewriting thresholds. The optional Cost function integrates with spend guards; Parallel controls concurrency (default 3); Budget sets per-document input token limits; Rewrite is the source-change fraction triggering rewrites (default 0.3).
+Coordinates writing repository documentation through an LLM. `GW` routes LLM calls; `Store` persists results. `Cost` and `CostUsage` are optional functions for pricing calls (the latter handles prompt-cache token rates separately). `Parallel` controls document concurrency (default 3), `Budget` limits input tokens per document (default 60000), `Rewrite` is the source-change threshold to rewrite unchanged structure (default 0.3), `Types` filters which document types to generate, and `Now` provides timestamps.
 
 <!-- dth:chunk 0af577e1f0c5f6ce -->
 ## `RunOptions`
@@ -81,7 +81,7 @@ Returns all repository file paths as sources for a document spec. Used for chang
 <!-- dth:chunk a93d119d693eba18 -->
 ## `Generator.write`
 
-**write** generates one document via LLM. It builds the prompt from the spec, calls the model to produce JSON (at_a_glance, sections, gaps), runs integrity checks with repair attempts, scores each section's grounding and names, and calls support() to judge whether citations align with code. Returns the document with status, tokens, cost, and confidence; errors leave status as "failed".
+Generates a single document by prompting the LLM with collected source material, validating the response with checks (one repair attempt), and scoring confidence. Creates a `Doc` with metadata, file hashes, and token/cost tracking. Handles architecture diagrams by prepending a mermaid graph. Returns the completed document or an error if the LLM call failed.
 
 <!-- dth:chunk 1ba493c81d28219e -->
 ## `prompt`
@@ -116,7 +116,7 @@ Extracts a code snippet around a citation. It finds the symbol containing the ci
 <!-- dth:chunk 26b81c56e6984679 -->
 ## `Generator.writeCards`
 
-**writeCards** generates file summary cards for files whose structure changed, in batches. It detects stale cards by comparing shapes, skips test files, routes to a fast model if available, batches up to 24k tokens or 12 files per batch, and stores results. For dry runs, it estimates token counts. Returns card count written and any error (stops on spend block).
+Generates brief descriptions (cards) for files whose code structure changed, processing them in batches up to 24KB or 12 files each. Uses a fast model if available, otherwise falls back to the standard model. Runs up to 4 batches concurrently with spend-guard checks and progress callbacks. Stores results and updates the cards map; returns count of successfully written cards.
 
 <!-- dth:chunk c41905ae6e3a877b -->
 ## `cardInputSize`
@@ -126,12 +126,22 @@ Estimates input tokens for a file's card generation: base 200 plus signature and
 <!-- dth:chunk 80300d6d1b4da024 -->
 ## `Generator.cardBatch`
 
-**cardBatch** calls the LLM to generate cards (file purpose, symbol notes) for a batch of files. It formats code with symbols, validates that all files got cards, and attaches current shapes. Returns the cards, token usage, and any error.
+Produces `Card` objects for a batch of files by sending their symbols and code excerpts to the LLM. Truncates symbol bodies to 1200 characters and respects a per-file budget to stay within token limits. Validates that all files received cards and filters out any unexpected paths from the response. Returns cards with shape matching the input files.
 
 <!-- dth:chunk 9d025b818b5c1807 -->
 ## `MarshalSections`
 
 MarshalSections is used by stores that keep sections as JSON.
+
+<!-- dth:chunk 9aecf74849f2ba37 -->
+## `inputTokens`
+
+inputTokens is all the input a call was billed for: uncached, cache reads and cache writes.
+
+<!-- dth:chunk e23d72d889f5bf77 -->
+## `Generator.usageCost`
+
+Calculates the cost of an LLM API call, preferring detailed cache-aware rates when available. If `CostUsage` is set, it uses all token types including cache reads/writes; otherwise falls back to `Cost` with just input/output tokens. Returns 0 if neither cost function is configured.
 
 <!-- dth:chunk 2fe320d66c9bf259 -->
 ## `__module__`
