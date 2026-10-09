@@ -1,7 +1,7 @@
 <!-- dth:generated source="internal/core/repodocs/system.go" — edit only inside dth:human blocks -->
 # `internal/core/repodocs/system.go`
 
-Defines system architecture documentation generation, including a flowchart diagram showing repository interactions and the specification for comprehensive system documentation sections.
+Generates system architecture documentation for repositories by orchestrating LLM-based generation, validation, and scoring.
 
 <!-- dth:chunk 1e21dba88d3c914d -->
 ## `SystemRepo`
@@ -36,7 +36,7 @@ Creates a synthetic Facts structure for system-level validation, with repository
 <!-- dth:chunk 3ef17ceee9c7d7a1 -->
 ## `Generator.WriteSystem`
 
-Generates the system architecture document by composing repository overviews and architecture descriptions with a Mermaid diagram, sending the material to an LLM with a validation loop to produce sections on the map, interactions, flows, contracts, coupling, and rules. Returns the completed document with usage metrics and status.
+Generates system architecture documentation by querying an LLM with repository overviews, inter-repository links, and a Mermaid diagram. Constructs a prompt containing repository facts, citation guidelines, and a pre-drawn diagram (which the LLM explains rather than redraws), then sends it to the LLM via ChatJSON with schema validation. On success, populates the Doc with generated sections ("at a glance", gaps, and keyed sections like "interactions"), token counts, model info, and cost; on LLM error, returns the error but still records attempt details. Uses a `check()` callback for validation and schema repair. Preserves the ID if updating a previous Doc.
 
 <!-- dth:chunk b782ac472674e15e -->
 ## `__module__`
