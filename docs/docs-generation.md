@@ -174,6 +174,14 @@ The tests use a stub model, so a run on your own provider is the first real chec
 - **Sections off length:** more than 1.6× or under 0.4× the target words.
 - **Every document:** status, confidence, tokens, cost, and whether it was repaired.
 
+**Or run it in GitHub Actions** with the manual **docs-real-run** workflow (Actions → docs-real-run → Run workflow):
+
+1. Add your provider key as the repository secret `DOCS_RUN_API_KEY` (Settings → Secrets and variables → Actions). It is not needed for `github_models`, which uses the workflow's own token.
+2. Choose the provider, the model and a cap. The run stops spending at the cap. A model the Hub has no price for needs `price_in` and `price_out` (USD per million tokens), or the run refuses to start.
+3. The report appears in the run summary and the log, and the whole `docs-run` folder is an artifact: the report with its text, the JSON and the hub log.
+
+The workflow runs `scripts/docs-real-run.sh`, which also works on any machine with PostgreSQL. In a public repository, workflow logs are public: the report (never the key) is visible.
+
 Without `--text`, the report holds no document prose. It still names files and identifiers from the code (in the checks' findings), so read it before sharing it for a private repository.
 
 ## Leaving files out: `.dthignore`

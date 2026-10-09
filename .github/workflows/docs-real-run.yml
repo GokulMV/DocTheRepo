@@ -1,0 +1,101 @@
+name: docs-real-run
+# Writes this repository's documents with a real model and prints the run report (manual only). It
+# spends real money: every run is capped by cap_usd. The provider key comes from the DOCS_RUN_API_KEY
+# repository secret (not needed for github_models, which uses this workflow's token).
+on:
+  workflow_dispatch:
+    inputs:
+      provider_kind:
+        description: "Provider kind (anthropic, openai, openai_compat, github_models, ...)"
+        default: anthropic
+        required: true
+      model:
+        description: "Model for the documents"
+        default: claude-sonnet-5-5
+        required: true
+      fast_model:
+        description: "Model for short code docs (blank: the same model)"
+        default: ""
+      base_url:
+        description: "Provider base URL (openai_compat only)"
+        default: ""
+      repo:
+        description: "Repository to document (must be readable with this workflow's token)"
+        default: GokulMV/DocTheRepo
+      cap_usd:
+        description: "Hard monthly cap for the run, in USD"
+        default: "3"
+        required: true
+      price_in:
+        description: "Input price, USD per million tokens (needed only for models the hub has no price for)"
+        default: ""
+      price_out:
+        description: "Output price, USD per million tokens (as above)"
+        default: ""
+
+permissions:
+  contents: read
+  models: read
+
+concurrency:
+  group: docs-real-run
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: dth
+          POSTGRES_PASSWORD: dth
+          POSTGRES_DB: dth
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U dth" --health-interval 2s --health-timeout 5s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: hub and CLI
+        run: make release
+      - name: write the documents and the report
+        env:
+          DTH_DATABASE_URL: postgres://dth:dth@localhost:5432/dth?sslmode=disable
+          RUN_PROVIDER_KIND: ${{ inputs.provider_kind }}
+          RUN_MODEL: ${{ inputs.model }}
+          RUN_FAST_MODEL: ${{ inputs.fast_model }}
+          RUN_BASE_URL: ${{ inputs.base_url }}
+          RUN_REPO: ${{ inputs.repo }}
+          RUN_CAP_USD: ${{ inputs.cap_usd }}
+          RUN_PRICE_IN: ${{ inputs.price_in }}
+          RUN_PRICE_OUT: ${{ inputs.price_out }}
+          RUN_API_KEY: ${{ inputs.provider_kind == 'github_models' && github.token || secrets.DOCS_RUN_API_KEY }}
+          RUN_GITHUB_TOKEN: ${{ github.token }}
+          RUN_OUT: docs-run
+        run: |
+          mkdir -p docs-run
+          if [ -z "$RUN_API_KEY" ]; then echo "::error::Add the DOCS_RUN_API_KEY repository secret (Settings → Secrets and variables → Actions)"; exit 1; fi
+          ./scripts/docs-real-run.sh
+      - name: report
+        if: always()
+        run: |
+          echo "===== DOCS REPORT BEGIN ====="
+          cat docs-run/docs-report.md 2>/dev/null || echo "(no report)"
+          echo "===== DOCS REPORT END ====="
+          echo "===== HUB WARNINGS ====="
+          cat docs-run/hub-warnings.log 2>/dev/null || true
+          if [ -f docs-run/docs-report.md ]; then cat docs-run/docs-report.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: docs-run
+          path: docs-run
