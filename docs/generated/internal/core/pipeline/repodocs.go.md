@@ -1,7 +1,7 @@
 <!-- dth:generated source="internal/core/pipeline/repodocs.go" — edit only inside dth:human blocks -->
 # `internal/core/pipeline/repodocs.go`
 
-Handles documentation generation for repositories and system architecture by processing jobs, managing LLM-based doc generation with cost controls, and indexing results for search.
+This file implements repository documentation generation as a pipeline job, extracting facts, configuration wiring, and generating structured docs with budget enforcement.
 
 <!-- dth:chunk ee9de0dee06fce02 -->
 ## `RepoDocsPayload`
@@ -11,7 +11,7 @@ Payload structure for the `repo_docs` job that controls how repository documenta
 <!-- dth:chunk 84b0b5d48aa64360 -->
 ## `RepoDocsFacts`
 
-RepoDocsFacts reads facts and removes the per-file docs Docs v2 replaces.
+`RepoDocsFacts` is an interface for reading repository documentation facts and managing the migration from legacy per-file docs to Docs v2. It provides `Facts` to retrieve stored facts, `DropLegacy` to remove old documentation, and `PutWiring` to update wiring information with change detection.
 
 <!-- dth:chunk e530d5ce45b92c9f -->
 ## `DocsBudget`
@@ -26,7 +26,12 @@ Checks if a file path should be excluded from documentation processing based on 
 <!-- dth:chunk 89295343cfc1c07c -->
 ## `Pipeline.RepoDocs`
 
-Handles the `repo_docs` job by generating documentation for a repository's files. Validates that Docs v2 is configured, retrieves the repository and its commit history, fetches special files (READMEs, etc.) within a size limit, and generates docs using an LLM. Checks cost budgets before writing, supports dry runs, and indexes generated documents for search. Queues a `system_docs` job if repository documents changed, affecting system architecture.
+`Pipeline.RepoDocs` executes a repository documentation generation job. It fetches repository state and facts, collects files from the repository tree (excluding certain directories), reads special files and wiring configuration, invokes the docs generator, and indexes results. It handles budget checks, dry runs, retry logic, and progress reporting. Returns aborted outcomes for missing/disabled repos or uninitialized Docs v2, spend-blocked outcomes when monthly budget is exceeded, and includes cost tracking and change queuing.
+
+<!-- dth:chunk e47d2cfcfcd05d69 -->
+## `Pipeline.readWiring`
+
+`Pipeline.readWiring` extracts configuration and CI information from repository files to track external service dependencies (hosts, images, pipelines). It reads up to 80 files, each capped at 256 KB, skipping test files and applying best-effort parsing that ignores unreadable files. It stores extracted wiring facts and queues a system documentation rebuild if the wiring changed.
 
 <!-- dth:chunk 28b1ff00ea305f78 -->
 ## `Pipeline.indexDocs`
@@ -66,4 +71,4 @@ Indexes the system architecture document into the search index as chunks, one pe
 <!-- dth:chunk 4e61ea5abd4729ea -->
 ## `__module__`
 
-Module-level constants and errors: `ErrDocsBudget` signals when a repository's monthly documentation generation budget is exhausted; `maxSpecialBytes` caps special file content at 12KB before trimming; `skipDirs` lists directories excluded from documentation (node_modules, vendor, build artifacts, etc.).
+Module-level constants and errors for docs generation: `ErrDocsBudget` signals monthly budget exhaustion; `maxSpecialBytes` (12 KB) and `maxWiringBytes` (256 KB) limit file sizes; `maxWiringFiles` caps wiring extraction at 80 files; `skipDirs` lists directories to exclude from documentation processing.
