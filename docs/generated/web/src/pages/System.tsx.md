@@ -1,7 +1,7 @@
 <!-- dth:generated source="web/src/pages/System.tsx" — edit only inside dth:human blocks -->
 # `web/src/pages/System.tsx`
 
-React component that visualizes how repositories in a codebase interconnect through APIs, events, and packages, with generated documentation and an interactive link map.
+A React page component displaying the system architecture across multiple repositories, including auto-generated diagrams, documentation, and a table of inter-repository connections detected from code analysis.
 
 <!-- dth:chunk 4934c1514b528ad8 -->
 ## `codeURL`
@@ -11,9 +11,13 @@ Generates a GitHub or GitLab URL pointing to a specific line in a repository's c
 <!-- dth:chunk 6f5f1b9bf79acb9d -->
 ## `System`
 
-Displays the system architecture view showing how repositories interconnect through APIs, events, and packages. Fetches system data with auto-refresh during active processing jobs, displays a Mermaid diagram of repository relationships, renders generated documentation with confidence badges and timestamps, and shows a table of discovered inter-repository links with source code locations. Admins can trigger regeneration of the architecture write-up via a button that becomes available when links exist. Citations in documentation are converted to clickable source code links via `codeURL`.
+### System
+
+A page component displaying the system architecture across repositories, including an auto-generated diagram, write-up, and table of inter-repository links. Fetches system metadata from `/system` endpoint with automatic refetching every 3 seconds when a write job is queued or processing. Admins can trigger a system write with the "Write again" button. The page renders repository-qualified citations (owner/repo/path:line) as clickable code links using `codeURL`. Displays different content states: a mermaid diagram of the system, an "at a glance" summary with confidence metadata, detailed sections from the write-up (if complete and readable), and a table of detected links with kind badges (event, api, call, library, image, pipeline, other) and source locations.
 
 <!-- dth:chunk 03aa3d77bde79f68 -->
 ## `__module__`
 
-Maps internal link kind identifiers to human-readable labels for display in the system architecture links table: 'event' → 'Event', 'api' → 'API call', 'call' → 'Code call', 'library' → 'Package', 'other' → 'Link'.
+### KIND
+
+A mapping of link kind identifiers to human-readable display labels used in the links table (e.g., 'event' → 'Event', 'api' → 'API call'). Used with Badge component to color-code links by their connection type.

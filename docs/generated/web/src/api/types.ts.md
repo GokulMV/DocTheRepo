@@ -1,7 +1,7 @@
 <!-- dth:generated source="web/src/api/types.ts" — edit only inside dth:human blocks -->
 # `web/src/api/types.ts`
 
-Defines TypeScript types for API responses and data structures across documentation, MCP server integration, system architecture analysis, and conversational AI features.
+Defines TypeScript interfaces for API request/response types used throughout the application.
 
 <!-- dth:chunk 43c36371bf7c7ac9 -->
 ## `Me`
@@ -66,7 +66,7 @@ A complete repository document with metadata, sections, and quality indicators. 
 <!-- dth:chunk 9ea3c621c7106dc4 -->
 ## `SystemLink`
 
-Represents a link between system components, tracking how repositories interact via events, APIs, function calls, libraries, or other mechanisms. The `n` field counts connection instances; `via`, `path`, and `line` provide source location details.
+Represents a link between symbols in different repositories within a system. Tracks the source (`from_repo`, `from_name`) and target (`to_repo`, `to_name`) of a dependency or reference, along with its `kind` (event, API call, library import, etc.). The `via` field documents the mechanism through which the link occurs, while optional `path` and `line` fields pinpoint its location in source code. The `n` field holds a count or identifier for the link.
 
 <!-- dth:chunk 01fcf768d1466f84 -->
 ## `SystemView`
