@@ -1,7 +1,7 @@
 <!-- dth:generated source="internal/core/repodocs/system.go" — edit only inside dth:human blocks -->
 # `internal/core/repodocs/system.go`
 
-Generates system-level architecture documentation that describes how multiple repositories interact, including diagrams, repository overviews, inter-repository links, and LLM-synthesized explanations of the system's structure and data flows.
+Defines system architecture documentation generation, including a flowchart diagram showing repository interactions and the specification for comprehensive system documentation sections.
 
 <!-- dth:chunk 1e21dba88d3c914d -->
 ## `SystemRepo`
@@ -21,7 +21,7 @@ Computes a hash of the system architecture's inputs (specification version, repo
 <!-- dth:chunk 089371cb9ae5ba3b -->
 ## `SystemDiagram`
 
-Generates a Mermaid flowchart diagram showing repositories as nodes and their communication links as directed edges, labeled by kind and mechanism (e.g., "api: name"). Deduplicates edges, sorts them consistently, and truncates output at 60 edges to keep diagrams readable.
+Generates a Mermaid flowchart diagram showing repositories as nodes and their communication links as labeled edges. Creates unique node IDs for each repository, deduplicates edges based on source, destination, and label, and limits output to 60 edges to prevent diagram overcrowding. Link labels are enhanced for certain kinds (event, api, library, image, pipeline) by appending the `Via` field (clipped for length); other kinds use their name as-is. Repository and label names have quotes escaped for Mermaid syntax.
 
 <!-- dth:chunk 676118413147f521 -->
 ## `clipLabel`
@@ -41,4 +41,4 @@ Generates the system architecture document by composing repository overviews and
 <!-- dth:chunk b782ac472674e15e -->
 ## `__module__`
 
-Defines the system architecture specification: its audience (cross-service teams), sections (map, interactions, flows, contracts, coupling, and rules), and prompts the LLM to explain how repositories work together as a unified system.
+Defines the specification for the "system" documentation section, targeting engineers and non-engineers across service boundaries. Comprises six subsections: a map describing repository roles and system cohesion; an interactions table and diagram explaining how repositories communicate via APIs, events, libraries, calls, images, and pipelines; end-to-end sequence diagrams (2-4 most critical) crossing services; shared contracts for producers and consumers; coupling analysis identifying risks and mismatches; and rules for safe cross-service changes. All subsections except contracts and dos require repository configuration or pipeline analysis as their source material.

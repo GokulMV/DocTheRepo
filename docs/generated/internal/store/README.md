@@ -10,4 +10,4 @@
 - [`mcp.go`](mcp.go.md) — Provides persistent storage and management of MCP (Model Context Protocol) server connections with encrypted secrets and OAuth tokens.
 - [`qa.go`](qa.go.md) — Implements Q&A thread and message storage operations for persisting conversational interactions with source citations and AI model metadata.
 - [`repodocs.go`](repodocs.go.md) — Provides database storage and retrieval for repository documentation (Docs v2), file cards, and repository facts extracted from the knowledge graph.
-- [`system.go`](system.go.md) — Provides methods to query inter-repository system architecture links and documentation chunks from the database.
+- [`system.go`](system.go.md) — Provides database storage operations for repository documentation, including loading wiring facts and calculating inter-repository system links.

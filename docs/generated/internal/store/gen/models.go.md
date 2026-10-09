@@ -1,7 +1,7 @@
 <!-- dth:generated source="internal/store/gen/models.go" — edit only inside dth:human blocks -->
 # `internal/store/gen/models.go`
 
-Generated data models defining database entities for repository documentation, MCP server configurations, code chunks, documentation records, and Q&A conversations.
+This file contains generated model structures for repository data objects used in the DocTheRepo system, with JSON serialization support for database operations.
 
 <!-- dth:chunk 59326f827e361503 -->
 ## `Chunk`
@@ -27,3 +27,8 @@ Represents a message in a Q&A conversation thread, tracking both user queries an
 ## `RepoDoc`
 
 Represents generated documentation for a repository or component. Tracks the documentation content via `Sections`, quality metrics (`Confidence`, `Calibrated`), and processing metadata including input hashes, file hashes, source SHA, model used, and token/cost accounting. The `Why` and `Gaps` fields store JSON analysis of documentation reasoning and identified knowledge gaps.
+
+<!-- dth:chunk ebfa410dd5df2d52 -->
+## `RepoWiring`
+
+A struct representing metadata about connections or dependencies within a repository. `RepoID` identifies the repository, `Kind` categorizes the type of wiring, and `Value` holds the wiring identifier or reference. The `Note` field provides additional context or description. `Path` and `Line` specify the location of the wiring in the source code for reference and navigation purposes.
