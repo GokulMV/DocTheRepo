@@ -77,18 +77,16 @@ test('cold start: connect, push, documents written, cited answer', async ({ page
   mark(`Tracking started the first sync; the documents are written in the Hub.`);
   const repos = await (await page.request.get('/api/v1/repos')).json();
   const repoId: string = repos.items.find((r: { full_name: string }) => r.full_name === repo).id;
-  type Doc = { type: string; key: string; status: string; updated_at: string };
+  type Doc = { type: string; key: string; status: string; source_sha: string; updated_at: string };
   const docs = async (): Promise<Doc[]> => (await (await page.request.get(`/api/v1/repo-docs?repo_id=${repoId}`)).json()).items ?? [];
-  const firstDocs = await eventually(async () => {
+  await eventually(async () => {
     const ds = await docs();
     return ds.some((d) => d.type === 'overview' && d.status === 'ok') && ds.some((d) => d.type === 'architecture') && ds.some((d) => d.type === 'module') ? ds : undefined;
   }, 'the overview, architecture and module guides', 120_000);
   expect(await prs(repo), 'documents live in the Hub: no docs PR').toHaveLength(0);
-  const moduleBefore = firstDocs.find((d) => d.type === 'module')!;
-
   // A developer pushes new code; the webhook delivers it and the affected documents are rewritten.
   mark(`A developer pushes new code; the affected documents are rewritten.`);
-  await push(repo, {
+  const pushed = await push(repo, {
     'refunds/chargeback.go': `package refunds
 
 // HandleChargeback reverses the ledger entries of a disputed payment and freezes further refunds on it
@@ -98,7 +96,9 @@ func HandleChargeback(paymentID string, amountMinor int64) error {
 }
 `,
   });
-  await eventually(async () => (await docs()).some((d) => d.type === 'module' && d.updated_at !== moduleBefore.updated_at) || (await docs()).length > firstDocs.length, 'documents rewritten after the push', 120_000);
+  // The module guide covering refunds/ is rewritten from the pushed commit. (Compare commits, not
+  // updated_at: the list reports whole seconds, and the rewrite can land in the same second as the first write.)
+  await eventually(async () => (await docs()).some((d) => d.type === 'module' && d.source_sha === pushed.sha), 'a module guide rewritten from the pushed commit', 120_000);
 
   // The Docs page opens on the overview, with every document in its navigation.
   mark(`The Docs page has the documents.`);
