@@ -1,7 +1,7 @@
 <!-- dth:generated source="web/src/layouts/Shell.tsx" — edit only inside dth:human blocks -->
 # `web/src/layouts/Shell.tsx`
 
-Shell.tsx defines the authenticated app layout with a sidebar navigation component, search command palette, and page outlet.
+Provides the main authenticated layout shell with sidebar navigation and content outlet for the DocTheRepo application.
 
 <!-- dth:chunk bcf47c5a93e166bf -->
 ## `SideLink`
@@ -16,7 +16,7 @@ Renders a horizontal tab navigation showing pages within the current section, fi
 <!-- dth:chunk 0b016a36b05c2537 -->
 ## `Shell`
 
-The authenticated layout component that displays a collapsible sidebar navigation filtered by user role, with a command palette and main content outlet. Handles user authentication (redirects to login if 401, shows error if API unavailable), scrolls to top on navigation, listens for Cmd/Ctrl+K to open search, manages sidebar collapse state, and provides logout functionality. The sidebar shows the user's avatar, name, and role, along with sections and a "New question" quick-action button.
+Renders the authenticated application shell with a collapsible sidebar and main content area. The sidebar includes role-based navigation filtered by user permissions and feature flags, a search command palette (accessible via Ctrl/⌘+K), theme switcher, and user account menu with logout. Handles API errors (401 redirects to login with return URL), shows loading spinner during auth check, and resets error boundaries on navigation. The main area renders page content via outlet with environment banner and section tabs, maintaining scroll-to-top on route changes.
 
 <!-- dth:chunk 9f7b243cbe48f136 -->
 ## `__module__`

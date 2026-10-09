@@ -1,7 +1,7 @@
 <!-- dth:generated source="web/src/layouts/nav.ts" — edit only inside dth:human blocks -->
 # `web/src/layouts/nav.ts`
 
-Defines the navigation structure and types for the application's main menu and page organization.
+Defines the navigation menu structure and item interface for the web application, including role-based access control and feature-gated visibility.
 
 <!-- dth:chunk a84878839d02e321 -->
 ## `Tab`
@@ -11,7 +11,7 @@ Represents a navigable page within a section, displayed as a tab. Each tab has a
 <!-- dth:chunk 6eff426d4497e413 -->
 ## `NavItem`
 
-Represents a top-level navigation item with a route, label, icon, and optional role-based visibility. Can contain sub-tabs for organizing related pages, and optionally a feature gate that hides it unless the Hub reports support for that feature (e.g., 'issues'). The `blurb` field provides secondary description text shown below the page title.
+Interface that defines a navigation menu item. Requires a destination URL (`to`), display label, minimum access role, and icon. Optionally includes a brief description (`blurb`) displayed under page titles, sub-pages (`tabs`), and conditional display based on feature availability (e.g., 'issues' or 'system' features reported by the Hub in `/me` response).
 
 <!-- dth:chunk d552cc4effcc5194 -->
 ## `under`
@@ -31,4 +31,4 @@ navItemFor finds the section a path belongs to (/known-issues → Issues).
 <!-- dth:chunk 20d318a4ab36e30c -->
 ## `__module__`
 
-Navigation structure defining the main app sections: Docs (with Architecture and Team docs tabs), Issues (Inbox and Known issues), Repositories (with Activity and Security tabs), Usage analytics, and Settings (Connections, AI models, People, and Advanced tabs with legacy URL mappings). Role gates restrict access (viewer, editor, admin), and the Issues section requires the 'issues' feature flag.
+Exports the main navigation structure as `NAV`, an array of navigation items covering documentation, system architecture, issue tracking, repositories, analytics, and admin settings. Features like 'system' (multi-repository relationships) and 'issues' are opt-in and hidden unless enabled. Nested `tabs` define subsections; some tabs require elevated access levels (e.g., 'Security' tab requires 'editor' role). The `also` field in tab definitions registers additional routes that should highlight the same section.
