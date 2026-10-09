@@ -4,4 +4,5 @@
 - [`cmd`](cmd/README.md)
 - [`deploy`](deploy/README.md)
 - [`internal`](internal/README.md)
+- [`migrations`](migrations/README.md)
 - [`web`](web/README.md)
