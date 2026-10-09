@@ -1,9 +1,11 @@
 <!-- dth:generated source="internal/api/openapi.go" — edit only inside dth:human blocks -->
 # `internal/api/openapi.go`
 
-Defines the complete OpenAPI endpoint registry and metadata for the DocTheRepo API hub.
+Exposes a complete OpenAPI specification for the Hub's REST API, defining all routes, methods, authentication requirements, and their purposes.
 
 <!-- dth:chunk 8d7cd432e67ea5ec -->
 ## `__module__`
 
-Defines the complete OpenAPI endpoint registry for the application as a static slice of operation metadata. Each entry specifies HTTP method, route path, category, description, required permission level, and flags for whether the endpoint expects request/response bodies. Covers webhook ingestion, authentication (SSO/password/tokens), user and organization management, documentation generation, AI queries (Ask), security scanning, library management, LLM provider configuration, GitHub App integration, architecture visualization, analytics, and issue/alert management. Also initializes sync-protected storage for lazy-loaded OpenAPI specification generation. This serves as the single source of truth for all API routes and their access control requirements.
+The file contains a complete OpenAPI specification for a documentation platform API, exposed as a slice of operation structs defining HTTP method, path, category, description, required permission, whether the request/response are JSON, and whether the response streams.
+
+Each endpoint entry specifies its semantics: ingestion webhooks (Git, Firehose, signals), authentication flows (SSO, tokens, invites), user and role management, Q&A threads, documentation generation and retrieval, security scanning, library uploads, repository tracking, LLM provider and connector management, settings, job queues, analytics, issue tracking, and health checks. The spec is built once on first access via the `specOnce` sync.Once guard and cached in `spec` for reuse.
