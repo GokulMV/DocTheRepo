@@ -1,7 +1,7 @@
 <!-- dth:generated source="internal/core/repodocs/generator.go" — edit only inside dth:human blocks -->
 # `internal/core/repodocs/generator.go`
 
-Generator orchestrates LLM-powered creation and updating of repository documentation, managing costs, batching, and API routing.
+Generates repository documentation by orchestrating LLM calls with validation, cost tracking, and section assembly from templated specifications.
 
 <!-- dth:chunk 547f8c5b25080877 -->
 ## `Store`
@@ -81,7 +81,7 @@ Returns all repository file paths as sources for a document spec. Used for chang
 <!-- dth:chunk a93d119d693eba18 -->
 ## `Generator.write`
 
-Generates a single document by prompting the LLM with collected source material, validating the response with checks (one repair attempt), and scoring confidence. Creates a `Doc` with metadata, file hashes, and token/cost tracking. Handles architecture diagrams by prepending a mermaid graph. Returns the completed document or an error if the LLM call failed.
+Generates a single documentation document by prompting an LLM and processing its response. Constructs a `Doc` with metadata (repo ID, type, key, title, source file hashes), calls `ChatJSONResult` to get LLM output constrained to `docSchema`, repairs responses via `check()` if needed, extracts sections with optional Mermaid diagrams for architecture components, and cleans dead references. Records token usage, model name, repair count, and cost; returns the document or an error with a failed status. Scores the result via `score()` after successful generation.
 
 <!-- dth:chunk 1ba493c81d28219e -->
 ## `prompt`
@@ -146,4 +146,4 @@ Calculates the cost of an LLM API call, preferring detailed cache-aware rates wh
 <!-- dth:chunk 2fe320d66c9bf259 -->
 ## `__module__`
 
-Module-level constants: **system** is the prompt preamble for document generation (rules on truthfulness, citations, format); **docSchema** is the JSON schema for document output (at_a_glance, sections array, gaps); **cardSchema** is the schema for file cards; **cardSystem** is the prompt preamble for card generation.
+System prompt and JSON schemas for documentation generation. `system` instructs the LLM to write clear, citation-backed documentation using only provided material, with rules for citations ([path:line] format), Mermaid diagrams, word limits, and a 3-5 sentence plain-language summary. `docSchema` defines the LLM response structure: `at_a_glance` string, `sections` array (each with `key` and `markdown`), and `gaps` array for undetermined information. `cardSchema` and `cardSystem` support a separate workflow for generating short file summaries with purpose, symbols, and notes.
