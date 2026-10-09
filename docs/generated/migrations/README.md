@@ -9,3 +9,5 @@
 - [`0030_docs_phase2.up.sql`](0030_docs_phase2.up.sql.md)
 - [`0031_chunk_requires_repos.down.sql`](0031_chunk_requires_repos.down.sql.md) — Rollback migration that removes the requires_repos column from the chunks table.
 - [`0031_chunk_requires_repos.up.sql`](0031_chunk_requires_repos.up.sql.md)
+- [`0032_repo_docs_draft_problems.down.sql`](0032_repo_docs_draft_problems.down.sql.md) — Database migration that reverses the addition of a `draft_problems` column to the `repo_docs` table.
+- [`0032_repo_docs_draft_problems.up.sql`](0032_repo_docs_draft_problems.up.sql.md)

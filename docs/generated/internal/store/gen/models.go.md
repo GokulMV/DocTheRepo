@@ -1,7 +1,7 @@
 <!-- dth:generated source="internal/store/gen/models.go" — edit only inside dth:human blocks -->
 # `internal/store/gen/models.go`
 
-Generated data models defining database entities for repository documentation, MCP server configurations, code chunks, documentation records, and Q&A conversations.
+Defines data models for storing repository documentation in the database, generated from a schema or ORM tool.
 
 <!-- dth:chunk 59326f827e361503 -->
 ## `Chunk`
@@ -26,4 +26,4 @@ Represents a message in a Q&A conversation thread, tracking both user queries an
 <!-- dth:chunk 23733c12f637b2a8 -->
 ## `RepoDoc`
 
-Represents generated documentation for a repository or component. Tracks the documentation content via `Sections`, quality metrics (`Confidence`, `Calibrated`), and processing metadata including input hashes, file hashes, source SHA, model used, and token/cost accounting. The `Why` and `Gaps` fields store JSON analysis of documentation reasoning and identified knowledge gaps.
+Struct representing a repository documentation record stored in the database. Contains metadata about generated documentation including its type, content organization, quality metrics, and processing details. Fields like `Sections`, `Gaps`, `Why`, and `DraftProblems` store JSON data for flexible schema. Tracks generation costs (`TokensIn`, `TokensOut`, `CostUsd`), source integrity (`SourceSha`, `InputsHash`, `FileHashes`), model metadata (`Model`), and processing status (`Status`, `Error`). The `Calibrated` flag indicates confidence calibration, `Changed` tracks content modification percentage, and timestamps record creation and updates.

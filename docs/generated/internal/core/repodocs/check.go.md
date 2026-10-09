@@ -1,7 +1,7 @@
 <!-- dth:generated source="internal/core/repodocs/check.go" — edit only inside dth:human blocks -->
 # `internal/core/repodocs/check.go`
 
-Validates and analyzes machine-generated documentation replies against specifications, checking citations, identifiers, formatting, and word counts.
+This file defines data structures and logic for managing generated documentation about code repositories, including validation and quality assessment.
 
 <!-- dth:chunk 9b7ad8a3d03b8b36 -->
 ## `DocSection`
@@ -11,7 +11,7 @@ A written section of documentation with its markdown content, quality score, and
 <!-- dth:chunk b801003b857237c1 -->
 ## `Doc`
 
-A complete written document with metadata, sections, quality metrics (confidence, gaps), source information (file hashes, changed ratio, source SHA), and generation details (model, token usage, cost, status).
+A struct representing a written document with metadata about its content, generation, and quality. It contains the document's identity (`ID`, `RepoID`, `Type`, `Key`), presentation (`Title`, `Group`, `Order`, `AtAGlance`, `Sections`), quality assessment (`Gaps`, `Confidence`, `Calibrated`, `DraftProblems`), change tracking (`Changed`, `FileHashes`, `SourceSHA`), and generation details (`Model`, `TokensIn`, `TokensOut`, `CostUSD`, `InputsHash`). The `Status` and `Error` fields track generation success or failure, while `UpdatedAt` records when it was created.
 
 <!-- dth:chunk ed30af68e17f9e50 -->
 ## `Doc.Section`

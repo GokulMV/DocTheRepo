@@ -1,11 +1,9 @@
 <!-- dth:generated source="internal/api/openapi.go" — edit only inside dth:human blocks -->
 # `internal/api/openapi.go`
 
-Exposes a complete OpenAPI specification for the Hub's REST API, defining all routes, methods, authentication requirements, and their purposes.
+Defines the OpenAPI specification and catalog of REST API operations exposed by the Hub.
 
 <!-- dth:chunk 8d7cd432e67ea5ec -->
 ## `__module__`
 
-The file contains a complete OpenAPI specification for a documentation platform API, exposed as a slice of operation structs defining HTTP method, path, category, description, required permission, whether the request/response are JSON, and whether the response streams.
-
-Each endpoint entry specifies its semantics: ingestion webhooks (Git, Firehose, signals), authentication flows (SSO, tokens, invites), user and role management, Q&A threads, documentation generation and retrieval, security scanning, library uploads, repository tracking, LLM provider and connector management, settings, job queues, analytics, issue tracking, and health checks. The spec is built once on first access via the `specOnce` sync.Once guard and cached in `spec` for reuse.
+Declares the API operations catalog as a slice of `op` structs, each containing HTTP method, route, category, description, required role, and flags indicating if the operation accepts request bodies and streams responses. Also declares a cached OpenAPI specification (`spec`) and synchronization primitive (`specOnce`) for thread-safe lazy initialization of the full specification document. This catalog serves as the source of truth for all REST endpoints exposed by the Hub, from webhook ingestion and authentication to documentation generation, security scanning, and administrative functions.

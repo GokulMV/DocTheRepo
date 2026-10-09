@@ -1,5 +1,4 @@
 <!-- dth:generated index — edit only inside dth:human blocks -->
-# `cmd`
+# `internal/adapters/email`
 
-- [`dth`](dth/README.md)
-- [`hub`](hub/README.md)
+- [`emailtest`](emailtest/README.md)

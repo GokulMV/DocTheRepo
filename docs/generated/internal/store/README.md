@@ -9,5 +9,5 @@
 - [`decodes.go`](decodes.go.md) — Decodes.go implements a decode store adapter backed by a database connection, handling persistence and retrieval of decoded documentation chunks.
 - [`mcp.go`](mcp.go.md) — Provides persistent storage and management of MCP (Model Context Protocol) server connections with encrypted secrets and OAuth tokens.
 - [`qa.go`](qa.go.md) — Implements Q&A thread and message storage operations for persisting conversational interactions with source citations and AI model metadata.
-- [`repodocs.go`](repodocs.go.md) — Provides database storage and retrieval for repository documentation (Docs v2), file cards, and repository facts extracted from the knowledge graph.
+- [`repodocs.go`](repodocs.go.md) — This file provides database storage operations for documentation records, including retrieval and upsert (insert/update) functionality backed by PostgreSQL.
 - [`system.go`](system.go.md) — Provides methods to query inter-repository system architecture links and documentation chunks from the database.

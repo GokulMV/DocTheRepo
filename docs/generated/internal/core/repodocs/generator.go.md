@@ -1,7 +1,7 @@
 <!-- dth:generated source="internal/core/repodocs/generator.go" — edit only inside dth:human blocks -->
 # `internal/core/repodocs/generator.go`
 
-Generator orchestrates the creation and updating of repository documentation by managing document specs, checking inputs for changes, calling an LLM to produce markdown with citations and confidence scores, and storing the results.
+Generator orchestrates the creation of repository documentation by calling an LLM, validating outputs, and persisting results.
 
 <!-- dth:chunk 547f8c5b25080877 -->
 ## `Store`
@@ -81,7 +81,7 @@ Returns all repository file paths as sources for a document spec. Used for chang
 <!-- dth:chunk a93d119d693eba18 -->
 ## `Generator.write`
 
-**write** generates one document via LLM. It builds the prompt from the spec, calls the model to produce JSON (at_a_glance, sections, gaps), runs integrity checks with repair attempts, scores each section's grounding and names, and calls support() to judge whether citations align with code. Returns the document with status, tokens, cost, and confidence; errors leave status as "failed".
+Generates a single documentation document by constructing a Doc with metadata, sending a prompt to the LLM gateway, validating the response with repair attempts, and scoring the result. Initializes the Doc with repo/job info and file hashes, computes material from inputs, calls the LLM with a maximum output token limit (bounded by route capacity and content size), extracts token usage and cost, handles any API error, and populates document sections from the response (prepending a Mermaid diagram for architecture component sections). Finally scores the document using check validation results and returns the completed Doc with status "ok" on success or an error status with message on failure.
 
 <!-- dth:chunk 1ba493c81d28219e -->
 ## `prompt`

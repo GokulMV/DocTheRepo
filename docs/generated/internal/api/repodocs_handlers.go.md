@@ -1,7 +1,7 @@
 <!-- dth:generated source="internal/api/repodocs_handlers.go" — edit only inside dth:human blocks -->
 # `internal/api/repodocs_handlers.go`
 
-Handles HTTP endpoints for repository and system documentation management, including retrieval, generation, export, and budget control.
+HTTP request handlers and routes for repository documentation operations, including retrieval, reporting, and administrative management.
 
 <!-- dth:chunk a28323e6e9854d38 -->
 ## `RepoDocsDeps`
@@ -21,7 +21,7 @@ repoDocsHandlers wraps RepoDocsDeps to implement HTTP handlers for documentation
 <!-- dth:chunk 15a26b26303cee89 -->
 ## `RepoDocsRoutes`
 
-RepoDocsRoutes registers documentation API routes with role-based access control: viewers can list and retrieve docs and system architecture; editors can estimate generation cost; admins can trigger document generation, manage budgets, export to pull requests, and update system documentation.
+Mounts repository documentation routes organized by permission level. The viewer-level routes expose public docs queries (`/repo-docs`, `/repo-docs/find`, `/repo-docs/{id}`, `/system`). Editor-level routes enable cost estimation and report generation for a specific repository. Admin-level routes permit writing docs, managing budgets, exporting data, and system-wide updates. Returns a chi router group configurator that applies role-based middleware to each route cluster.
 
 <!-- dth:chunk fb4d6742833ae735 -->
 ## `repoDocsHandlers.readable`
@@ -57,6 +57,11 @@ find retrieves a document by repository ID and document key or type, supporting 
 ## `repoDocsHandlers.estimate`
 
 estimate performs a dry-run cost calculation for generating missing documentation, responding with token count, USD estimate, and lists of documents that would be written or remain unchanged. The full parameter controls whether all docs are estimated or just missing ones.
+
+<!-- dth:chunk 329039c38bd7b064 -->
+## `repoDocsHandlers.report`
+
+HTTP handler that generates a summary report of repository documents for review and tuning. It retrieves the repository and associated documents, then builds a report via `BuildReport`; if a budget function is configured, it includes cap and spent USD values. Query parameters control output: `?text=true` preserves prose in the report, and `?format=md` renders the response as Markdown (with appropriate Content-Type header) instead of the default JSON. Requires editor-level access to the repository.
 
 <!-- dth:chunk 8933160f22c3eb52 -->
 ## `repoDocsHandlers.write`

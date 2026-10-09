@@ -1,7 +1,7 @@
 <!-- dth:generated source="internal/store/repodocs.go" — edit only inside dth:human blocks -->
 # `internal/store/repodocs.go`
 
-Provides database storage and retrieval for repository documentation (Docs v2), file cards, and repository facts extracted from the knowledge graph.
+This file provides database storage operations for documentation records, including retrieval and upsert (insert/update) functionality backed by PostgreSQL.
 
 <!-- dth:chunk 9080289c452f7030 -->
 ## `RepoDocs`
@@ -36,7 +36,7 @@ Batch-inserts or updates file cards, storing each card's JSON representation alo
 <!-- dth:chunk 538007a0f29473e5 -->
 ## `scanDoc`
 
-Scans a single document row from the database, deserializing JSON fields (sections, gaps, why, file hashes) and converting floating-point confidence/changed values to float64. Returns `ErrNotFound` if the row doesn't exist.
+Deserializes a database row into a `repodocs.Doc` struct, handling JSON unmarshaling of embedded JSON fields (Sections, Gaps, Why, FileHashes, DraftProblems) and converting float32 database values to float64 for Confidence and Changed fields. Returns `ports.ErrNotFound` if the row doesn't exist, and silently ignores JSON unmarshaling errors to tolerate malformed data.
 
 <!-- dth:chunk 352bc91d12b1997c -->
 ## `RepoDocs.Docs`
@@ -51,7 +51,7 @@ Doc returns one document.
 <!-- dth:chunk 319951b753e8bb19 -->
 ## `RepoDocs.PutDoc`
 
-Inserts or updates a document by (repo, type, key), generating a new ID and timestamp if missing. Handles system-wide documents (repo_id null) separately. Uses PostgreSQL `ON CONFLICT` to upsert, returning the resulting document state after insert/update.
+Inserts or replaces a document by (repo, type, key) using PostgreSQL's UPSERT mechanism. Generates a new ID if absent and sets UpdatedAt to now if zero. Handles system-wide documents (repo_id = NULL) with a modified conflict clause. Converts complex fields (Sections, Gaps, Why, FileHashes, DraftProblems) to JSON, substituting empty arrays for null values. Returns the inserted/updated document by calling scanDoc on the query result.
 
 <!-- dth:chunk e8502a6a91b6b786 -->
 ## `RepoDocs.DeleteDocsExcept`
@@ -71,4 +71,4 @@ Removes Docs v1 legacy generated documentation: deletes all `doc_nodes` and soft
 <!-- dth:chunk 2e77ece06230e94a -->
 ## `__module__`
 
-SQL column selection constant for document queries, selecting all fields from `repo_docs` table with null-coalescing for nullable columns.
+Query constant listing all columns to retrieve from the repo_docs table for reconstructing a Doc record, used in RETURNING clauses. Includes fields for document identity, content (sections, gaps), metadata (type, key, title, group, order), processing results (hashes, model, tokens), and status tracking (confidence, changed, calibrated, error, status, updated_at).
