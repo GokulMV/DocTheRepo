@@ -1,7 +1,7 @@
 <!-- dth:generated source="internal/core/repodocs/check.go" — edit only inside dth:human blocks -->
 # `internal/core/repodocs/check.go`
 
-Validates and analyzes machine-generated documentation replies against specifications, checking citations, identifiers, formatting, and word counts.
+Validates generated documentation against specifications, fact sources, and code material, checking sections, word limits, citations, and identifier references.
 
 <!-- dth:chunk 9b7ad8a3d03b8b36 -->
 ## `DocSection`
@@ -41,7 +41,12 @@ Counts prose words in markdown by removing code fences, tables, and citations, t
 <!-- dth:chunk c7d43a504b0be95f -->
 ## `identifiers`
 
-Extracts backticked identifiers from markdown that resemble code (containing special chars like ._/#: or camelCase or UPPER_SNAKE), excludes commands and known common terms, and returns total count and list of unknown identifiers not in the provided knowledge map. Code blocks are excluded from search.
+Extracts backticked identifiers from markdown that appear to be code references rather than commands or expressions, filters out known identifiers and those found in the material, and returns the count and list of unknown ones. Strips code fences before processing, skips items containing shell operators or previously seen entries, and uses heuristics (underscores, dots, slashes, CamelCase, UPPER_CASE) to distinguish code names from prose. Trims common suffixes like `()` and `(…)` and extracting base names before function argument lists.
+
+<!-- dth:chunk b450f109670d5dd5 -->
+## `inMaterial`
+
+Checks whether a name appears in the material (code, declarations, or prose provided to the model). Handles wildcard patterns by trimming trailing asterisks from the name and checking for prefix containment. Requires names to be at least 3 characters (after wildcard removal) to avoid false positives. Returns false for empty material.
 
 <!-- dth:chunk f6f42ef1cce7aed4 -->
 ## `matchKnown`
@@ -61,7 +66,7 @@ Aggregates validation results from checking a reply: hard errors requiring fixes
 <!-- dth:chunk ff989f496a5dfcd1 -->
 ## `check`
 
-Validates a model-generated reply against a specification and available facts: checks at_a_glance length, required sections presence, word limits, citation validity and presence where required, unknown identifiers, and mermaid diagram format. Returns aggregated results with hard errors that must be fixed.
+Validates a generated documentation reply against its spec, facts, and provided material. Checks that at_a_glance is non-empty and under 140 words, all required sections are present and within word limits, citations resolve to actual files and line numbers (allowing file-level references at line 0 and non-indexed files by path alone), large claims have citations, identifiers are known or appear in material, and mermaid diagrams have recognized type headers. Collects hard errors that require fixes, plus per-section metrics on citations and identifiers. Material grounding allows config keys, environment variables, and similar names even without declarations.
 
 <!-- dth:chunk eb04b90138d247e5 -->
 ## `first`
