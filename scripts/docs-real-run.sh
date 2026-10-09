@@ -2,7 +2,7 @@
 # docs-real-run.sh writes a repository's documents with a real model and prints the run report, for
 # reviewing output and tuning the prompts. It starts the hub against an empty database, signs in as a
 # local owner, adds the provider and a GitHub connector, tracks the repository with a hard monthly cap,
-# waits for the documents, and writes docs-report.md (with the text) and docs-report.json.
+# waits for the documents, and writes docs-report.md (with the text), docs-report-summary.md and docs-report.json.
 #
 # Needs: bin/dth-hub and bin/dth (make release), curl, jq, psql, and:
 #   DTH_DATABASE_URL     an empty PostgreSQL (pgvector) database
@@ -107,5 +107,6 @@ done
 
 ./bin/dth --server "$HUB" --token "$TOKEN" docs report "$REPO" --text -o "$OUT/docs-report.md"
 ./bin/dth --server "$HUB" --token "$TOKEN" --json docs report "$REPO" > "$OUT/docs-report.json"
+./bin/dth --server "$HUB" --token "$TOKEN" docs report "$REPO" -o "$OUT/docs-report-summary.md"
 grep -E '"level":"(WARN|ERROR)"' "$OUT/hub.log" | tail -40 > "$OUT/hub-warnings.log" || true
 log "report written: $OUT/docs-report.md"

@@ -88,12 +88,16 @@ jobs:
       - name: report
         if: always()
         run: |
-          echo "===== DOCS REPORT BEGIN ====="
+          # The documents' text first, then the short summary last, so the end of the log always holds it.
+          echo "===== DOCS TEXT BEGIN ====="
           cat docs-run/docs-report.md 2>/dev/null || echo "(no report)"
-          echo "===== DOCS REPORT END ====="
+          echo "===== DOCS TEXT END ====="
           echo "===== HUB WARNINGS ====="
           cat docs-run/hub-warnings.log 2>/dev/null || true
-          if [ -f docs-run/docs-report.md ]; then cat docs-run/docs-report.md >> "$GITHUB_STEP_SUMMARY"; fi
+          echo "===== DOCS SUMMARY BEGIN ====="
+          cat docs-run/docs-report-summary.md 2>/dev/null || echo "(no report)"
+          echo "===== DOCS SUMMARY END ====="
+          if [ -f docs-run/docs-report-summary.md ]; then cat docs-run/docs-report-summary.md >> "$GITHUB_STEP_SUMMARY"; fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:

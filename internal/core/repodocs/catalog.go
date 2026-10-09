@@ -71,7 +71,7 @@ type Spec struct {
 }
 
 // SpecVersion changes when the catalogue changes in a way that should rewrite documents.
-const SpecVersion = "v2.1"
+const SpecVersion = "v2.2"
 
 func s(key, title string, words int, required, cite bool, guide string) Section {
 	return Section{Key: key, Title: title, Words: words, Required: required, Cite: cite, Guide: guide}
@@ -138,7 +138,7 @@ var Catalog = []Spec{
 			s("what", "What it does", 120, true, false, "What the software does and for whom, in plain words. No jargon without explaining it."),
 			s("concepts", "Key concepts", 180, true, true, "The 4-8 ideas someone must know to understand the code (domain terms and main abstractions), one line each, with where they live."),
 			s("map", "Module map", 0, true, false, "A table: Module | What it is for (one line). Every module, in a sensible reading order."),
-			s("entry", "Entry points", 0, true, true, "A table: Entry point (binary, server, CLI command, worker, UI) | What starts it | Where (path:line)."),
+			s("entry", "Entry points", 0, true, true, "A table: Entry point (binary, server, CLI command, worker, UI) | What starts it | Where ([path:line])."),
 			s("run", "Running it", 150, false, true, "How to build, run and test it locally, from the README, Makefile, package scripts or compose files. Commands in code blocks."),
 			s("next", "Where to go next", 80, true, false, "Which documents to read next for which goal (new engineer, product person, on-call)."),
 		},
@@ -184,7 +184,7 @@ var Catalog = []Spec{
 		Needs: []string{"module_guides", "facts_detail", "central_bodies"},
 		Sections: []Section{
 			s("list", "Flows at a glance", 0, true, false, "A table: Flow | Trigger | Outcome, for the 3-8 most important flows."),
-			s("details", "Each flow", 900, true, true, "For each flow a ### heading, then: trigger, numbered steps naming function and path:line, a mermaid sequenceDiagram, data touched, and what happens on failure."),
+			s("details", "Each flow", 900, true, true, "For each flow a ### heading, then: trigger, numbered steps naming the function and [path:line], a mermaid sequenceDiagram, data touched, and what happens on failure."),
 		},
 	},
 	{
@@ -193,7 +193,7 @@ var Catalog = []Spec{
 		Needs: []string{"endpoints", "central_bodies"},
 		Sections: []Section{
 			s("overview", "Conventions", 150, true, true, "Base path, authentication, formats, pagination and error shape, as far as the code shows."),
-			s("endpoints", "Endpoints", 0, true, true, "Group by resource with ### headings. For each endpoint: method and path, what it does, auth or role, request fields, response, errors, and the handler (path:line). Use tables for fields."),
+			s("endpoints", "Endpoints", 0, true, true, "Group by resource with ### headings. For each endpoint: method and path, what it does, auth or role, request fields, response, errors, and the handler ([path:line]). Use tables for fields."),
 		},
 	},
 	{
@@ -222,7 +222,7 @@ var Catalog = []Spec{
 		Needs: []string{"env", "special"},
 		Sections: []Section{
 			s("how", "How configuration works", 150, true, true, "Where settings come from (env, files, flags, defaults) and in which order."),
-			s("vars", "Settings", 0, true, true, "A table: Name | Effect | Default | Secret? | Read in (path:line). Every environment variable."),
+			s("vars", "Settings", 0, true, true, "A table: Name | Effect | Default | Secret? | Read in ([path:line]). Every environment variable."),
 		},
 	},
 	{
@@ -252,7 +252,7 @@ var Catalog = []Spec{
 		Needs: []string{"error_symbols", "module_guides"},
 		Sections: []Section{
 			s("model", "How errors work", 150, true, true, "The error types, codes and wrapping conventions, and how errors reach users or logs."),
-			s("catalogue", "Errors", 0, true, true, "A table: Error / code | Raised in (path:line) | Meaning | What to do."),
+			s("catalogue", "Errors", 0, true, true, "A table: Error / code | Raised in ([path:line]) | Meaning | What to do."),
 		},
 	},
 	{

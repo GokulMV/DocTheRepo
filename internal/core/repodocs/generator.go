@@ -91,7 +91,8 @@ Rules:
 - Write only what the material supports. When something cannot be determined from it, say "Not determined from the code"
   and list it in gaps. Never invent names, files, endpoints, numbers or behaviour.
 - Cite behaviour with [path:line] right after the claim, using only paths and line numbers shown in the material
-  (code is shown with its line numbers). Cite the line where the thing is defined or happens.
+  (code is shown with its line numbers). Cite the line where the thing is defined or happens. Citations are always in
+  square brackets, also inside tables. For a file shown without line numbers, cite [path:0].
 - Lead with what and why before how. Do not restate code line by line. Prefer tables for lists of facts.
 - Put names from the code in backticks, exactly as written in the material.
 - Mermaid diagrams go in fenced mermaid blocks and must start with a diagram type (flowchart, sequenceDiagram, erDiagram).
