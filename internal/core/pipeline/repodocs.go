@@ -34,6 +34,9 @@ type RepoDocsPayload struct {
 type RepoDocsFacts interface {
 	Facts(ctx context.Context, repoID string) (*repodocs.Facts, error)
 	DropLegacy(ctx context.Context, repoID string) ([]string, error)
+	// PutWiring replaces what the repository's configuration and CI say about other services; it
+	// reports whether that changed.
+	PutWiring(ctx context.Context, repoID string, ws []repodocs.Wire) (bool, error)
 }
 
 // DocsBudget reports a repository's monthly docs cap and what this month's docs cost so far. estimate
@@ -45,6 +48,9 @@ var ErrDocsBudget = errors.New("this repository's monthly docs budget is used up
 
 // maxSpecialBytes caps each README, build or CI file read whole as context.
 const maxSpecialBytes = 12000
+
+// maxWiringBytes skips generated or vendored configuration too large to be hand-written.
+const maxWiringBytes = 256 << 10
 
 // vendored directories never documented.
 var skipDirs = []string{"node_modules/", "vendor/", "third_party/", "dist/", "build/", ".git/", "target/", ".venv/", "venv/", "__pycache__/"}
@@ -136,6 +142,9 @@ func (p *Pipeline) RepoDocs(ctx context.Context, job ports.Job) (ports.Outcome, 
 			n++
 		}
 	}
+	if !pl.DryRun {
+		p.readWiring(ctx, repo, facts.AllPaths, read)
+	}
 	meta := llmgateway.CallMeta{RepoID: repo.ID, JobID: job.ID, Override: pl.OverrideCeiling}
 	opts := repodocs.RunOptions{Meta: meta, Read: read, Force: pl.Full, Only: pl.Only, DryRun: pl.DryRun, RetryFailed: pl.RetryFailed,
 		Progress: func(done, total int, doing string) {
@@ -196,6 +205,36 @@ func (p *Pipeline) RepoDocs(ctx context.Context, job ports.Job) (ports.Outcome, 
 	}
 	p.log().Info("repository docs written", "repo", repo.FullName, "written", len(res.Written), "unchanged", res.Unchanged, "failed", len(res.Failed), "cost_usd", res.CostUSD)
 	return ports.Outcome{Status: ports.JobDone, Message: msg, Result: res}, nil
+}
+
+// maxWiringFiles caps how many configuration and CI files one docs run reads for wiring.
+const maxWiringFiles = 80
+
+// readWiring reads the repository's configuration and CI files for how it talks to other services
+// (hosts, images, pipelines) and keeps the facts; a change brings the System architecture up to date.
+// Best effort: a file that cannot be read is skipped.
+func (p *Pipeline) readWiring(ctx context.Context, repo ports.RepoConfig, paths []string, read func(context.Context, string) ([]byte, error)) {
+	var ws []repodocs.Wire
+	n := 0
+	for _, t := range paths {
+		if n >= maxWiringFiles || !repodocs.WiringFile(t) || repodocs.IsTest(t) {
+			continue
+		}
+		b, err := read(ctx, t)
+		if err != nil || len(b) > maxWiringBytes {
+			continue
+		}
+		n++
+		ws = append(ws, repodocs.ExtractWiring(repo.FullName, t, string(b))...)
+	}
+	changed, err := p.RepoDocsFacts.PutWiring(ctx, repo.ID, ws)
+	if err != nil {
+		p.log().Warn("keeping wiring failed", "repo", repo.FullName, "err", err)
+		return
+	}
+	if changed {
+		p.queueSystemDocs(ctx, "configuration or pipelines of "+repo.FullName+" changed")
+	}
 }
 
 // indexDocs puts written documents in the search index (one piece per section) and takes out the

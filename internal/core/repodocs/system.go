@@ -33,7 +33,7 @@ var SystemSpec = Spec{
 	Audience: "everyone working across services, including non-engineers for the map", Purpose: "How the repositories work together as one system.",
 	Sections: []Section{
 		s("map", "The system at a glance", 0, true, false, "A table: Repository | Its role in the system (one line). Then two or three sentences on how the whole fits together."),
-		s("interactions", "How the parts talk", 0, true, true, "Explain the diagram that is provided (do not redraw it), then a table: From | To | How (API, event, library, call) | What is exchanged | Where [repo/path:line]."),
+		s("interactions", "How the parts talk", 0, true, true, "Explain the diagram that is provided (do not redraw it), then a table: From | To | How (API, event, library, call, image, pipeline) | What is exchanged | Where [repo/path:line]. Links found in configuration (a host one calls that another serves) and in pipelines (CI that uses, checks out or triggers another repository; an image one runs that another publishes) count as interactions too."),
 		s("flows", "End-to-end flows across services", 500, true, true, "The 2-4 most important journeys that cross repositories, step by step, each with a mermaid sequenceDiagram whose participants are repositories."),
 		s("contracts", "Shared contracts", 0, false, true, "For each shared API, event or package: producer, consumers, what is in it, and what would break consumers if it changed."),
 		s("coupling", "Coupling and risks", 200, true, false, "Where the parts are tightly coupled, cycles, single points of failure, and any mismatch the material shows (a consumer expecting what a producer does not send)."),
@@ -67,7 +67,7 @@ func SystemDiagram(in SystemInput) string {
 	var edges []edge
 	for _, l := range in.Links {
 		label := l.Kind
-		if l.Kind == "event" || l.Kind == "api" || l.Kind == "library" {
+		if l.Kind == "event" || l.Kind == "api" || l.Kind == "library" || l.Kind == "image" || l.Kind == "pipeline" {
 			label = l.Kind + ": " + clipLabel(l.Via)
 		}
 		e := edge{id[l.FromRepo], id[l.ToRepo], label}

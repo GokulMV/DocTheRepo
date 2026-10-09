@@ -47,14 +47,18 @@ func TestSystemDocs(t *testing.T) {
 	gh := githubmock.New()
 	defer gh.Close()
 	gh.CreateRepo("acme/lib", "main", map[string]string{
-		"go.mod":    "module github.com/acme/lib\n\ngo 1.22\n",
-		"money.go":  "package lib\n\n// Cents formats an amount.\nfunc Cents(n int64) string { return \"\" }\n",
-		"README.md": "# lib\n\nShared money helpers.\n",
+		"go.mod":              "module github.com/acme/lib\n\ngo 1.22\n",
+		"money.go":            "package lib\n\n// Cents formats an amount.\nfunc Cents(n int64) string { return \"\" }\n",
+		"README.md":           "# lib\n\nShared money helpers.\n",
+		"deploy/service.yaml": "apiVersion: v1\nkind: Service\nmetadata:\n  name: ledger\nspec:\n  ports:\n    - port: 8080\n",
 	})
 	gh.CreateRepo("acme/web", "main", map[string]string{
 		"go.mod":                   "module github.com/acme/web\n\ngo 1.22\n\nrequire github.com/acme/lib v1.2.0\n",
 		"main.go":                  "package main\n\nimport \"github.com/acme/lib\"\n\nfunc main() { _ = lib.Cents(5) }\n",
 		"docs/adr/0001-use-lib.md": "# Use acme/lib for money\n\nWe moved formatting into acme/lib.\n",
+		// Wiring in configuration and CI: a host acme/lib serves, and acme/lib's reusable workflow.
+		"deploy/app.yaml":          "kind: Deployment\nspec:\n  template:\n    spec:\n      containers:\n        - name: web\n          env:\n            - name: LEDGER_URL\n              value: http://ledger.default.svc.cluster.local:8080\n",
+		".github/workflows/ci.yml": "on: push\njobs:\n  money:\n    uses: acme/lib/.github/workflows/money-contract.yml@main\n",
 	})
 	llm := stubllm.New()
 	defer llm.Close()
@@ -103,7 +107,19 @@ func TestSystemDocs(t *testing.T) {
 	require.Equal(t, http.StatusOK, code, sys)
 	links := sys["links"].([]any)
 	require.NotEmpty(t, links)
-	l := links[0].(map[string]any)
+	byKind := map[string]map[string]any{}
+	for _, x := range links {
+		byKind[x.(map[string]any)["kind"].(string)] = x.(map[string]any)
+	}
+	require.Contains(t, byKind, "library", "%v", links)
+	l := byKind["library"]
+	// Configuration and pipelines link them too.
+	require.Contains(t, byKind, "api", "a host acme/lib serves, called from acme/web's deployment: %v", links)
+	assert.Equal(t, "ledger.default.svc.cluster.local", byKind["api"]["via"])
+	assert.Equal(t, "deploy/app.yaml", byKind["api"]["path"])
+	require.Contains(t, byKind, "pipeline", "acme/web's CI uses acme/lib's workflow: %v", links)
+	assert.Equal(t, "acme/web", byKind["pipeline"]["from_name"])
+	assert.Equal(t, "acme/lib", byKind["pipeline"]["to_name"])
 	assert.Equal(t, "acme/web", l["from_name"])
 	assert.Equal(t, "acme/lib", l["to_name"])
 	assert.Equal(t, "library", l["kind"])

@@ -218,7 +218,7 @@ type SystemLink struct {
 	FromName string `json:"from_name"`
 	ToRepo   string `json:"to_repo"`
 	ToName   string `json:"to_name"`
-	Kind     string `json:"kind"` // event | api | call | library | other
+	Kind     string `json:"kind"` // event | api | call | library | image | pipeline | other
 	Via      string `json:"via"`  // the topic, endpoint, symbol or package
 	Path     string `json:"path,omitempty"`
 	Line     int    `json:"line,omitempty"`
