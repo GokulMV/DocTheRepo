@@ -57,7 +57,8 @@ func (a *Adapter) effortUnsupported(model string) bool {
 		return true
 	}
 	m := strings.ToLower(model)
-	return strings.Contains(m, "haiku") || strings.HasPrefix(m, "claude-3")
+	// Haiku 4.5 and older reject it; Claude Haiku 5.5 and later take it (default medium).
+	return strings.Contains(m, "haiku-4") || strings.HasPrefix(m, "claude-3")
 }
 
 // isEffortRejection reports the API's "this model does not support the effort parameter" error.

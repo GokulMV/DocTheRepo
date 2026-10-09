@@ -286,5 +286,7 @@ func TestChat_EffortDroppedForModelsThatRejectIt(t *testing.T) {
 	assert.Equal(t, 3, calls, "remembered: no wasted request")
 	ask("claude-haiku-4-5-20251001")
 	assert.Equal(t, 4, calls)
-	assert.Equal(t, 1, withEffort, "Haiku never gets the effort parameter")
+	assert.Equal(t, 1, withEffort, "Haiku 4.5 never gets the effort parameter")
+	ask("claude-haiku-5-5")
+	assert.Equal(t, 2, withEffort, "Claude Haiku 5.5 takes it")
 }
