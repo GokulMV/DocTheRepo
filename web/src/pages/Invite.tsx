@@ -46,7 +46,7 @@ export default function Invite() {
 
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
-      <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-xs dark:border-slate-800 dark:bg-slate-900">
         <Logo className="mb-4 h-10 w-10" />
         {info.isLoading && <Spinner />}
         {info.error ? (

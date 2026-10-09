@@ -12,9 +12,9 @@ export { cx };
 
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger';
 const variants: Record<Variant, string> = {
-  primary: 'bg-brand-600 text-white shadow-sm shadow-brand-600/20 hover:bg-brand-700 disabled:bg-brand-600/50 dark:bg-brand-500 dark:hover:bg-brand-400',
-  secondary: 'border border-slate-200 bg-white text-slate-800 shadow-sm hover:bg-slate-50 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100 dark:hover:bg-white/[0.08]',
-  ghost: 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/[0.06]',
+  primary: 'bg-brand-600 text-white shadow-xs shadow-brand-600/20 hover:bg-brand-700 disabled:bg-brand-600/50 dark:bg-brand-500 dark:hover:bg-brand-400',
+  secondary: 'border border-slate-200 bg-white text-slate-800 shadow-xs hover:bg-slate-50 dark:border-white/10 dark:bg-white/4 dark:text-slate-100 dark:hover:bg-white/8',
+  ghost: 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/6',
   danger: 'bg-red-600 text-white hover:bg-red-700 disabled:bg-red-600/50',
 };
 
@@ -24,7 +24,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
       ref={ref}
       type={type}
       className={cx(
-        'inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed',
+        'inline-flex items-center justify-center gap-1.5 rounded-lg font-medium transition-colors focus:outline-hidden focus-visible:ring-2 focus-visible:ring-brand-500 disabled:cursor-not-allowed',
         size === 'sm' ? 'h-8 px-2.5 text-xs' : 'h-9 px-3.5 text-sm',
         variants[variant],
         className,
@@ -36,7 +36,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
 Button.displayName = 'Button';
 
 const fieldBase =
-  'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20 dark:border-white/10 dark:bg-white/[0.03] dark:placeholder:text-slate-500';
+  'rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-xs placeholder:text-slate-400 focus:border-brand-500 focus:outline-hidden focus:ring-2 focus:ring-brand-500/20 dark:border-white/10 dark:bg-white/3 dark:placeholder:text-slate-500';
 
 // field is full width unless the caller sets a width (w-48, min-w-…): Tailwind cannot tell which of two
 // width classes was meant, so only one may be present.
@@ -85,7 +85,7 @@ export function Card({ title, actions, children, className }: { title?: ReactNod
   return (
     <section className={cx('rounded-xl border border-slate-200/80 bg-white shadow-card dark:border-white/[0.07] dark:bg-slate-900/60', className)}>
       {(title || actions) && (
-        <header className="flex items-center justify-between gap-2 border-b border-slate-200/80 px-4 py-3 dark:border-white/[0.06]">
+        <header className="flex items-center justify-between gap-2 border-b border-slate-200/80 px-4 py-3 dark:border-white/6">
           <h2 className="text-sm font-semibold">{title}</h2>
           <div className="flex items-center gap-2">{actions}</div>
         </header>
@@ -96,7 +96,7 @@ export function Card({ title, actions, children, className }: { title?: ReactNod
 }
 
 const tones = {
-  gray: 'bg-slate-100 text-slate-700 dark:bg-white/[0.06] dark:text-slate-300',
+  gray: 'bg-slate-100 text-slate-700 dark:bg-white/6 dark:text-slate-300',
   green: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300',
   amber: 'bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300',
   red: 'bg-red-100 text-red-800 dark:bg-red-500/15 dark:text-red-300',
@@ -126,7 +126,7 @@ export function IconTile({ icon: Icon, tone = 'brand', size = 'md' }: { icon: Lu
     green: 'bg-emerald-50 text-emerald-600 ring-emerald-100 dark:bg-emerald-500/15 dark:text-emerald-300 dark:ring-emerald-400/20',
     amber: 'bg-amber-50 text-amber-600 ring-amber-100 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-400/20',
     violet: 'bg-violet-50 text-violet-600 ring-violet-100 dark:bg-violet-500/15 dark:text-violet-300 dark:ring-violet-400/20',
-    slate: 'bg-slate-100 text-slate-500 ring-slate-200 dark:bg-white/[0.06] dark:text-slate-400 dark:ring-white/10',
+    slate: 'bg-slate-100 text-slate-500 ring-slate-200 dark:bg-white/6 dark:text-slate-400 dark:ring-white/10',
   }[tone];
   const box = { sm: 'h-8 w-8 rounded-lg', md: 'h-10 w-10 rounded-xl', lg: 'h-12 w-12 rounded-2xl' }[size];
   const ic = { sm: 'h-4 w-4', md: 'h-5 w-5', lg: 'h-6 w-6' }[size];
@@ -185,8 +185,8 @@ export function ErrorNote({ error }: { error: unknown }) {
 
 export function Empty({ title, children, icon: Icon = CircleDashed, action }: { title: string; children?: ReactNode; icon?: LucideIcon; action?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center rounded-xl border border-dashed border-slate-300 bg-white/50 px-8 py-12 text-center dark:border-white/10 dark:bg-white/[0.02]">
-      <span className="grid h-12 w-12 place-items-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-white/[0.05] dark:text-slate-500">
+    <div className="flex flex-col items-center rounded-xl border border-dashed border-slate-300 bg-white/50 px-8 py-12 text-center dark:border-white/10 dark:bg-white/2">
+      <span className="grid h-12 w-12 place-items-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-white/5 dark:text-slate-500">
         <Icon className="h-6 w-6" aria-hidden />
       </span>
       <p className="mt-4 text-sm font-semibold">{title}</p>
@@ -200,7 +200,7 @@ export function Table({ head, children }: { head: ReactNode[]; children: ReactNo
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-sm">
-        <thead className="border-b border-slate-200/80 text-[11px] uppercase tracking-wide text-slate-500 dark:border-white/[0.06]">
+        <thead className="border-b border-slate-200/80 text-[11px] uppercase tracking-wide text-slate-500 dark:border-white/6">
           <tr>
             {head.map((h, i) => (
               <th key={i} className="px-3 py-2 font-medium">
@@ -209,7 +209,7 @@ export function Table({ head, children }: { head: ReactNode[]; children: ReactNo
             ))}
           </tr>
         </thead>
-        <tbody className="divide-y divide-slate-100 dark:divide-white/[0.05]">{children}</tbody>
+        <tbody className="divide-y divide-slate-100 dark:divide-white/5">{children}</tbody>
       </table>
     </div>
   );
@@ -229,7 +229,7 @@ export function Dialog({ open, onOpenChange, title, description, children }: {
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-sm" />
+        <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-slate-950/50 backdrop-blur-xs" />
         <DialogPrimitive.Content className="fixed left-1/2 top-1/2 z-50 max-h-[90vh] w-[min(36rem,95vw)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-slate-200/80 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-slate-900">
           <DialogPrimitive.Title className="text-base font-semibold">{title}</DialogPrimitive.Title>
           {description ? (
@@ -247,7 +247,7 @@ export function Dialog({ open, onOpenChange, title, description, children }: {
 /** DialogFooter ends a dialog form: actions on the right, separated from the fields. */
 export function DialogFooter({ children, note }: { children: ReactNode; note?: ReactNode }) {
   return (
-    <div className="-mx-6 -mb-6 mt-5 flex flex-wrap items-center justify-end gap-2 rounded-b-2xl border-t border-slate-200/80 bg-slate-50/80 px-6 py-3 dark:border-white/[0.06] dark:bg-white/[0.02]">
+    <div className="-mx-6 -mb-6 mt-5 flex flex-wrap items-center justify-end gap-2 rounded-b-2xl border-t border-slate-200/80 bg-slate-50/80 px-6 py-3 dark:border-white/6 dark:bg-white/2">
       {note && <div className="mr-auto text-xs text-slate-500">{note}</div>}
       {children}
     </div>

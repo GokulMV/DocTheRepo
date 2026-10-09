@@ -201,7 +201,7 @@ function SSOCard({ state, callback, onSaved }: { state: SignInState; callback: s
         Add them under Users first to give them another role.
       </p>
       {state.sso_source === 'config' && (
-        <p className="mt-2 rounded-lg bg-slate-100 p-2 text-xs text-slate-600 dark:bg-white/[0.05] dark:text-slate-400">
+        <p className="mt-2 rounded-lg bg-slate-100 p-2 text-xs text-slate-600 dark:bg-white/5 dark:text-slate-400">
           Single sign-on is configured in the deployment’s config file ({state.config_issuer}). Saving here replaces it until you remove it again.
         </p>
       )}

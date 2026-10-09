@@ -96,7 +96,7 @@ function Branch({ node, repoId, selected, onSelect, depth }: {
         className={cx(
           rowCls,
           isRepo && 'font-semibold',
-          active ? 'bg-brand-50 font-medium text-brand-800 dark:bg-brand-500/15 dark:text-white' : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/[0.05]',
+          active ? 'bg-brand-50 font-medium text-brand-800 dark:bg-brand-500/15 dark:text-white' : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5',
         )}
         style={{ paddingLeft: depth * 14 + 6 }}
         onClick={() => (expandable ? ex.toggle(node) : onSelect(node))}
@@ -150,7 +150,7 @@ function NoDocs() {
       }
     };
     return (
-      <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-8 shadow-card dark:border-white/[0.06] dark:bg-slate-900/40">
+      <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-8 shadow-card dark:border-white/6 dark:bg-slate-900/40">
         <div className="mx-auto max-w-2xl text-center">
           <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-300">
             <BookOpen className="h-6 w-6" aria-hidden />
@@ -205,7 +205,7 @@ function NoDocs() {
     { icon: Sparkles, title: 'Push, or import', text: 'Docs are written on the next push. Already have Markdown docs? Import them from the repository’s page.', to: '/repos', show: true },
   ].filter((x) => x.show);
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-8 shadow-card dark:border-white/[0.06] dark:bg-slate-900/40">
+    <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-8 shadow-card dark:border-white/6 dark:bg-slate-900/40">
       <div className="mx-auto max-w-2xl text-center">
         <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-300">
           <BookOpen className="h-6 w-6" aria-hidden />
@@ -254,7 +254,7 @@ function LegacyDocs() {
 
 const DESCRIPTION = 'Generated and imported documentation, per repository. Edit generated files only inside dth:human blocks — those survive regeneration.';
 
-const toolBtn = 'grid h-6 w-6 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/[0.06] dark:hover:text-slate-200';
+const toolBtn = 'grid h-6 w-6 place-items-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/6 dark:hover:text-slate-200';
 
 function DocsBrowser({ roots, nodeId, node, onSelect }: {
   roots: TreeNode[];
@@ -274,9 +274,9 @@ function DocsBrowser({ roots, nodeId, node, onSelect }: {
       <PageHeader title="Docs" description={DESCRIPTION} />
       <ExplorerCtx.Provider value={ex.ctx}>
         <div className="grid gap-6 lg:grid-cols-[17rem_minmax(0,1fr)]">
-          <nav aria-label="Documentation" className="self-start rounded-2xl border border-slate-200/80 bg-white/70 shadow-card lg:sticky lg:top-6 dark:border-white/[0.06] dark:bg-slate-900/40">
-            <div className="flex items-center gap-0.5 border-b border-slate-200/80 px-2 py-1.5 dark:border-white/[0.06]">
-              <p className="flex-1 px-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-slate-400">Explorer</p>
+          <nav aria-label="Documentation" className="self-start rounded-2xl border border-slate-200/80 bg-white/70 shadow-card lg:sticky lg:top-6 dark:border-white/6 dark:bg-slate-900/40">
+            <div className="flex items-center gap-0.5 border-b border-slate-200/80 px-2 py-1.5 dark:border-white/6">
+              <p className="flex-1 px-2 text-[11px] font-semibold uppercase tracking-widest text-slate-400">Explorer</p>
               <button type="button" className={toolBtn} onClick={() => node.data && ex.locate(node.data.ancestors ?? [])} disabled={!node.data}
                 aria-label="Show the open page in the tree" title="Show the open page in the tree">
                 <LocateFixed className="h-3.5 w-3.5" aria-hidden />
@@ -296,7 +296,7 @@ function DocsBrowser({ roots, nodeId, node, onSelect }: {
           </nav>
           <div className="min-w-0">
             {!nodeId && (
-              <div className="grid min-h-[16rem] place-items-center rounded-2xl border border-slate-200/80 bg-white/40 p-8 text-center dark:border-white/[0.06] dark:bg-slate-900/20">
+              <div className="grid min-h-64 place-items-center rounded-2xl border border-slate-200/80 bg-white/40 p-8 text-center dark:border-white/6 dark:bg-slate-900/20">
                 <div>
                   <FileText className="mx-auto h-7 w-7 text-slate-300 dark:text-slate-600" aria-hidden />
                   <p className="mt-3 text-sm font-medium">Choose a page in the explorer</p>

@@ -7,13 +7,20 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 )
 
-type fakeHub struct{ paths []string }
+// fakeHub answers Hub API calls; the server handles requests concurrently, so it locks.
+type fakeHub struct {
+	mu    sync.Mutex
+	paths []string
+}
 
 func (f *fakeHub) call(_ context.Context, method, path string, body, out any) error {
+	f.mu.Lock()
 	f.paths = append(f.paths, method+" "+path)
+	f.mu.Unlock()
 	var v string
 	switch {
 	case path == "/repos":

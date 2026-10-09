@@ -63,7 +63,7 @@ function ArchSummary({ a }: { a: Architecture }) {
   if (!parts.length) return null;
   const last = parts.pop();
   return (
-    <p className="rounded-xl border border-slate-200/80 bg-white/70 px-4 py-3 text-sm text-slate-700 dark:border-white/[0.06] dark:bg-slate-900/40 dark:text-slate-300">
+    <p className="rounded-xl border border-slate-200/80 bg-white/70 px-4 py-3 text-sm text-slate-700 dark:border-white/6 dark:bg-slate-900/40 dark:text-slate-300">
       <b className="font-medium">{a.repo.full_name}</b> {parts.length ? `${parts.join('; ')}; and ${last}` : last}. Read left to right: who calls it, what it exposes, its parts, then what it depends on.
     </p>
   );
@@ -102,7 +102,7 @@ function ArchitectureList() {
               <Link
                 key={s.repo_id}
                 to={`/architecture/${s.repo_id}`}
-                className="group rounded-xl border border-slate-200/80 bg-white p-4 shadow-card transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md dark:border-white/[0.06] dark:bg-slate-900/60 dark:hover:border-brand-500/40"
+                className="group rounded-xl border border-slate-200/80 bg-white p-4 shadow-card transition hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-md dark:border-white/6 dark:bg-slate-900/60 dark:hover:border-brand-500/40"
               >
                 <div className="flex items-start gap-3">
                   <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-300"><FolderGit2 className="h-[18px] w-[18px]" aria-hidden /></span>
@@ -114,7 +114,7 @@ function ArchitectureList() {
                 </div>
                 <dl className="mt-4 grid grid-cols-4 gap-2 text-center">
                   {([['Endpoints', s.endpoints, 'endpoint'], ['Topics', s.topics, 'queue_topic'], ['Data', s.datastores, 'datastore'], ['Modules', s.modules, 'module']] as const).map(([label, n, kind]) => (
-                    <div key={label} className="rounded-lg bg-slate-50 px-1 py-2 dark:bg-white/[0.03]">
+                    <div key={label} className="rounded-lg bg-slate-50 px-1 py-2 dark:bg-white/3">
                       <dd className="text-base font-semibold tabular-nums" style={{ color: n ? kindMeta(kind).color : undefined }}>{n}</dd>
                       <dt className="text-[11px] text-slate-500">{label}</dt>
                     </div>
@@ -175,7 +175,7 @@ function RepoArchitecture({ repoId }: { repoId: string }) {
       )}
       {a && (
         <>
-          <div role="tablist" aria-label="Views" className="mb-4 flex flex-wrap gap-1 border-b border-slate-200/80 dark:border-white/[0.06]">
+          <div role="tablist" aria-label="Views" className="mb-4 flex flex-wrap gap-1 border-b border-slate-200/80 dark:border-white/6">
             <Tab active={view === 'generated'} onClick={() => setParams({})} icon={Network}>Generated</Tab>
             {a.diagrams.map((d) => (
               <Tab key={d.id} active={view === d.id} onClick={() => setParams({ view: d.id })} icon={FileCode2}>{d.title}</Tab>
@@ -207,7 +207,7 @@ function RepoArchitecture({ repoId }: { repoId: string }) {
                     <p className="text-xs text-slate-500">{nodeSubtitle(sel, kindMeta(sel.kind).label)} · {LAYERS.find((l) => l.id === sel.layer)?.label}</p>
                     {sel.key && sel.key !== sel.name && <p className="mt-1 break-all font-mono text-[12px] text-slate-500">{sel.key}</p>}
                     {!!sel.items?.length && (
-                      <ul className="mt-3 max-h-64 space-y-0.5 overflow-y-auto rounded-lg bg-slate-50 p-2 font-mono text-[12px] dark:bg-white/[0.04]">
+                      <ul className="mt-3 max-h-64 space-y-0.5 overflow-y-auto rounded-lg bg-slate-50 p-2 font-mono text-[12px] dark:bg-white/4">
                         {sel.items.map((it) => <li key={it} className="truncate" title={it}>{it}</li>)}
                         {(sel.count ?? 0) > sel.items.length && <li className="font-sans text-slate-400">+{(sel.count ?? 0) - sel.items.length} more</li>}
                       </ul>
@@ -228,7 +228,7 @@ function RepoArchitecture({ repoId }: { repoId: string }) {
                 ) : null}
                 <Card title="Configuration">
                   {a.env.length ? (
-                    <div className="flex flex-wrap gap-1.5">{a.env.map((e) => <code key={e} className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] dark:bg-white/[0.06]">{e}</code>)}</div>
+                    <div className="flex flex-wrap gap-1.5">{a.env.map((e) => <code key={e} className="rounded-sm bg-slate-100 px-1.5 py-0.5 font-mono text-[12px] dark:bg-white/6">{e}</code>)}</div>
                   ) : <p className="text-sm text-slate-500">No environment variables read.</p>}
                 </Card>
                 <Card title="Documentation">
@@ -266,7 +266,7 @@ function RepoArchitecture({ repoId }: { repoId: string }) {
                 title={diagram.title}
                 src={`/api/v1/architecture/diagrams/${diagram.id}`}
                 sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-downloads"
-                className="h-[78vh] w-full rounded-xl border border-slate-200/80 bg-white dark:border-white/[0.06] dark:bg-slate-950"
+                className="h-[78vh] w-full rounded-xl border border-slate-200/80 bg-white dark:border-white/6 dark:bg-slate-950"
               />
             </div>
           )}

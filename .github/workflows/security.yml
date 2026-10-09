@@ -36,7 +36,7 @@ jobs:
           load: true
           tags: dth-hub:scan
       - name: Trivy image scan (fixable HIGH/CRITICAL fail)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: dth-hub:scan
           severity: HIGH,CRITICAL

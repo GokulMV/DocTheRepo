@@ -124,7 +124,7 @@ export function MonthlyBudget() {
             <Button disabled={!valid || save.isPending || amount === budget} onClick={async () => { await save.mutateAsync(amount); setSaved(true); }}>{save.isPending ? 'Saving…' : 'Save'}</Button>
           </div>
         </Field>
-        <div className="min-w-[14rem] flex-1">
+        <div className="min-w-56 flex-1">
           <p className="text-sm text-slate-600 dark:text-slate-400">
             Spent this month: <b className="text-slate-900 dark:text-slate-100">{usd(spent)}</b>{budget ? <> of {usd(budget)}</> : null}
           </p>

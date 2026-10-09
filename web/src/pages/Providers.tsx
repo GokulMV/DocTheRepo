@@ -136,7 +136,7 @@ function AddProvider({ kinds, routed }: { kinds: string[]; routed: string[] }) {
                 </ol>
               </div>
             )}
-            {spec?.authNote && <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600 dark:bg-white/[0.04] dark:text-slate-400">{spec.authNote}</p>}
+            {spec?.authNote && <p className="rounded-lg bg-slate-50 p-3 text-xs text-slate-600 dark:bg-white/4 dark:text-slate-400">{spec.authNote}</p>}
             {spec?.key !== 'none' && (
               <Field label={spec?.keyLabel ?? 'API key'} hint={<SealedHint />}>
                 <Input type="password" autoComplete="off" value={key} onChange={(e) => setKey(e.target.value)} />
@@ -302,7 +302,7 @@ function RouteRow({ feature, route, providers }: { feature: string; route?: Rout
         </div>
       </Td>
       <Td>
-        <div className="flex min-w-[7rem] flex-col items-start gap-1">
+        <div className="flex min-w-28 flex-col items-start gap-1">
           {dirty || !route ? (
             <Button size="sm" disabled={!v.providerId || !v.model.trim() || save.isPending} onClick={() => void onSave()}>{save.isPending ? 'Saving…' : 'Save'}</Button>
           ) : (
@@ -371,7 +371,7 @@ export default function Providers() {
           Advanced: a model per feature, fallbacks and docs cost
           <ChevronDown className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180" aria-hidden />
         </summary>
-        <div className="border-t border-slate-200/80 p-4 dark:border-white/[0.06]">
+        <div className="border-t border-slate-200/80 p-4 dark:border-white/6">
           <Table head={['Feature', 'Provider', 'Model', 'Effort', 'Fallback', '']}>
             {(routes.data?.features ?? []).map((f) => (
               <RouteRow key={f} feature={f} route={routes.data?.items.find((r) => r.feature === f)} providers={list} />

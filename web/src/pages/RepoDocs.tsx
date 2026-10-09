@@ -239,7 +239,7 @@ function Empty({ repo }: { repo: Repo }) {
     api.post<{ documents: number; estimated_usd: number; modules: number }>(`/repos/${repo.id}/docs/estimate`).then(setEstimate, setErr);
   }, [repo.id, repo.last_processed_sha, routed]);
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-8 text-center shadow-card dark:border-white/[0.06] dark:bg-slate-900/40">
+    <div className="rounded-2xl border border-slate-200/80 bg-white/70 p-8 text-center shadow-card dark:border-white/6 dark:bg-slate-900/40">
       <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-brand-50 text-brand-600 dark:bg-brand-500/15 dark:text-brand-300"><BookOpen className="h-6 w-6" aria-hidden /></span>
       <h2 className="mt-4 text-lg font-semibold">No documents for {repo.full_name} yet</h2>
       {!repo.last_processed_sha ? (

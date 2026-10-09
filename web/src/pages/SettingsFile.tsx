@@ -101,7 +101,7 @@ export default function SettingsFile() {
             }}
             placeholder={EXAMPLE}
             spellCheck={false}
-            className="min-h-[22rem] font-mono text-[13px] leading-relaxed"
+            className="min-h-88 font-mono text-[13px] leading-relaxed"
           />
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Button variant="secondary" disabled={!text.trim() || run.isPending} onClick={() => run.mutate(true)}><Eye className="h-4 w-4" aria-hidden />Preview changes</Button>
@@ -118,12 +118,12 @@ export default function SettingsFile() {
           <ul className="mt-3 space-y-2 text-xs">
             {REFS.map(([ref, what]) => (
               <li key={ref}>
-                <code className="rounded bg-slate-100 px-1 py-0.5 font-mono text-[12px] text-slate-800 dark:bg-white/[0.06] dark:text-slate-200">{ref}</code>
+                <code className="rounded-sm bg-slate-100 px-1 py-0.5 font-mono text-[12px] text-slate-800 dark:bg-white/6 dark:text-slate-200">{ref}</code>
                 <span className="mt-0.5 block text-slate-500">{what}</span>
               </li>
             ))}
           </ul>
-          <div className="mt-4 rounded-lg border border-slate-200 p-3 text-xs text-slate-600 dark:border-white/[0.08] dark:text-slate-400">
+          <div className="mt-4 rounded-lg border border-slate-200 p-3 text-xs text-slate-600 dark:border-white/8 dark:text-slate-400">
             {enabled.length > 0 ? (
               <>Here, the Hub resolves: <b>{enabled.join(', ')}</b>{enabled.includes('env') && <> (variables starting with <code>{sources.data?.env_prefix}</code>)</>}.</>
             ) : (
