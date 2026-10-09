@@ -9,3 +9,5 @@
 - [`0030_docs_phase2.up.sql`](0030_docs_phase2.up.sql.md)
 - [`0031_chunk_requires_repos.down.sql`](0031_chunk_requires_repos.down.sql.md) — Rollback migration that removes the requires_repos column from the chunks table.
 - [`0031_chunk_requires_repos.up.sql`](0031_chunk_requires_repos.up.sql.md)
+- [`0033_repo_wiring.down.sql`](0033_repo_wiring.down.sql.md) — Database migration that drops the repo_wiring table when rolling back migration 0033.
+- [`0033_repo_wiring.up.sql`](0033_repo_wiring.up.sql.md) — Database migration that creates the repo_wiring table to track inter-repository dependencies discovered from configuration and CI files.
