@@ -11,3 +11,5 @@
 - [`0031_chunk_requires_repos.up.sql`](0031_chunk_requires_repos.up.sql.md)
 - [`0033_repo_wiring.down.sql`](0033_repo_wiring.down.sql.md) — Database migration that drops the repo_wiring table when rolling back migration 0033.
 - [`0033_repo_wiring.up.sql`](0033_repo_wiring.up.sql.md) — Database migration that creates the repo_wiring table to track inter-repository dependencies discovered from configuration and CI files.
+- [`0034_seed_haiku_5_5_price.down.sql`](0034_seed_haiku_5_5_price.down.sql.md) — Database migration to remove seeded pricing data for the Anthropic Claude Haiku 5.5 model during rollback.
+- [`0034_seed_haiku_5_5_price.up.sql`](0034_seed_haiku_5_5_price.up.sql.md)
