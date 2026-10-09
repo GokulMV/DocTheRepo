@@ -33,6 +33,9 @@ type Generator struct {
 	Store Store
 	// Cost prices a call (spendguard); optional.
 	Cost func(providerKind, model, feature string, in, out int64) (float64, bool)
+	// CostUsage prices actual usage with prompt-cache reads and writes at their own rates (in includes
+	// them); optional, Cost is used without it.
+	CostUsage func(providerKind, model, feature string, in, out, cacheRead, cacheWrite int64) (float64, bool)
 	// Parallel is how many documents are written at once (default 3).
 	Parallel int
 	// Budget is the input budget per document in tokens (default 60000, or the route's if larger).
@@ -452,23 +455,21 @@ func (g *Generator) write(ctx context.Context, e *env, j job, prev *Doc, route l
 	var w written
 	var res checkResult
 	chk := func() []string {
-		res = check(j.spec, &w, e.facts, known)
+		res = check(j.spec, &w, e.facts, known, material)
 		return res.hard
 	}
-	maxOut := 1500
+	// The reply's own length, plus room for the model's thinking (current models think by default and
+	// thinking counts against the output limit). The route's limit only raises it.
+	maxOut := 8000
 	for _, sec := range j.spec.Sections {
-		maxOut += max(sec.Words, 250) * 2
+		maxOut += max(sec.Words, 400) * 3
 	}
-	if route.MaxOutputTokens > 0 {
-		maxOut = min(maxOut, route.MaxOutputTokens)
-	}
+	maxOut = min(max(maxOut, route.MaxOutputTokens), 32000)
 	user := prompt(e, j, material)
 	r, err := g.GW.ChatJSONResult(ctx, llmgateway.FeatureDocGen, o.Meta, ports.ChatRequest{System: system,
 		Messages: []ports.ChatMessage{{Role: "user", Content: user}}, MaxOutputTokens: maxOut}, docSchema, &w, chk)
-	d.TokensIn, d.TokensOut, d.Model, d.DraftProblems = r.Usage.InputTokens, r.Usage.OutputTokens, r.Model, r.Repaired
-	if g.Cost != nil {
-		d.CostUSD, _ = g.Cost(route.ProviderKind, r.Model, llmgateway.FeatureDocGen, r.Usage.InputTokens, r.Usage.OutputTokens)
-	}
+	d.TokensIn, d.TokensOut, d.Model, d.DraftProblems = inputTokens(r.Usage), r.Usage.OutputTokens, r.Model, r.Repaired
+	d.CostUSD = g.usageCost(route.ProviderKind, r.Model, llmgateway.FeatureDocGen, r.Usage)
 	if err != nil {
 		d.Error = err.Error()
 		return d, err
@@ -762,12 +763,9 @@ func (g *Generator) writeCards(ctx context.Context, f *Facts, cards map[string]C
 			out, usage, err := g.cardBatch(gctx, feature, route, batch, o)
 			mu.Lock()
 			defer mu.Unlock()
-			res.TokensIn += usage.InputTokens
+			res.TokensIn += inputTokens(usage)
 			res.TokensOut += usage.OutputTokens
-			if g.Cost != nil {
-				c, _ := g.Cost(route.ProviderKind, route.Model, feature, usage.InputTokens, usage.OutputTokens)
-				res.CostUSD += c
-			}
+			res.CostUSD += g.usageCost(route.ProviderKind, route.Model, feature, usage)
 			if err != nil {
 				var sb *ports.SpendBlockedError
 				if errors.As(err, &sb) {
@@ -858,7 +856,7 @@ func (g *Generator) cardBatch(ctx context.Context, feature string, route llmgate
 		return probs
 	}
 	r, err := g.GW.ChatJSONResult(ctx, feature, o.Meta, ports.ChatRequest{System: cardSystem, Messages: []ports.ChatMessage{{Role: "user", Content: b.String()}},
-		MaxOutputTokens: min(400*len(batch)+500, max(route.MaxOutputTokens, 4000))}, cardSchema, &out, chk)
+		MaxOutputTokens: min(max(6000+500*len(batch), route.MaxOutputTokens), 32000)}, cardSchema, &out, chk)
 	if err != nil {
 		return nil, r.Usage, err
 	}
@@ -878,4 +876,22 @@ func (g *Generator) cardBatch(ctx context.Context, feature string, route llmgate
 func MarshalSections(s []DocSection) []byte {
 	b, _ := json.Marshal(s)
 	return b
+}
+
+// inputTokens is all the input a call was billed for: uncached, cache reads and cache writes.
+func inputTokens(u ports.TokenUsage) int64 {
+	return u.InputTokens + u.CacheReadTokens + u.CacheWriteTokens
+}
+
+// usageCost prices a call's usage, prompt-cache tokens at their own rates when that is known.
+func (g *Generator) usageCost(kind, model, feature string, u ports.TokenUsage) float64 {
+	if g.CostUsage != nil {
+		c, _ := g.CostUsage(kind, model, feature, inputTokens(u), u.OutputTokens, u.CacheReadTokens, u.CacheWriteTokens)
+		return c
+	}
+	if g.Cost != nil {
+		c, _ := g.Cost(kind, model, feature, inputTokens(u), u.OutputTokens)
+		return c
+	}
+	return 0
 }

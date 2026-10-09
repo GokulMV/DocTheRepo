@@ -124,7 +124,7 @@ var commonTicks = map[string]bool{"null": true, "nil": true, "true": true, "fals
 	"http": true, "https": true, "get": true, "post": true, "put": true, "patch": true, "delete": true, "200": true, "404": true, "500": true}
 
 // identifiers returns backticked names that look like code (not commands or prose), and those not known.
-func identifiers(md string, known map[string]bool) (total int, unknown []string) {
+func identifiers(md string, known map[string]bool, material string) (total int, unknown []string) {
 	md = fenceRE.ReplaceAllString(md, " ")
 	seen := map[string]bool{}
 	for _, m := range tickRE.FindAllStringSubmatch(md, -1) {
@@ -142,11 +142,23 @@ func identifiers(md string, known map[string]bool) (total int, unknown []string)
 			continue
 		}
 		total++
-		if ok := matchKnown(name, known); !ok {
+		if ok := matchKnown(name, known) || inMaterial(name, material); !ok {
 			unknown = append(unknown, t)
 		}
 	}
 	return total, unknown
+}
+
+// inMaterial reports a name written in the material itself; a trailing wildcard (DTH_*) matches its prefix.
+func inMaterial(name, material string) bool {
+	if material == "" {
+		return false
+	}
+	n := strings.TrimRight(name, "*")
+	if len(n) < 3 {
+		return false
+	}
+	return strings.Contains(material, n)
 }
 
 func matchKnown(name string, known map[string]bool) bool {
@@ -189,8 +201,10 @@ type checkResult struct {
 	bad                  map[string][]string // citations that do not resolve
 }
 
-// check validates a reply against its spec and the facts.
-func check(spec Spec, w *written, f *Facts, known map[string]bool) checkResult {
+// check validates a reply against its spec, the facts, and the material the model was given (a name that
+// appears in the material is grounded even when it is not a declaration: config keys, environment
+// variables, table names, error codes).
+func check(spec Spec, w *written, f *Facts, known map[string]bool, material string) checkResult {
 	r := checkResult{cites: map[string]int{}, valid: map[string]int{}, idents: map[string]int{}, unknown: map[string][]string{}, bad: map[string][]string{}}
 	if strings.TrimSpace(w.AtAGlance) == "" {
 		r.hard = append(r.hard, "at_a_glance is empty: write 3-5 plain sentences")
@@ -225,6 +239,8 @@ func check(spec Spec, w *written, f *Facts, known map[string]bool) checkResult {
 			switch {
 			case indexed && c.Line >= 1 && c.Line <= max(fl.Lines, 1)+5:
 				r.valid[sec.Key]++
+			case c.Line == 0 && (indexed || all[c.Path]):
+				r.valid[sec.Key]++ // [path:0]: the file as a whole (shown without line numbers)
 			case !indexed && all[c.Path]:
 				r.valid[sec.Key]++ // a file that is not indexed (tests, config): the path is enough
 			default:
@@ -237,7 +253,7 @@ func check(spec Spec, w *written, f *Facts, known map[string]bool) checkResult {
 		if n := len(r.bad[sec.Key]); n > 2 {
 			r.hard = append(r.hard, fmt.Sprintf("section %q cites places that do not exist: %s (cite only paths and lines shown in the material)", sec.Key, strings.Join(first(r.bad[sec.Key], 5), ", ")))
 		}
-		total, unknown := identifiers(md, known)
+		total, unknown := identifiers(md, known, material)
 		r.idents[sec.Key], r.unknown[sec.Key] = total, unknown
 		if len(unknown) > 3 {
 			r.hard = append(r.hard, fmt.Sprintf("section %q names things that are not in the code: %s (use only names from the material)", sec.Key, strings.Join(first(unknown, 6), ", ")))

@@ -145,15 +145,13 @@ func (g *Generator) WriteSystem(ctx context.Context, in SystemInput, prev *Doc, 
 	var w written
 	var res checkResult
 	chk := func() []string {
-		res = check(spec, &w, f, known)
+		res = check(spec, &w, f, known, mat.String())
 		return res.hard
 	}
 	r, err := g.GW.ChatJSONResult(ctx, llmgateway.FeatureDocGen, o.Meta, ports.ChatRequest{System: system,
-		Messages: []ports.ChatMessage{{Role: "user", Content: user}}, MaxOutputTokens: min(6000, max(route.MaxOutputTokens, 4000))}, docSchema, &w, chk)
-	d.TokensIn, d.TokensOut, d.Model, d.DraftProblems = r.Usage.InputTokens, r.Usage.OutputTokens, r.Model, r.Repaired
-	if g.Cost != nil {
-		d.CostUSD, _ = g.Cost(route.ProviderKind, r.Model, llmgateway.FeatureDocGen, r.Usage.InputTokens, r.Usage.OutputTokens)
-	}
+		Messages: []ports.ChatMessage{{Role: "user", Content: user}}, MaxOutputTokens: min(max(route.MaxOutputTokens, 24000), 32000)}, docSchema, &w, chk)
+	d.TokensIn, d.TokensOut, d.Model, d.DraftProblems = inputTokens(r.Usage), r.Usage.OutputTokens, r.Model, r.Repaired
+	d.CostUSD = g.usageCost(route.ProviderKind, r.Model, llmgateway.FeatureDocGen, r.Usage)
 	if err != nil {
 		d.Error = err.Error()
 		return d, err

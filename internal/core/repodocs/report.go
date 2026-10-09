@@ -134,8 +134,8 @@ func BuildReport(repo string, docs []Doc, text bool) Report {
 				switch {
 				case float64(rs.Words) > float64(sec.Words)*1.6:
 					rs.Length = "long"
-				case float64(rs.Words) < float64(sec.Words)*0.4:
-					rs.Length = "short"
+				case float64(rs.Words) < float64(sec.Words)*0.4 && !tableRowRE.MatchString(ds.Markdown):
+					rs.Length = "short" // a section written as a table has few prose words by design
 				default:
 					rs.Length = "ok"
 				}

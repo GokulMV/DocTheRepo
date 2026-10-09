@@ -298,6 +298,8 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 		a.pipe.SystemStore = a.repoDocs
 		a.pipe.RepoDocsGen = &repodocs.Generator{GW: gw, Store: a.repoDocs, Cost: func(kind, model, feature string, in, out int64) (float64, bool) {
 			return a.enforcer.Guard().Cost(kind, model, feature, in, out)
+		}, CostUsage: func(kind, model, feature string, in, out, cacheRead, cacheWrite int64) (float64, bool) {
+			return a.enforcer.Guard().CostUsage(kind, model, feature, in, out, cacheRead, cacheWrite)
 		}}
 		a.pipe.DocsBudget = a.docsBudget
 		a.pipe.Enqueue = func(ctx context.Context, j ports.NewJob) error {

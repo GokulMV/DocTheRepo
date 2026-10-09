@@ -173,7 +173,7 @@ var Catalog = []Spec{
 			s("config", "Configuration", 0, false, true, "A table: Setting / env var | Effect | Default, for settings this module reads."),
 			s("deps", "Depends on and used by", 0, true, false, "A table: Module | Direction (uses / used by) | For what."),
 			s("files", "Files", 0, true, false, "A table: File | Role (one line). Every file in the module."),
-			s("change", "Where to change things", 150, true, true, "5-8 bullets: 'To <common change>, edit <file/function>'."),
+			s("change", "Where to change things", 150, true, true, "5-8 bullets: 'To <common change>, edit `<function>` in [path:line]'. Every bullet cites where to start."),
 			s("dos", "Do's and don'ts", 120, false, true, "Rules to keep when changing this module."),
 			s("tests", "Tests", 100, false, false, "Which tests cover this module and how to run them; what is not covered."),
 		},
