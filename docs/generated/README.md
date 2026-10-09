@@ -3,6 +3,8 @@
 
 - [`cmd`](cmd/README.md)
 - [`deploy`](deploy/README.md)
+- [`docker`](docker/README.md)
 - [`internal`](internal/README.md)
 - [`migrations`](migrations/README.md)
+- [`scripts`](scripts/README.md)
 - [`web`](web/README.md)
