@@ -8,7 +8,7 @@ import { Badge, Button, ErrorNote, PageHeader, Spinner, Table, Td } from '@/comp
 import { relTime } from '@/lib/format';
 import { ConfidenceBadge, withCitations } from './RepoDocs';
 
-const KIND: Record<string, string> = { event: 'Event', api: 'API call', call: 'Code call', library: 'Package', other: 'Link' };
+const KIND: Record<string, string> = { event: 'Event', api: 'API call', call: 'Code call', library: 'Package', image: 'Container image', pipeline: 'CI pipeline', other: 'Link' };
 
 function codeURL(repos: Repo[], repoName: string, path: string, line: string) {
   const r = repos.find((x) => x.full_name === repoName);
@@ -36,12 +36,12 @@ export default function System() {
   const writing = d?.job && ['queued', 'processing'].includes(d.job.status);
   return (
     <>
-      <PageHeader icon={Network} title="System architecture" description="How your repositories work together: the APIs, events and packages that connect them, found in the code."
+      <PageHeader icon={Network} title="System architecture" description="How your repositories work together: the APIs, events, packages, images and CI pipelines that connect them, found in the code and its configuration."
         actions={admin && d?.links.length ? <Button size="sm" variant="secondary" disabled={write.isPending || !!writing} onClick={() => write.mutate(undefined)}>Write again</Button> : undefined} />
       {sys.isLoading && <Spinner />}
       <ErrorNote error={sys.error ?? write.error} />
       {d && d.links.length === 0 && (
-        <p className="text-sm text-slate-500">The repositories you can read do not call each other, share events or build on each other’s packages, so there is no system-wide view.</p>
+        <p className="text-sm text-slate-500">The repositories you can read do not call each other, share events, build on each other’s packages or images, or reference each other in CI, so there is no system-wide view.</p>
       )}
       {d && d.links.length > 0 && (
         <div className="space-y-8">
@@ -81,7 +81,7 @@ export default function System() {
                   <tr key={`${l.from_repo}-${l.to_repo}-${l.kind}-${l.via}`}>
                     <Td>{l.from_name}</Td>
                     <Td>{l.to_name}</Td>
-                    <Td><Badge tone={l.kind === 'event' ? 'amber' : l.kind === 'api' ? 'blue' : 'gray'}>{KIND[l.kind] ?? l.kind}</Badge></Td>
+                    <Td><Badge tone={l.kind === 'event' ? 'amber' : l.kind === 'api' ? 'blue' : l.kind === 'pipeline' || l.kind === 'image' ? 'green' : 'gray'}>{KIND[l.kind] ?? l.kind}</Badge></Td>
                     <Td><code className="text-xs">{l.via}</code>{l.n > 1 && <span className="ml-1 text-xs text-slate-500">· {l.n} places</span>}</Td>
                     <Td className="text-xs">{l.path ? (url ? <a className="text-brand-600 underline" href={url} target="_blank" rel="noreferrer">{l.path}:{l.line || 1}</a> : <code>{l.path}:{l.line || 1}</code>) : '—'}</Td>
                   </tr>

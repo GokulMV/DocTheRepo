@@ -54,7 +54,15 @@ The Architecture document covers:
 When tracked repositories talk to each other, a **System** item appears in the sidebar. Repositories count as talking when:
 - one publishes events another consumes;
 - one's code calls another's endpoints or code;
-- one depends on a package built from another (for example `github.com/acme/lib` or `@acme/lib`).
+- one depends on a package built from another (for example `github.com/acme/lib` or `@acme/lib`);
+- **configuration:** one's config calls a host another serves. "Serves" means a Kubernetes `Service` or ingress host, a gateway route or a fly.io app in the other repository. An internal name after the other repository also counts (`http://billing:8080`, `billing.payments.svc.cluster.local`). Public hosts such as `api.stripe.com` only count when another tracked repository declares them;
+- **images:** one runs or builds on a container image another publishes. Images it runs come from Compose, Kubernetes, Helm values or a Dockerfile `FROM`. Images another publishes come from `docker build -t`, `docker push` or `build-push-action` tags in its pipeline;
+- **CI pipelines:** one's CI refers to another repository. Examples: a reusable workflow or action (`uses: acme/platform/.github/workflows/go.yml@main`), `actions/checkout` with `repository:`, a dispatch (`gh workflow run --repo acme/deployer`) or a GitLab `trigger:`/`include:` `project:`.
+
+**How the configuration and CI facts are gathered:**
+- Each docs run reads the repository's configuration, deployment and CI files: `.env*`, `config/`, `deploy/`, `k8s/`, `helm/`, Compose, Dockerfiles, Terraform and CI definitions. It reads at most 80 files, skips files over 256 KB and uses no model.
+- It keeps what those files say about other services.
+- When that changes, the System architecture is brought up to date.
 
 The page shows:
 - **A map** of the repositories and their links, drawn from the code.

@@ -652,7 +652,7 @@ export interface SystemLink {
   from_name: string;
   to_repo: string;
   to_name: string;
-  kind: 'event' | 'api' | 'call' | 'library' | 'other';
+  kind: 'event' | 'api' | 'call' | 'library' | 'image' | 'pipeline' | 'other';
   via: string;
   path?: string;
   line?: number;

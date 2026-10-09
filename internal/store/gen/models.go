@@ -1789,6 +1789,15 @@ type RepoDoc struct {
 	DraftProblems json.RawMessage `json:"draft_problems"`
 }
 
+type RepoWiring struct {
+	RepoID string `json:"repo_id"`
+	Kind   string `json:"kind"`
+	Value  string `json:"value"`
+	Note   string `json:"note"`
+	Path   string `json:"path"`
+	Line   int32  `json:"line"`
+}
+
 type SavingsEvent struct {
 	ID                string      `json:"id"`
 	At                time.Time   `json:"at"`

@@ -119,6 +119,15 @@ func (r *RepoDocs) SystemLinks(ctx context.Context) ([]repodocs.SystemLink, erro
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+
+	// Configuration and pipelines: hosts called, images run, repositories referenced in CI.
+	wired, err := r.wiringRepos(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, l := range repodocs.MatchWiring(wired) {
+		add(l.FromRepo, l.ToRepo, l.Kind, l.Via, l.Path, l.Line)
+	}
 	out := make([]repodocs.SystemLink, 0, len(acc))
 	for _, l := range acc {
 		out = append(out, *l)
@@ -154,4 +163,81 @@ func (r *RepoDocs) SystemChunks(ctx context.Context) ([]ports.Chunk, error) {
 		return nil, err
 	}
 	return toChunks(rows), nil
+}
+
+// wiringRepos loads every enabled repository with its wiring facts.
+func (r *RepoDocs) wiringRepos(ctx context.Context) ([]repodocs.WiringRepo, error) {
+	rows, err := r.s.Pool.Query(ctx, `SELECT r.id::text, r.full_name, coalesce(r.service_name, ''), w.kind, w.value, w.note, w.path, w.line
+		FROM repos r LEFT JOIN repo_wiring w ON w.repo_id = r.id WHERE r.enabled ORDER BY r.full_name, w.path, w.line`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []repodocs.WiringRepo
+	at := map[string]int{}
+	for rows.Next() {
+		var id, name, svc string
+		var kind, value, note, path *string
+		var line *int
+		if err := rows.Scan(&id, &name, &svc, &kind, &value, &note, &path, &line); err != nil {
+			return nil, err
+		}
+		i, ok := at[id]
+		if !ok {
+			i = len(out)
+			at[id] = i
+			out = append(out, repodocs.WiringRepo{ID: id, Name: name, Service: svc})
+		}
+		if kind != nil {
+			out[i].Wires = append(out[i].Wires, repodocs.Wire{Kind: *kind, Value: *value, Note: *note, Path: *path, Line: *line})
+		}
+	}
+	return out, rows.Err()
+}
+
+// PutWiring replaces a repository's wiring facts; it reports whether they changed.
+func (r *RepoDocs) PutWiring(ctx context.Context, repoID string, ws []repodocs.Wire) (bool, error) {
+	fp := func(ws []repodocs.Wire) string {
+		parts := make([]string, 0, len(ws))
+		for _, w := range ws {
+			parts = append(parts, w.Kind+"\x00"+w.Value+"\x00"+w.Path)
+		}
+		sort.Strings(parts)
+		return strings.Join(parts, "\n")
+	}
+	tx, err := r.s.Pool.Begin(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	rows, err := tx.Query(ctx, `SELECT kind, value, path FROM repo_wiring WHERE repo_id = $1`, repoID)
+	if err != nil {
+		return false, err
+	}
+	var prev []repodocs.Wire
+	for rows.Next() {
+		var w repodocs.Wire
+		if err := rows.Scan(&w.Kind, &w.Value, &w.Path); err != nil {
+			rows.Close()
+			return false, err
+		}
+		prev = append(prev, w)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	if fp(prev) == fp(ws) {
+		return false, nil
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM repo_wiring WHERE repo_id = $1`, repoID); err != nil {
+		return false, err
+	}
+	for _, w := range ws {
+		if _, err := tx.Exec(ctx, `INSERT INTO repo_wiring (repo_id, kind, value, note, path, line) VALUES ($1, $2, $3, $4, $5, $6)
+			ON CONFLICT DO NOTHING`, repoID, w.Kind, w.Value, w.Note, w.Path, w.Line); err != nil {
+			return false, err
+		}
+	}
+	return true, tx.Commit(ctx)
 }
