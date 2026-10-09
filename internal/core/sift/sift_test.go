@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -24,9 +25,12 @@ var stateRE = regexp.MustCompile(`(?s)## State\n(.*)\n\n## Questions`)
 // or path mentions any of the words; everything else is no. Chat requests without a schema fail the test.
 func judgeOn(t *testing.T, env *fakegw.Env, words ...string) *int {
 	calls := 0
+	var mu sync.Mutex // the sifter judges batches concurrently
 	env.Model.Handler = func(r ports.ChatRequest) (ports.ChatResponse, error) {
 		require.NotNil(t, r.JSONSchema, "only judgments are expected")
+		mu.Lock()
 		calls++
+		mu.Unlock()
 		m := stateRE.FindStringSubmatch(r.Messages[0].Content)
 		require.Len(t, m, 2)
 		var st struct {
