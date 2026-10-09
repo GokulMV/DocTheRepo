@@ -94,6 +94,7 @@ func TestDocsV2(t *testing.T) {
 		d := it.(map[string]any)
 		types[d["type"].(string)] = d
 		assert.Equal(t, "ok", d["status"], "%v: %v", d["title"], d["error"])
+		assert.NotEmpty(t, d["source_sha"], "the commit each document was written from")
 	}
 	for _, want := range []string{"overview", "architecture", "module", "tests", "build"} {
 		assert.Contains(t, types, want)

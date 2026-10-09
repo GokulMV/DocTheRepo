@@ -100,7 +100,9 @@ type docSummary struct {
 	Changed    float64  `json:"changed,omitempty"`
 	Status     string   `json:"status"`
 	Error      string   `json:"error,omitempty"`
-	UpdatedAt  string   `json:"updated_at"`
+	// SourceSHA is the commit the document was written from.
+	SourceSHA string `json:"source_sha"`
+	UpdatedAt string `json:"updated_at"`
 }
 
 func (h *repoDocsHandlers) list(w http.ResponseWriter, r *http.Request) {
@@ -117,7 +119,7 @@ func (h *repoDocsHandlers) list(w http.ResponseWriter, r *http.Request) {
 	for _, d := range docs {
 		items = append(items, docSummary{ID: d.ID, Type: d.Type, Key: d.Key, Title: d.Title, Group: d.Group, Order: d.Order, AtAGlance: d.AtAGlance,
 			Confidence: d.Confidence, Label: repodocs.Label(d.Confidence), Why: d.Why, Changed: d.Changed, Status: d.Status, Error: d.Error,
-			UpdatedAt: d.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z")})
+			SourceSHA: d.SourceSHA, UpdatedAt: d.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z")})
 	}
 	out := map[string]any{"repo_id": repoID, "items": items}
 	if h.d.Budget != nil {
