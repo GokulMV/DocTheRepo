@@ -1,7 +1,10 @@
 <!-- dth:generated index — edit only inside dth:human blocks -->
 # `internal/api`
 
-- [`auth_handlers.go`](auth_handlers.go.md) — HTTP handlers for authentication endpoints including login, logout, SSO callbacks, user profile, and password management.
-- [`openapi.go`](openapi.go.md) — Defines the complete OpenAPI endpoint registry and metadata for the DocTheRepo API hub.
+- [`ask_handlers.go`](ask_handlers.go.md) — Defines HTTP handlers for answering questions using a RAG-backed AI engine with conversation history, streaming support, rate limiting, and repository access...
+- [`auth_handlers.go`](auth_handlers.go.md) — This file implements HTTP request handlers for authentication operations including user profile retrieval, login, and credential management.
+- [`mcp_handlers.go`](mcp_handlers.go.md) — This file implements HTTP handlers for managing MCP server connections through a REST API, including CRUD operations and OAuth sign-in flow for Hub administr...
+- [`openapi.go`](openapi.go.md) — Exposes a complete OpenAPI specification for the Hub's REST API, defining all routes, methods, authentication requirements, and their purposes.
 - [`ops_handlers.go`](ops_handlers.go.md) — Defines HTTP handlers for operations endpoints, including job management and analytics queries, with role-based access control.
-- [`server.go`](server.go.md) — Defines the Deps struct and NewRouter function that configure and build the HTTP handler tree for the Hub API server.
+- [`repodocs_handlers.go`](repodocs_handlers.go.md) — Handles HTTP endpoints for repository and system documentation management, including retrieval, generation, export, and budget control.
+- [`server.go`](server.go.md) — Defines the HTTP router and its dependency configuration, orchestrating endpoints for health checks, webhooks, authentication, and the web UI.
