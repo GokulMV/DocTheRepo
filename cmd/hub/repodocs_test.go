@@ -102,6 +102,14 @@ func TestDocsV2(t *testing.T) {
 	budget := out["budget"].(map[string]any)
 	assert.GreaterOrEqual(t, budget["cap_usd"], 10.0, "a first cap is set from the estimate")
 
+	// The run report adds up what the documents cost and how they came out.
+	code, rep := c.call("GET", "/repos/"+repoID+"/docs/report", nil)
+	require.Equal(t, http.StatusOK, code, rep)
+	assert.Equal(t, float64(len(items)), rep["docs"])
+	assert.Equal(t, rep["docs"], rep["ok"])
+	assert.NotZero(t, rep["tokens_in"])
+	assert.Len(t, rep["items"], len(items))
+
 	code, doc := c.call("GET", "/repo-docs/"+types["overview"]["id"].(string), nil)
 	require.Equal(t, http.StatusOK, code, doc)
 	assert.NotEmpty(t, doc["at_a_glance"])

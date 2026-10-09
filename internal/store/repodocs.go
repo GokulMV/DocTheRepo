@@ -227,14 +227,14 @@ func (r *RepoDocs) PutCards(ctx context.Context, repoID string, cards []repodocs
 }
 
 const docCols = `id::text, coalesce(repo_id::text, ''), doc_type, doc_key, title, grp, ord, at_a_glance, sections, gaps, confidence, why, calibrated,
-	inputs_hash, file_hashes, changed, source_sha, model, tokens_in, tokens_out, cost_usd, status, error, updated_at`
+	inputs_hash, file_hashes, changed, source_sha, model, tokens_in, tokens_out, cost_usd, status, error, updated_at, draft_problems`
 
 func scanDoc(row pgx.Row) (repodocs.Doc, error) {
 	var d repodocs.Doc
-	var sections, gaps, why, hashes []byte
+	var sections, gaps, why, hashes, draft []byte
 	var conf, changed float32
 	err := row.Scan(&d.ID, &d.RepoID, &d.Type, &d.Key, &d.Title, &d.Group, &d.Order, &d.AtAGlance, &sections, &gaps, &conf, &why, &d.Calibrated,
-		&d.InputsHash, &hashes, &changed, &d.SourceSHA, &d.Model, &d.TokensIn, &d.TokensOut, &d.CostUSD, &d.Status, &d.Error, &d.UpdatedAt)
+		&d.InputsHash, &hashes, &changed, &d.SourceSHA, &d.Model, &d.TokensIn, &d.TokensOut, &d.CostUSD, &d.Status, &d.Error, &d.UpdatedAt, &draft)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return d, ports.ErrNotFound
 	}
@@ -246,6 +246,7 @@ func scanDoc(row pgx.Row) (repodocs.Doc, error) {
 	_ = json.Unmarshal(gaps, &d.Gaps)
 	_ = json.Unmarshal(why, &d.Why)
 	_ = json.Unmarshal(hashes, &d.FileHashes)
+	_ = json.Unmarshal(draft, &d.DraftProblems)
 	return d, nil
 }
 
@@ -298,17 +299,17 @@ func (r *RepoDocs) PutDoc(ctx context.Context, d repodocs.Doc) (repodocs.Doc, er
 	}
 	return scanDoc(r.s.Pool.QueryRow(ctx, `
 		INSERT INTO repo_docs (id, repo_id, doc_type, doc_key, title, grp, ord, at_a_glance, sections, gaps, confidence, why, calibrated,
-			inputs_hash, file_hashes, changed, source_sha, model, tokens_in, tokens_out, cost_usd, status, error, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+			inputs_hash, file_hashes, changed, source_sha, model, tokens_in, tokens_out, cost_usd, status, error, updated_at, draft_problems)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
 		ON CONFLICT `+conflict+` DO UPDATE SET title = EXCLUDED.title, grp = EXCLUDED.grp, ord = EXCLUDED.ord,
 			at_a_glance = EXCLUDED.at_a_glance, sections = EXCLUDED.sections, gaps = EXCLUDED.gaps, confidence = EXCLUDED.confidence,
 			why = EXCLUDED.why, calibrated = EXCLUDED.calibrated, inputs_hash = EXCLUDED.inputs_hash, file_hashes = EXCLUDED.file_hashes,
 			changed = EXCLUDED.changed, source_sha = EXCLUDED.source_sha, model = EXCLUDED.model, tokens_in = EXCLUDED.tokens_in,
 			tokens_out = EXCLUDED.tokens_out, cost_usd = EXCLUDED.cost_usd, status = EXCLUDED.status, error = EXCLUDED.error,
-			updated_at = EXCLUDED.updated_at
+			updated_at = EXCLUDED.updated_at, draft_problems = EXCLUDED.draft_problems
 		RETURNING `+docCols,
 		d.ID, repoID, d.Type, d.Key, d.Title, d.Group, d.Order, d.AtAGlance, j(d.Sections), j(d.Gaps), d.Confidence, j(d.Why), d.Calibrated,
-		d.InputsHash, hashes, d.Changed, d.SourceSHA, d.Model, d.TokensIn, d.TokensOut, d.CostUSD, d.Status, d.Error, d.UpdatedAt))
+		d.InputsHash, hashes, d.Changed, d.SourceSHA, d.Model, d.TokensIn, d.TokensOut, d.CostUSD, d.Status, d.Error, d.UpdatedAt, j(d.DraftProblems)))
 }
 
 // DeleteDocsExcept removes documents that no longer apply; it returns their ids.

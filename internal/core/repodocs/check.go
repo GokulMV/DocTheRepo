@@ -36,15 +36,17 @@ type Doc struct {
 	// FileHashes are the content hashes of the files it was written from (to measure later change).
 	FileHashes map[string]string `json:"file_hashes,omitempty"`
 	// Changed is the share of its source lines that changed since it was written (0 when current).
-	Changed   float64   `json:"changed,omitempty"`
-	SourceSHA string    `json:"source_sha"`
-	Model     string    `json:"model,omitempty"`
-	TokensIn  int64     `json:"tokens_in"`
-	TokensOut int64     `json:"tokens_out"`
-	CostUSD   float64   `json:"cost_usd"`
-	Status    string    `json:"status"` // ok | failed
-	Error     string    `json:"error,omitempty"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Changed   float64 `json:"changed,omitempty"`
+	SourceSHA string  `json:"source_sha"`
+	Model     string  `json:"model,omitempty"`
+	TokensIn  int64   `json:"tokens_in"`
+	TokensOut int64   `json:"tokens_out"`
+	CostUSD   float64 `json:"cost_usd"`
+	// DraftProblems are what the checks found in the first draft, when it had to be repaired.
+	DraftProblems []string  `json:"draft_problems,omitempty"`
+	Status        string    `json:"status"` // ok | failed
+	Error         string    `json:"error,omitempty"`
+	UpdatedAt     time.Time `json:"updated_at"`
 }
 
 // Section finds a section by key.

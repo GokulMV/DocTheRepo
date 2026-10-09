@@ -247,6 +247,8 @@ type JSONResult struct {
 	Usage ports.TokenUsage
 	Model string
 	Raw   string
+	// Repaired lists what was wrong with the first reply when a repair call was made (empty otherwise).
+	Repaired []string
 }
 
 func (r *JSONResult) add(resp ports.ChatResponse) {
@@ -293,6 +295,7 @@ func (g *Gateway) ChatJSONResult(ctx context.Context, feature string, meta CallM
 	if len(probs) == 0 {
 		return res, nil
 	}
+	res.Repaired = probs
 	repair := req
 	repair.Messages = append(append([]ports.ChatMessage{}, req.Messages...),
 		ports.ChatMessage{Role: "assistant", Content: resp.Text},

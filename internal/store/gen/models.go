@@ -1761,31 +1761,32 @@ type RepoAccess struct {
 }
 
 type RepoDoc struct {
-	ID         string          `json:"id"`
-	RepoID     *string         `json:"repo_id"`
-	DocType    string          `json:"doc_type"`
-	DocKey     string          `json:"doc_key"`
-	Title      string          `json:"title"`
-	Grp        string          `json:"grp"`
-	Ord        int32           `json:"ord"`
-	AtAGlance  string          `json:"at_a_glance"`
-	Sections   json.RawMessage `json:"sections"`
-	Gaps       json.RawMessage `json:"gaps"`
-	Confidence float32         `json:"confidence"`
-	Why        json.RawMessage `json:"why"`
-	Calibrated bool            `json:"calibrated"`
-	InputsHash string          `json:"inputs_hash"`
-	FileHashes json.RawMessage `json:"file_hashes"`
-	Changed    float32         `json:"changed"`
-	SourceSha  string          `json:"source_sha"`
-	Model      string          `json:"model"`
-	TokensIn   int64           `json:"tokens_in"`
-	TokensOut  int64           `json:"tokens_out"`
-	CostUsd    float64         `json:"cost_usd"`
-	Status     string          `json:"status"`
-	Error      string          `json:"error"`
-	CreatedAt  time.Time       `json:"created_at"`
-	UpdatedAt  time.Time       `json:"updated_at"`
+	ID            string          `json:"id"`
+	RepoID        *string         `json:"repo_id"`
+	DocType       string          `json:"doc_type"`
+	DocKey        string          `json:"doc_key"`
+	Title         string          `json:"title"`
+	Grp           string          `json:"grp"`
+	Ord           int32           `json:"ord"`
+	AtAGlance     string          `json:"at_a_glance"`
+	Sections      json.RawMessage `json:"sections"`
+	Gaps          json.RawMessage `json:"gaps"`
+	Confidence    float32         `json:"confidence"`
+	Why           json.RawMessage `json:"why"`
+	Calibrated    bool            `json:"calibrated"`
+	InputsHash    string          `json:"inputs_hash"`
+	FileHashes    json.RawMessage `json:"file_hashes"`
+	Changed       float32         `json:"changed"`
+	SourceSha     string          `json:"source_sha"`
+	Model         string          `json:"model"`
+	TokensIn      int64           `json:"tokens_in"`
+	TokensOut     int64           `json:"tokens_out"`
+	CostUsd       float64         `json:"cost_usd"`
+	Status        string          `json:"status"`
+	Error         string          `json:"error"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
+	DraftProblems json.RawMessage `json:"draft_problems"`
 }
 
 type SavingsEvent struct {
