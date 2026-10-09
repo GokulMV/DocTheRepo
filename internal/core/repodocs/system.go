@@ -169,6 +169,7 @@ func (g *Generator) WriteSystem(ctx context.Context, in SystemInput, prev *Doc, 
 		if sec.Key == "interactions" {
 			md = "```mermaid\n" + diagram + "```\n\n" + md
 		}
+		md = DropDeadRefs(md, f)
 		d.Sections = append(d.Sections, DocSection{Key: sec.Key, Title: sec.Title, Markdown: md})
 	}
 	g.score(ctx, &env{facts: f, files: map[string]*File{}}, job{spec: spec}, &d, res, RunOptions{})

@@ -33,3 +33,11 @@ func TestCheckGroundsOnTheMaterial(t *testing.T) {
 	r = check(spec, w, f, f.Known(), "")
 	assert.Contains(t, r.unknown["config"], "DTH_LISTEN", "without the material, config names are not grounded")
 }
+
+func TestDropDeadRefs(t *testing.T) {
+	f := &Facts{AllPaths: []string{"internal/core/x.go", "README.md"}}
+	md := "Simplified the app [web:0]. Docs moved [Repository root:0] [internal/core:0], see [internal/core/x.go:12] and [README.md:3-5].\n" +
+		"A [link](https://example.com:8080) and [web:0](x) stay. | Area [docs:0] |"
+	assert.Equal(t, "Simplified the app. Docs moved, see [internal/core/x.go:12] and [README.md:3-5].\n"+
+		"A [link](https://example.com:8080) and [web:0](x) stay. | Area |", DropDeadRefs(md, f))
+}

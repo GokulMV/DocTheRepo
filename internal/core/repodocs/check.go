@@ -289,3 +289,33 @@ func DocPath(d Doc) string { return "@docs/" + d.Type + "/" + d.Key }
 
 // Link is the document's address in the Hub.
 func Link(d Doc) string { return "/docs/r/" + d.RepoID + "/" + d.Type + "/" + d.Key }
+
+// refRE matches anything written like a citation, [something:12] or [something:12-20], with the space
+// before it.
+var refRE = regexp.MustCompile(`\s?\[([^\[\]\n:]+):(\d+)(?:-\d+)?\]`)
+
+// DropDeadRefs removes citation-like references that point at no file in the repository (a module title,
+// a directory, an invented path) so readers do not see them; real citations and Markdown links are kept.
+func DropDeadRefs(md string, f *Facts) string {
+	known := map[string]bool{}
+	for _, p := range f.AllPaths {
+		known[p] = true
+	}
+	for _, fl := range f.Files {
+		known[fl.Path] = true
+	}
+	var b strings.Builder
+	last := 0
+	for _, m := range refRE.FindAllStringSubmatchIndex(md, -1) {
+		if m[1] < len(md) && md[m[1]] == '(' {
+			continue // [text:1](url) is a link
+		}
+		if known[strings.TrimSpace(md[m[2]:m[3]])] {
+			continue
+		}
+		b.WriteString(md[last:m[0]])
+		last = m[1]
+	}
+	b.WriteString(md[last:])
+	return b.String()
+}

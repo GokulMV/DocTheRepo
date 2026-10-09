@@ -92,7 +92,8 @@ Rules:
   and list it in gaps. Never invent names, files, endpoints, numbers or behaviour.
 - Cite behaviour with [path:line] right after the claim, using only paths and line numbers shown in the material
   (code is shown with its line numbers). Cite the line where the thing is defined or happens. Citations are always in
-  square brackets, also inside tables. For a file shown without line numbers, cite [path:0].
+  square brackets, also inside tables. For a file shown without line numbers, cite [path:0]. Only files are cited:
+  name a module or directory in backticks, and a commit by its short hash in plain text.
 - Lead with what and why before how. Do not restate code line by line. Prefer tables for lists of facts.
 - Put names from the code in backticks, exactly as written in the material.
 - Mermaid diagrams go in fenced mermaid blocks and must start with a diagram type (flowchart, sequenceDiagram, erDiagram).
@@ -490,6 +491,7 @@ func (g *Generator) write(ctx context.Context, e *env, j job, prev *Doc, route l
 			_, diagram := e.moduleGraph()
 			md = "```mermaid\n" + diagram + "```\n\n" + md
 		}
+		md = DropDeadRefs(md, e.facts)
 		d.Sections = append(d.Sections, DocSection{Key: sec.Key, Title: sec.Title, Markdown: md})
 	}
 	g.score(ctx, e, j, &d, res, o)
