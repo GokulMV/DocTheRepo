@@ -6,5 +6,5 @@
 - [`mcp_handlers.go`](mcp_handlers.go.md) — This file implements HTTP handlers for managing MCP server connections through a REST API, including CRUD operations and OAuth sign-in flow for Hub administr...
 - [`openapi.go`](openapi.go.md) — Exposes a complete OpenAPI specification for the Hub's REST API, defining all routes, methods, authentication requirements, and their purposes.
 - [`ops_handlers.go`](ops_handlers.go.md) — Defines HTTP handlers for operations endpoints, including job management and analytics queries, with role-based access control.
-- [`repodocs_handlers.go`](repodocs_handlers.go.md) — Handles HTTP endpoints for repository and system documentation management, including retrieval, generation, export, and budget control.
+- [`repodocs_handlers.go`](repodocs_handlers.go.md) — HTTP handlers for repository documentation endpoints, managing document listing and retrieval with authorization checks.
 - [`server.go`](server.go.md) — Defines the HTTP router and its dependency configuration, orchestrating endpoints for health checks, webhooks, authentication, and the web UI.

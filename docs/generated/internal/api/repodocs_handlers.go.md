@@ -1,7 +1,7 @@
 <!-- dth:generated source="internal/api/repodocs_handlers.go" — edit only inside dth:human blocks -->
 # `internal/api/repodocs_handlers.go`
 
-Handles HTTP endpoints for repository and system documentation management, including retrieval, generation, export, and budget control.
+HTTP handlers for repository documentation endpoints, managing document listing and retrieval with authorization checks.
 
 <!-- dth:chunk a28323e6e9854d38 -->
 ## `RepoDocsDeps`
@@ -31,12 +31,12 @@ readable checks if the caller has permission to access a repository by verifying
 <!-- dth:chunk b20c809d59811800 -->
 ## `docSummary`
 
-docSummary is a JSON-serializable overview of a document without its section details, including metadata like title, confidence level, status, and generation timestamp.
+A document metadata container that omits full section content for lightweight serialization. Fields include document identity (ID, Type, Key), presentation (Title, Group, Order), and analysis data (AtAGlance summary, Confidence score, Label derived from confidence). Why lists reasons for the confidence assessment. Changed and Status track modifications and processing state. SourceSHA records the commit version. UpdatedAt is serialized as UTC RFC3339 format.
 
 <!-- dth:chunk c1d11a8397e76ae9 -->
 ## `repoDocsHandlers.list`
 
-list responds with a repository's generated documents and their summaries. It optionally includes budget information and the status of any queued generation job if those services are available.
+HTTP GET handler that lists all documents for a repository. It verifies read access via `readable()`, fetches documents from the store, and converts them to `docSummary` format with computed labels. The response includes repo_id and items array; if Budget and Queue dependencies are available, it optionally appends budget information (cap and spent USD) and the latest document generation job's status and progress. Returns JSON on success or writes error on auth failure or store error.
 
 <!-- dth:chunk 15e486dea417c671 -->
 ## `repoDocsHandlers.send`
