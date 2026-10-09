@@ -1,7 +1,7 @@
 <!-- dth:generated source="internal/core/repodocs/check.go" — edit only inside dth:human blocks -->
 # `internal/core/repodocs/check.go`
 
-Validates generated documentation against specifications, fact sources, and code material, checking sections, word limits, citations, and identifier references.
+Provides functions to validate and clean up documentation by checking for dead references, analyzing citation patterns, and extracting identifiers from Markdown content.
 
 <!-- dth:chunk 9b7ad8a3d03b8b36 -->
 ## `DocSection`
@@ -88,7 +88,12 @@ DocPath is where a document's sections live in the search index.
 
 Link is the document's address in the Hub.
 
+<!-- dth:chunk 5a83174d279874c3 -->
+## `DropDeadRefs`
+
+Removes citation-like references (formatted as `[text:digits]`) that point to non-existent repository paths, keeping valid Markdown links (`[text](url)`) and citations with known targets. Builds the result string by skipping matches that correspond to known paths from the repository facts.
+
 <!-- dth:chunk c8f25dac359026fd -->
 ## `__module__`
 
-Module-level regex patterns and lookup tables: `citeRE` matches [path:line] citations; `fenceRE`, `tableRowRE`, `tickRE`, `camelRE`, `mermaidRE` parse markdown structure; `mermaidKinds` lists valid diagram types; `commonTicks` filters out non-identifier keywords.
+Package-level regex patterns and lookup tables for parsing and validating Markdown content: `citeRE` matches file citations with line numbers; `fenceRE`, `tableRowRE`, `tickRE`, `camelRE`, and `mermaidRE` extract code blocks, tables, backtick expressions, camelCase identifiers, and Mermaid diagrams; `mermaidKinds` lists valid Mermaid diagram types; `commonTicks` identifies built-in keywords to exclude from identifier checks; `refRE` matches bracketed references with line numbers.
