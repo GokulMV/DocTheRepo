@@ -1,5 +1,5 @@
 <!-- dth:generated index — edit only inside dth:human blocks -->
 # `scripts`
 
-- [`docs-real-run.sh`](docs-real-run.sh.md) — Automates end-to-end documentation generation for a repository using a real LLM model, generating reports for output review and prompt tuning.
+- [`docs-real-run.sh`](docs-real-run.sh.md) — Bash script that orchestrates end-to-end documentation generation by running a hub server, configuring an LLM provider and GitHub connector, and generating r...
 - [`quickstart.sh`](quickstart.sh.md) — Bash script that provides an automated one-command setup and deployment of DocTheRepo from a fresh machine, handling prerequisite installation, optional cont...

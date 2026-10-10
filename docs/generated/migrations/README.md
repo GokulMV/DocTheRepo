@@ -13,3 +13,5 @@
 - [`0033_repo_wiring.up.sql`](0033_repo_wiring.up.sql.md) — Database migration that creates the repo_wiring table to track inter-repository dependencies discovered from configuration and CI files.
 - [`0034_seed_haiku_5_5_price.down.sql`](0034_seed_haiku_5_5_price.down.sql.md) — Database migration to remove seeded pricing data for the Anthropic Claude Haiku 5.5 model during rollback.
 - [`0034_seed_haiku_5_5_price.up.sql`](0034_seed_haiku_5_5_price.up.sql.md)
+- [`0035_long_prompt_prices.down.sql`](0035_long_prompt_prices.down.sql.md) — Rollback migration that removes long-prompt pricing columns from the cost_table.
+- [`0035_long_prompt_prices.up.sql`](0035_long_prompt_prices.up.sql.md) — Database migration that adds tiered pricing columns to support higher rates for long prompts on models like Claude Haiku 5.5.

@@ -1,7 +1,7 @@
 <!-- dth:generated source="internal/core/repodocs/facts.go" — edit only inside dth:human blocks -->
 # `internal/core/repodocs/facts.go`
 
-Defines core data structures and utility functions for representing repository facts: code symbols, files, facts, and inter-repository links.
+facts.go defines the core data structures representing what the Hub knows about a repository and the connections between repositories.
 
 <!-- dth:chunk 0b0c2012ba0870dd -->
 ## `Symbol`
@@ -28,10 +28,15 @@ A piece of knowledge about the repository: endpoints, environment variables, dat
 
 Call is a call from one file to another (aggregated from symbol calls).
 
+<!-- dth:chunk b302ae742beb6a98 -->
+## `Import`
+
+Import is a file importing a package of the same repository, by the package's directory (Go). Calls through values (a method on a struct field) are not resolved to their file, but the import is.
+
 <!-- dth:chunk d3e2c99d157b6cc6 -->
 ## `Facts`
 
-Aggregated facts about a repository at a specific commit, gathered without a language model. Includes files, facts, function calls, all repository paths, contents of special files (README, build/deploy/CI configs), authored diagrams, and recent commits for tracking changes and decisions.
+Facts aggregates all static information about a repository at a specific commit that the Hub collects without requiring a language model. It serves as the foundation for documentation generation, containing indexed source code elements (Files, Facts, Calls, Imports), file system metadata (AllPaths), special file contents (README, build/deploy/CI files in Special), diagrams found in the repository, and recent commits on the documented branch for change history and decision records tracking.
 
 <!-- dth:chunk aa19430a134a23e1 -->
 ## `IsTest`
@@ -71,4 +76,4 @@ Returns a map's string keys in sorted order. Used internally as a utility for co
 <!-- dth:chunk 68bc8b16195869d2 -->
 ## `SystemLink`
 
-Documents one inter-repository connection: which repositories communicate, through what medium (event, API, function call, library, other), and how frequently. Records the symbol or path where the link originates.
+SystemLink represents a single connection between two repositories, capturing how they communicate through various channels. It records the source and target repository/module names, the type of interaction (event, api, call, library, image, pipeline, or other), the specific mechanism (Via field), and optionally the file path and line number where the link originates. The N field likely counts occurrences of this type of link.
