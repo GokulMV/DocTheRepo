@@ -1,7 +1,7 @@
 <!-- dth:generated source="internal/core/repodocs/inputs.go" — edit only inside dth:human blocks -->
 # `internal/core/repodocs/inputs.go`
 
-Defines the data types and functions for assembling documentation input material (symbols, modules, facts, dependencies) into prioritized, budget-aware text blocks suitable for feeding into a language model.
+Assembles and structures prompt material for documentation generation from repository analysis by collecting and prioritizing repository facts, code structure, and metadata.
 
 <!-- dth:chunk 3d1901d7cebb28a5 -->
 ## `Reader`
@@ -126,7 +126,7 @@ Finds symbols with names containing "err", "exception", or "fault" (case-insensi
 <!-- dth:chunk c8550d67ce47cc85 -->
 ## `env.inputs`
 
-Assembles prompt material for one document by building blocks from a specification that lists required sections (e.g., "modules", "endpoints", "tests"). Adds each requested section as a block with priority, then renders all blocks within the token budget using `render()`.
+Assembles prompt material for document generation by building a list of content blocks based on a specification. Each item in `spec.Needs` triggers collection of specific repository information—modules, dependency graphs, declared facts (endpoints, datastores, topics), entry points, tests, CI configuration, decisions, and more. The blocks are prioritized (lower numbers appear earlier) and passed to `render()` which selects them to fit the given token budget.
 
 <!-- dth:chunk 4861bde80838196e -->
 ## `env.titleOf`
@@ -146,7 +146,7 @@ Extracts the first `n` handler/producer/consumer function bodies associated with
 <!-- dth:chunk 6297454cd3d6f165 -->
 ## `env.moduleInputs`
 
-Collects detailed inputs for a specific module: its metadata, file list with card notes, exported symbols sorted by call frequency (up to 120), facts the module declares, and central code by call count and lines (up to 8 bodies). Calls the provided add function with each block title, content, and priority.
+Populates a module-specific document with five sections: basic metadata (file count, line count, directory), a file listing with line counts and summaries, exported declarations sorted by usage frequency (capped at 120), facts this module declares (endpoints, environment variables, datastores, topics), and the module's most-called internal code. If test files exist, includes test material; otherwise notes their absence. The `add` callback registers each section with a priority level.
 
 <!-- dth:chunk 888f8d4405590ff4 -->
 ## `commitLines`

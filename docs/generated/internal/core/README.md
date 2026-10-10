@@ -4,3 +4,4 @@
 - [`pipeline`](pipeline/README.md)
 - [`rag`](rag/README.md)
 - [`repodocs`](repodocs/README.md)
+- [`triage`](triage/README.md)
