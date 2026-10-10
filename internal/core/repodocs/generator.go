@@ -228,11 +228,16 @@ func (g *Generator) Run(ctx context.Context, f *Facts, o RunOptions) (Result, er
 		if g.Parallel <= 0 {
 			eg.SetLimit(3)
 		}
+		var st stopper
 		for _, j := range js {
 			eg.Go(func() error {
+				if st.stopped() != nil {
+					return nil
+				}
 				if o.Guard != nil {
 					if err := o.Guard(ctx); err != nil {
-						return err
+						st.stop(err)
+						return nil
 					}
 				}
 				if o.Progress != nil {
@@ -244,13 +249,13 @@ func (g *Generator) Run(ctx context.Context, f *Facts, o RunOptions) (Result, er
 				mu.Lock()
 				defer mu.Unlock()
 				done++
-				var sb *ports.SpendBlockedError
-				if errors.As(err, &sb) {
-					return err // stop: the budget is used up
-				}
 				res.TokensIn += d.TokensIn
 				res.TokensOut += d.TokensOut
 				res.CostUSD += d.CostUSD
+				if isSpendBlocked(err) {
+					st.stop(err) // the budget is used up: start nothing new
+					return nil
+				}
 				if err != nil {
 					res.Failed = append(res.Failed, j.id()+": "+err.Error())
 					if prev := have[j.id()]; prev != nil && prev.Status == "ok" {
@@ -270,7 +275,10 @@ func (g *Generator) Run(ctx context.Context, f *Facts, o RunOptions) (Result, er
 				return nil
 			})
 		}
-		return eg.Wait()
+		if err := eg.Wait(); err != nil {
+			return err
+		}
+		return st.stopped()
 	}
 	// Module guides first: the repository-level documents are written from them.
 	if err := run(mt); err != nil {
@@ -748,14 +756,19 @@ func (g *Generator) writeCards(ctx context.Context, f *Facts, cards map[string]C
 		batches = append(batches, cur)
 	}
 	var mu sync.Mutex
+	var st stopper
 	written := 0
 	eg, gctx := errgroup.WithContext(ctx)
 	eg.SetLimit(4)
 	for bi, batch := range batches {
 		eg.Go(func() error {
+			if st.stopped() != nil {
+				return nil
+			}
 			if o.Guard != nil {
 				if err := o.Guard(gctx); err != nil {
-					return err
+					st.stop(err)
+					return nil
 				}
 			}
 			if o.Progress != nil {
@@ -770,9 +783,9 @@ func (g *Generator) writeCards(ctx context.Context, f *Facts, cards map[string]C
 			res.TokensOut += usage.OutputTokens
 			res.CostUSD += g.usageCost(route.ProviderKind, route.Model, feature, usage)
 			if err != nil {
-				var sb *ports.SpendBlockedError
-				if errors.As(err, &sb) {
-					return err
+				if isSpendBlocked(err) {
+					st.stop(err)
+					return nil
 				}
 				res.Failed = append(res.Failed, "cards: "+err.Error())
 				return nil
@@ -787,7 +800,37 @@ func (g *Generator) writeCards(ctx context.Context, f *Facts, cards map[string]C
 			return nil
 		})
 	}
-	return written, eg.Wait()
+	if err := eg.Wait(); err != nil {
+		return written, err
+	}
+	return written, st.stopped()
+}
+
+// stopper ends parallel work when the budget is used up (a spend block or the run's Guard) without
+// cancelling what is in flight: those calls are reserved and paid for, so their results are kept. Work
+// not yet started is skipped, and the first stopping error is the batch's result.
+type stopper struct {
+	mu  sync.Mutex
+	err error
+}
+
+func (s *stopper) stop(err error) {
+	s.mu.Lock()
+	if s.err == nil {
+		s.err = err
+	}
+	s.mu.Unlock()
+}
+
+func (s *stopper) stopped() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.err
+}
+
+func isSpendBlocked(err error) bool {
+	var sb *ports.SpendBlockedError
+	return errors.As(err, &sb)
 }
 
 func cardInputSize(fl *File) int {

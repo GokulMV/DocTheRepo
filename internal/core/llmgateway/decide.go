@@ -45,8 +45,10 @@ func (g *Gateway) decideNative(ctx context.Context, r Route, meta CallMeta, d po
 	q.Context = g.protect(r, q.Context)
 	inEst := spendguard.EstimateTokens(q.Context) + int64(8*len(q.Options))
 	sreq := spendguard.Request{Feature: r.Feature, ProviderID: r.ProviderID, ProviderKind: r.ProviderKind, Model: r.Model,
-		RepoID: meta.RepoID, InputTokens: inEst, OutputTokens: int64(4 * len(q.Options)), Override: meta.Override}
-	if _, err := g.enforcer.Check(ctx, sreq); err != nil {
+		RepoID: meta.RepoID, InputTokens: inEst, OutputTokens: int64(4 * len(q.Options)), Override: meta.Override, Budget: meta.Budget}
+	_, release, err := g.enforcer.Reserve(ctx, sreq)
+	defer release()
+	if err != nil {
 		g.observe(r, "blocked", ports.TokenUsage{}, 0, false)
 		return ports.Decision{}, err
 	}
