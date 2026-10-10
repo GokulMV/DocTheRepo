@@ -47,6 +47,8 @@ describe('Connections: MCP', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Live lookups in New Relic' }));
     const dialog = await screen.findByRole('dialog', { name: 'Live lookups in New Relic' });
     await userEvent.selectOptions(within(dialog).getByLabelText('Region or site'), 'EU');
+    expect(within(dialog).getByLabelText('How it signs in')).toHaveValue('oauth');
+    await userEvent.selectOptions(within(dialog).getByLabelText('How it signs in'), 'header');
     await userEvent.type(within(dialog).getByLabelText('Key'), 'NRAK-secret');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
     expect(await screen.findByRole('dialog', { name: 'New Relic: Connected' })).toHaveTextContent('1 of its 2 tools');

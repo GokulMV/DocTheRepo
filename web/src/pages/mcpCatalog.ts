@@ -95,7 +95,7 @@ export const MCP_CATALOG: McpEntry[] = [
   },
   {
     key: 'newrelic', name: 'New Relic', group: 'Monitoring', what: 'Entities, NRQL queries, alerts',
-    url: 'https://mcp.newrelic.com/mcp/', auth: 'header', headerName: 'api-key', keyName: 'User API key (NRAK-…)',
+    url: 'https://mcp.newrelic.com/mcp/', auth: 'oauth', alsoAuth: ['header'], headerName: 'api-key', keyName: 'User API key (NRAK-…)',
     variants: [{ label: 'US', url: 'https://mcp.newrelic.com/mcp/' }, { label: 'EU', url: 'https://mcp.eu.newrelic.com/mcp/' }],
     docs: 'https://docs.newrelic.com/docs/agentic-ai/mcp/setup/',
   },
@@ -107,8 +107,8 @@ export const MCP_CATALOG: McpEntry[] = [
   },
   {
     key: 'splunk', name: 'Splunk', group: 'Monitoring', what: 'Searches and saved searches on your Splunk',
-    url: 'https://{host}:8089/services/mcp', placeholders: { host: 'Your Splunk host' }, auth: 'bearer', keyName: 'encrypted token from the Splunk MCP app',
-    docs: 'https://help.splunk.com/en/splunk-cloud-platform/mcp-server-for-splunk-platform/', note: 'Install the MCP Server app from Splunkbase first.',
+    url: 'https://{host}:8089/services/mcp', placeholders: { host: 'Your Splunk host' }, auth: 'bearer', alsoAuth: ['oauth'], keyName: 'encrypted token from the Splunk MCP app',
+    docs: 'https://help.splunk.com/en/splunk-cloud-platform/mcp-server-for-splunk-platform/', note: 'Install the MCP Server app from Splunkbase first. Splunk Cloud can turn on sign-in with Splunk (OAuth) for your stack; Splunk Enterprise uses a token.',
   },
   {
     key: 'elastic', name: 'Elastic', group: 'Monitoring', what: 'Search your Elasticsearch data through Agent Builder',
@@ -162,7 +162,7 @@ export const MCP_CATALOG: McpEntry[] = [
   },
   {
     key: 'stripe', name: 'Stripe', group: 'Other', what: 'Customers, payments, subscriptions',
-    url: 'https://mcp.stripe.com', auth: 'bearer', alsoAuth: ['oauth'], keyName: 'restricted API key (read-only)',
+    url: 'https://mcp.stripe.com', auth: 'oauth', alsoAuth: ['bearer'], keyName: 'restricted API key (read-only)',
     docs: 'https://docs.stripe.com/mcp', note: 'Public preview.',
   },
 ];
