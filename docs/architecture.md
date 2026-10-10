@@ -135,6 +135,12 @@ Two caches keep repeated questions cheap:
   reads the repeated prefix at about a tenth of the input price. Prefixes below the model's minimum length
   are not cached. OpenAI and Gemini cache repeated prefixes on their own. Cache reads and writes are
   reported per call; spend limits count them as full-price input, which errs on the safe side.
+- **Long-prompt prices.** A cost-table row can carry a long-prompt tier (`long_prompt_threshold_tokens`
+  and the `long_*_per_mtok_usd` prices). When a prompt (input plus cache reads and writes) is over the
+  threshold, the whole request, output and cache included, is priced at the long rates; the spend guard's
+  pre-call estimate uses the same rule. A long cache price left empty is the long input price. Claude
+  Haiku 5.5 is seeded with a 100K-token threshold at 5x its base prices. Rows without a tier price every
+  prompt the same.
 
 ## 4. Data
 

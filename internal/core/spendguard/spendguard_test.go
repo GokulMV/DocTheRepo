@@ -232,3 +232,40 @@ func TestCostUsagePricesCacheTokens(t *testing.T) {
 	_, ok = g.CostUsage("x", "y", "qa", 1, 1, 1, 0)
 	assert.False(t, ok)
 }
+
+func TestLongPromptTier(t *testing.T) {
+	rd, wr, lrd, lwr := 0.01, 0.125, 0.05, 0.625
+	g, err := New([]Limit{{ID: "g", Scope: ScopeGlobal, Window: WindowDay, MaxCostUSD: 1}}, map[string]Price{
+		PriceKey("anthropic", "m"): {InputPerMTok: 0.1, OutputPerMTok: 0.5, EmbedPerMTok: 0.02, CacheReadPerMTok: &rd, CacheWritePerMTok: &wr,
+			LongPromptThreshold: 100_000,
+			Long:                &Price{InputPerMTok: 0.5, OutputPerMTok: 2.5, CacheReadPerMTok: &lrd, CacheWritePerMTok: &lwr}},
+		PriceKey("anthropic", "flat"): {InputPerMTok: 0.1, OutputPerMTok: 0.5},
+	}, false)
+	require.NoError(t, err)
+	cost := func(in, out int64) float64 {
+		c, ok := g.Cost("anthropic", "m", "qa", in, out)
+		require.True(t, ok)
+		return c
+	}
+	assert.InDelta(t, (99_999*0.1+1000*0.5)/1e6, cost(99_999, 1000), 1e-12, "just under the threshold: base rates")
+	assert.InDelta(t, (100_000*0.1+1000*0.5)/1e6, cost(100_000, 1000), 1e-12, "at the threshold: base rates")
+	assert.InDelta(t, (100_001*0.5+1000*2.5)/1e6, cost(100_001, 1000), 1e-12, "over: the whole request at the long rates")
+
+	// 60k plain + 30k cache read + 20k cache write = 110k: the cache tokens push the prompt over.
+	c, ok := g.CostUsage("anthropic", "m", "qa", 110_000, 1000, 30_000, 20_000)
+	require.True(t, ok)
+	assert.InDelta(t, (60_000*0.5+30_000*lrd+20_000*lwr+1000*2.5)/1e6, c, 1e-12)
+	// The same cache split with 40k plain (90k in all) stays on the base rates.
+	c, _ = g.CostUsage("anthropic", "m", "qa", 90_000, 1000, 30_000, 20_000)
+	assert.InDelta(t, (40_000*0.1+30_000*rd+20_000*wr+1000*0.5)/1e6, c, 1e-12)
+
+	// Embeddings and models without a tier are unaffected.
+	c, _ = g.Cost("anthropic", "m", "embedding", 200_000, 0)
+	assert.InDelta(t, 200_000*0.02/1e6, c, 1e-12)
+	c, _ = g.Cost("anthropic", "flat", "qa", 200_000, 0)
+	assert.InDelta(t, 200_000*0.1/1e6, c, 1e-12)
+
+	// The pre-call estimate the guard decides on uses the same rule.
+	d := g.Evaluate(Request{Feature: "qa", ProviderKind: "anthropic", Model: "m", InputTokens: 150_000, OutputTokens: 4000}, nil)
+	assert.InDelta(t, (150_000*0.5+4000*2.5)/1e6, d.EstimatedCostUSD, 1e-12)
+}

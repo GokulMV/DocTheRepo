@@ -72,6 +72,18 @@ type Price struct {
 	// CacheReadPerMTok and CacheWritePerMTok price prompt-cache tokens (nil: as plain input).
 	CacheReadPerMTok  *float64
 	CacheWritePerMTok *float64
+	// LongPromptThreshold > 0 with Long set: a prompt (all input, cache reads and writes included) over
+	// this many tokens is priced at Long for the whole request, output and cache too. Embeddings are not.
+	LongPromptThreshold int64
+	Long                *Price
+}
+
+// forPrompt returns the prices that apply to a prompt of this many tokens.
+func (p Price) forPrompt(promptTokens int64) Price {
+	if p.Long != nil && p.LongPromptThreshold > 0 && promptTokens > p.LongPromptThreshold {
+		return *p.Long
+	}
+	return p
 }
 
 // Request describes a paid call about to be made.
@@ -140,7 +152,8 @@ func New(limits []Limit, prices map[string]Price, allowUnlimited bool) (*Guard, 
 // PriceKey keys the price table.
 func PriceKey(providerKind, model string) string { return providerKind + "|" + model }
 
-// Cost prices a call; ok is false when no price is known.
+// Cost prices a call; ok is false when no price is known. in is the whole prompt, so a prompt over the
+// model's long-prompt threshold is priced at the long rates (pre-call estimates included).
 func (g *Guard) Cost(providerKind, model, feature string, in, out int64) (float64, bool) {
 	p, ok := g.prices[PriceKey(providerKind, model)]
 	if !ok {
@@ -149,11 +162,12 @@ func (g *Guard) Cost(providerKind, model, feature string, in, out int64) (float6
 	if feature == "embedding" {
 		return float64(in+out) * p.EmbedPerMTok / 1e6, true
 	}
+	p = p.forPrompt(in)
 	return float64(in)*p.InputPerMTok/1e6 + float64(out)*p.OutputPerMTok/1e6, true
 }
 
 // CostUsage prices actual usage, with prompt-cache reads and writes at their own prices. in is all
-// input, cache tokens included.
+// input, cache tokens included, and is the prompt size the long-prompt threshold is checked against.
 func (g *Guard) CostUsage(providerKind, model, feature string, in, out, cacheRead, cacheWrite int64) (float64, bool) {
 	p, ok := g.prices[PriceKey(providerKind, model)]
 	if !ok {
@@ -162,6 +176,7 @@ func (g *Guard) CostUsage(providerKind, model, feature string, in, out, cacheRea
 	if feature == "embedding" || (cacheRead == 0 && cacheWrite == 0) {
 		return g.Cost(providerKind, model, feature, in, out)
 	}
+	p = p.forPrompt(in)
 	rate := func(r *float64) float64 {
 		if r == nil {
 			return p.InputPerMTok

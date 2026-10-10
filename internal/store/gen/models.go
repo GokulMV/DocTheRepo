@@ -1355,17 +1355,22 @@ type ConnectorCursor struct {
 }
 
 type CostTable struct {
-	ProviderKind         LlmProviderKind `json:"provider_kind"`
-	Model                string          `json:"model"`
-	InputPerMtokUsd      float64         `json:"input_per_mtok_usd"`
-	OutputPerMtokUsd     float64         `json:"output_per_mtok_usd"`
-	EmbedPerMtokUsd      float64         `json:"embed_per_mtok_usd"`
-	UpdatedBy            *string         `json:"updated_by"`
-	UpdatedAt            time.Time       `json:"updated_at"`
-	Source               string          `json:"source"`
-	VerifiedAt           *time.Time      `json:"verified_at"`
-	CacheReadPerMtokUsd  *float64        `json:"cache_read_per_mtok_usd"`
-	CacheWritePerMtokUsd *float64        `json:"cache_write_per_mtok_usd"`
+	ProviderKind              LlmProviderKind `json:"provider_kind"`
+	Model                     string          `json:"model"`
+	InputPerMtokUsd           float64         `json:"input_per_mtok_usd"`
+	OutputPerMtokUsd          float64         `json:"output_per_mtok_usd"`
+	EmbedPerMtokUsd           float64         `json:"embed_per_mtok_usd"`
+	UpdatedBy                 *string         `json:"updated_by"`
+	UpdatedAt                 time.Time       `json:"updated_at"`
+	Source                    string          `json:"source"`
+	VerifiedAt                *time.Time      `json:"verified_at"`
+	CacheReadPerMtokUsd       *float64        `json:"cache_read_per_mtok_usd"`
+	CacheWritePerMtokUsd      *float64        `json:"cache_write_per_mtok_usd"`
+	LongPromptThresholdTokens *int32          `json:"long_prompt_threshold_tokens"`
+	LongInputPerMtokUsd       *float64        `json:"long_input_per_mtok_usd"`
+	LongOutputPerMtokUsd      *float64        `json:"long_output_per_mtok_usd"`
+	LongCacheReadPerMtokUsd   *float64        `json:"long_cache_read_per_mtok_usd"`
+	LongCacheWritePerMtokUsd  *float64        `json:"long_cache_write_per_mtok_usd"`
 }
 
 type Decode struct {
