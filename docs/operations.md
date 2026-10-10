@@ -37,6 +37,7 @@ Unknown keys fail at start.
 | `DTH_SECRETS_PROVIDER` | `localfile` (with `DTH_LOCAL_KEY_FILE`), `awskms` or `gcpkms` (with `DTH_KMS_KEY_ID`) |
 | `DTH_AUTH_MODE` | `local` (passwords on by default) or `oidc` (with `DTH_OIDC_*`); sign-in can also be set in the UI or the settings file |
 | `DTH_SETTINGS_FILE`, `DTH_SETTINGS` | Settings applied on start ([settings-file.md](settings-file.md#applied-when-the-hub-starts)) |
+| `DTH_AWS_ROLE_TEMPLATE_URL`, `DTH_AWS_HUB_PRINCIPAL_ARN` | Read-only roles in other AWS accounts: the role template in S3 (for one-click quick-create links), and the Hub's role ARN when it has a path ([connectors.md](connectors.md#read-only-role-in-aws)) |
 | `DTH_SMTP_URL`, `DTH_EMAIL_FROM` | Email invite and password links ([users-and-sign-in.md](users-and-sign-in.md#email)); without them admins copy the link |
 | `DTH_DOCS_VERSION` | `2` (default): documents per repository, kept in the Hub; `1`: one doc per source file, landed as a docs PR ([docs-generation.md](docs-generation.md)) |
 | `DTH_DOCS_MODE` | Docs v1 only: cost mode `thorough`, `balanced` (default) or `economy` |

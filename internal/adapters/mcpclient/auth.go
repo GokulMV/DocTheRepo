@@ -15,8 +15,12 @@ import (
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+
+	"github.com/GokulMV/DocTheRepo/internal/adapters/awsrole"
 )
 
 // Header sets one header, e.g. Authorization: Bearer <token>, or api-key: <key>.
@@ -58,6 +62,9 @@ type AWSKeys struct {
 	SessionToken    string `json:"session_token,omitempty"`
 }
 
+// newSTS builds the STS client that assumes the role (a fake in tests).
+var newSTS = func(cfg aws.Config) stscreds.AssumeRoleAPIClient { return sts.NewFromConfig(cfg) }
+
 // SigV4 signs requests for AWS-hosted MCP servers.
 type SigV4 struct {
 	Region, Service string
@@ -66,7 +73,10 @@ type SigV4 struct {
 }
 
 // NewSigV4 builds a signer from stored keys (JSON) or, when keys is empty, the default credential chain.
-func NewSigV4(ctx context.Context, region, service, keys string) (*SigV4, error) {
+// With roleARN, those credentials only assume that role (with externalID when set) and requests are
+// signed with the role's: the read-only role the Hub's CloudFormation template creates in another
+// account. The session renews itself before it expires.
+func NewSigV4(ctx context.Context, region, service, keys, roleARN, externalID string) (*SigV4, error) {
 	if region == "" || service == "" {
 		return nil, errors.New("AWS region and service are required")
 	}
@@ -83,6 +93,14 @@ func NewSigV4(ctx context.Context, region, service, keys string) (*SigV4, error)
 			return nil, fmt.Errorf("find AWS credentials: %w", err)
 		}
 		s.creds = cfg.Credentials
+	}
+	if roleARN = strings.TrimSpace(roleARN); roleARN != "" {
+		if !awsrole.ValidRoleARN(roleARN) {
+			return nil, errors.New("the role ARN is not valid (arn:aws:iam::123456789012:role/Name)")
+		}
+		base := aws.Config{Region: region, Credentials: aws.NewCredentialsCache(s.creds)}
+		s.creds = awsrole.Credentials(newSTS(base), roleARN, strings.TrimSpace(externalID))
+		return s, nil
 	}
 	s.creds = aws.NewCredentialsCache(s.creds)
 	return s, nil

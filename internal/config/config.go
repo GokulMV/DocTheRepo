@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -48,6 +49,20 @@ type Config struct {
 	Settings  SettingsConfig  `yaml:"settings"`
 	Ask       AskConfig       `yaml:"ask"`
 	Email     EmailConfig     `yaml:"email"`
+	AWS       AWSConfig       `yaml:"aws"`
+}
+
+// AWSConfig is how the Hub gets read-only access to other AWS accounts through a role it assumes (see
+// docs/connectors.md#read-only-role-in-aws).
+type AWSConfig struct {
+	// RoleTemplateURL is the Hub's role template uploaded to Amazon S3, as an https URL
+	// (DTH_AWS_ROLE_TEMPLATE_URL). The AWS console's quick-create links only take templates in S3; without
+	// it the Hub offers the template file and an aws cloudformation deploy command instead.
+	RoleTemplateURL string `yaml:"role_template_url"`
+	// HubPrincipalARN is the IAM role the Hub runs as, for roles the template should trust
+	// (DTH_AWS_HUB_PRINCIPAL_ARN). Empty reads it from STS GetCallerIdentity; set it when the Hub's role
+	// has a path, which the session ARN does not show.
+	HubPrincipalARN string `yaml:"hub_principal_arn"`
 }
 
 // EmailConfig sends invite and password links by email. Without it the admin copies the link and passes
@@ -315,26 +330,28 @@ func Load(path string) (Config, error) {
 // applyEnv maps DTH_* variables onto the keys operators most often set per environment.
 func applyEnv(cfg *Config) error {
 	str := map[string]*string{
-		"DTH_LISTEN":              &cfg.Server.Listen,
-		"DTH_METRICS_LISTEN":      &cfg.Server.MetricsListen,
-		"DTH_PUBLIC_URL":          &cfg.Server.PublicURL,
-		"DTH_ENVIRONMENT":         &cfg.Server.Environment,
-		"DTH_SECRETS_PROVIDER":    &cfg.Secrets.Provider,
-		"DTH_LOCAL_KEY_FILE":      &cfg.Secrets.LocalKeyFile,
-		"DTH_KMS_KEY_ID":          &cfg.Secrets.KMSKeyID,
-		"DTH_AUTH_MODE":           &cfg.Auth.Mode,
-		"DTH_OIDC_ISSUER":         &cfg.Auth.OIDC.Issuer,
-		"DTH_OIDC_CLIENT_ID":      &cfg.Auth.OIDC.ClientID,
-		"DTH_OIDC_REDIRECT_URL":   &cfg.Auth.OIDC.RedirectURL,
-		"DTH_LOG_FORMAT":          &cfg.Logging.Format,
-		"DTH_LOG_LEVEL":           &cfg.Logging.Level,
-		"DTH_OTLP_ENDPOINT":       &cfg.Tracing.OTLPEndpoint,
-		"DTH_GRAMMARS_DIR":        &cfg.Grammars.LoadDir,
-		"DTH_VECTOR_BACKEND":      &cfg.Vector.Backend,
-		"DTH_QDRANT_URL":          &cfg.Vector.QdrantURL,
-		"DTH_SETTINGS_ENV_PREFIX": &cfg.Settings.EnvPrefix,
-		"DTH_SETTINGS_FILE_ROOT":  &cfg.Settings.FileRoot,
-		"DTH_EMAIL_FROM":          &cfg.Email.From,
+		"DTH_LISTEN":                &cfg.Server.Listen,
+		"DTH_METRICS_LISTEN":        &cfg.Server.MetricsListen,
+		"DTH_PUBLIC_URL":            &cfg.Server.PublicURL,
+		"DTH_ENVIRONMENT":           &cfg.Server.Environment,
+		"DTH_SECRETS_PROVIDER":      &cfg.Secrets.Provider,
+		"DTH_LOCAL_KEY_FILE":        &cfg.Secrets.LocalKeyFile,
+		"DTH_KMS_KEY_ID":            &cfg.Secrets.KMSKeyID,
+		"DTH_AUTH_MODE":             &cfg.Auth.Mode,
+		"DTH_OIDC_ISSUER":           &cfg.Auth.OIDC.Issuer,
+		"DTH_OIDC_CLIENT_ID":        &cfg.Auth.OIDC.ClientID,
+		"DTH_OIDC_REDIRECT_URL":     &cfg.Auth.OIDC.RedirectURL,
+		"DTH_LOG_FORMAT":            &cfg.Logging.Format,
+		"DTH_LOG_LEVEL":             &cfg.Logging.Level,
+		"DTH_OTLP_ENDPOINT":         &cfg.Tracing.OTLPEndpoint,
+		"DTH_GRAMMARS_DIR":          &cfg.Grammars.LoadDir,
+		"DTH_VECTOR_BACKEND":        &cfg.Vector.Backend,
+		"DTH_QDRANT_URL":            &cfg.Vector.QdrantURL,
+		"DTH_SETTINGS_ENV_PREFIX":   &cfg.Settings.EnvPrefix,
+		"DTH_SETTINGS_FILE_ROOT":    &cfg.Settings.FileRoot,
+		"DTH_EMAIL_FROM":            &cfg.Email.From,
+		"DTH_AWS_ROLE_TEMPLATE_URL": &cfg.AWS.RoleTemplateURL,
+		"DTH_AWS_HUB_PRINCIPAL_ARN": &cfg.AWS.HubPrincipalARN,
 	}
 	for k, dst := range str {
 		if v, ok := os.LookupEnv(k); ok {
@@ -458,6 +475,8 @@ func (c Config) HasRole(r Role) bool {
 	return false
 }
 
+var principalARN = regexp.MustCompile(`^arn:aws[a-z-]*:iam::\d{12}:(role|user)/.+$`)
+
 // Validate checks every key and returns all problems at once.
 func (c Config) Validate() error {
 	var errs []string
@@ -481,6 +500,14 @@ func (c Config) Validate() error {
 	}
 	if c.Email.SMTPURL() != "" && strings.TrimSpace(c.Email.From) == "" {
 		add("email.from: required when %s is set (e.g. \"DocTheRepo <docs@example.com>\")", c.Email.SMTPURLEnv)
+	}
+	if t := c.AWS.RoleTemplateURL; t != "" {
+		if u, err := url.Parse(t); err != nil || u.Scheme != "https" || !strings.Contains(u.Hostname(), "s3") || !strings.HasSuffix(u.Hostname(), ".amazonaws.com") {
+			add("aws.role_template_url: must be the https URL of the template in Amazon S3 (https://<bucket>.s3.<region>.amazonaws.com/<key>)")
+		}
+	}
+	if p := c.AWS.HubPrincipalARN; p != "" && !principalARN.MatchString(p) {
+		add("aws.hub_principal_arn: must be an IAM role or user ARN (arn:aws:iam::123456789012:role/Name)")
 	}
 	if s := c.Ask.SimilarAnswer; s != 0 && (s < 0.8 || s > 1) {
 		add("ask.similar_answer: want 0 (off) or a similarity from 0.8 to 1, got %g", s)

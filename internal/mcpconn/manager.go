@@ -139,7 +139,7 @@ func (m *Manager) authorizer(ctx context.Context, s store.MCPServer) (mcpclient.
 		if region == "" || service == "" {
 			region, service = guessAWS(s.URL, region, service)
 		}
-		return mcpclient.NewSigV4(ctx, region, service, secret)
+		return mcpclient.NewSigV4(ctx, region, service, secret, s.Config["role_arn"], s.Config["external_id"])
 	case "google":
 		return mcpclient.NewGoogle(ctx, secret)
 	case "oauth":

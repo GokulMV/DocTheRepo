@@ -377,6 +377,10 @@ func (h *adminHandlers) createConnector(w http.ResponseWriter, r *http.Request) 
 		fail(w, r, errBadParam("mode must be webhook, poll or both"))
 		return
 	}
+	if err := validAWSRole(in.Config); err != nil {
+		fail(w, r, err)
+		return
+	}
 	if err := h.openSecret(r, &in.Credentials, secrets.PurposeConnectorCreds); err != nil {
 		fail(w, r, err)
 		return
@@ -405,6 +409,12 @@ func (h *adminHandlers) patchConnector(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := chi.URLParam(r, "id")
+	if in.Config != nil {
+		if err := validAWSRole(*in.Config); err != nil {
+			fail(w, r, err)
+			return
+		}
+	}
 	if err := h.openSecret(r, in.Credentials, secrets.PurposeConnectorCreds); err != nil {
 		fail(w, r, err)
 		return

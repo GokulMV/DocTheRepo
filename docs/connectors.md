@@ -119,11 +119,11 @@ Webhook alert action: add ?token=<secret> to the URL (Splunk cannot send headers
 Alarms arrive by EventBridge API destination (webhook); log groups without a subscription are polled.
 
 - **How events arrive:** webhook, poll, webhook + poll; the webhook secret is shown once when you add it.
-- **Credentials:** Optional {"access_key_id","secret_access_key"}; empty uses the Hub’s own AWS identity.
+- **Credentials:** Optional {"access_key_id","secret_access_key"}; empty uses the Hub’s own AWS identity (or the [read-only role](#read-only-role-in-aws)).
 - **Settings:**
   - `region` (required): e.g. eu-west-1
-  - `role_arn`: Read-only role to assume (cross-account)
-  - `external_id`: External ID for the role
+  - `role_arn`: Filled in by “Create a read-only role in AWS” ([read-only role](#read-only-role-in-aws)), or a role of your own
+  - `external_id`: External ID the role requires
   - `log_groups`: Comma-separated log groups to poll
   - `filter_pattern`: Default: ?ERROR ?Exception ?Traceback ?FATAL ?panic
 
@@ -177,8 +177,8 @@ Queue depth, oldest message age, and dead-letter queues found from redrive polic
 - **How events arrive:** poll.
 - **Settings:**
   - `region` (required): e.g. eu-west-1
-  - `role_arn`: Read-only role
-  - `external_id`
+  - `role_arn`: Filled in by “Create a read-only role in AWS”, or a role of your own
+  - `external_id`: External ID the role requires
   - `queue_prefix`: Only queues starting with…
   - `peek`: true to sample dead letters (increments receive count)
   - `lag_min`: Lag threshold floor (default 1000)
@@ -191,7 +191,8 @@ Delivery failures per topic (CloudWatch metrics).
 - **How events arrive:** poll.
 - **Settings:**
   - `region` (required)
-  - `role_arn`
+  - `role_arn`: Filled in by “Create a read-only role in AWS”, or a role of your own
+  - `external_id`: External ID the role requires
   - `topics`: Topic names (comma-separated, * suffix)
 
 #### Amazon EventBridge (`eventbridge`)
@@ -201,7 +202,8 @@ Failed rule invocations (poll); events by API destination (webhook).
 - **How events arrive:** webhook, poll; the webhook secret is shown once when you add it.
 - **Settings:**
   - `region`
-  - `role_arn`
+  - `role_arn`: Filled in by “Create a read-only role in AWS”, or a role of your own
+  - `external_id`: External ID the role requires
   - `rules`: Rule names to watch
 
 #### Amazon Kinesis (`kinesis`)
@@ -211,7 +213,8 @@ Iterator age of streams and Lambda consumers.
 - **How events arrive:** poll.
 - **Settings:**
   - `region` (required)
-  - `role_arn`
+  - `role_arn`: Filled in by “Create a read-only role in AWS”, or a role of your own
+  - `external_id`: External ID the role requires
   - `streams`: Streams to watch
   - `lag_min`: Lag threshold floor (default 1000)
   - `oldest_age_seconds`: Oldest message age that counts as lag (default 300)
@@ -242,6 +245,77 @@ Ready backlog and queues bound to dead-letter exchanges.
   - `lag_min`: Lag threshold floor (default 1000)
   - `oldest_age_seconds`: Oldest message age that counts as lag (default 300)
 
+
+## Read-only role in AWS
+
+The AWS signal sources (CloudWatch, SQS, SNS, EventBridge, Kinesis) and the AWS MCP connection can read
+another AWS account without access keys. AWS creates a read-only IAM role there that trusts only the Hub.
+
+1. In the connector's form (or the AWS MCP connection under **AWS credentials → A read-only role in your
+   AWS account**), click **Create a read-only role in AWS**.
+2. The AWS console opens on **Quick create stack** with everything filled in. Tick the IAM acknowledgement
+   and click **Create stack**. Without a quick-create link (see [Hosting the template](#hosting-the-template)),
+   the Hub offers the template file and the exact command instead:
+   `aws cloudformation deploy --stack-name doctherepo-hub-readonly-… --template-file doctherepo-hub-readonly-….yaml --capabilities CAPABILITY_NAMED_IAM --parameter-overrides …`.
+   You can also upload that file under **CloudFormation → Create stack → Upload a template file**.
+3. Enter the **AWS account ID** (or paste the stack's `RoleArn` output) and click **Check access**.
+
+The Hub works out the role ARN from the role's fixed name (`DocTheRepoHubReadOnly-<10 characters>`),
+assumes it with the External ID, and says exactly what is wrong if it can't:
+
+| Check says | Meaning |
+|---|---|
+| no role it may assume | The stack is not finished yet (wait for `CREATE_COMPLETE`), or the account ID is wrong. STS reports a missing role as "access denied", so the Hub cannot tell these apart |
+| trust policy does not let the Hub in | The role exists but trusts another principal or External ID. Create it from this connection's link or template |
+| the Hub's own IAM principal is not allowed | Give the Hub's role a policy allowing `sts:AssumeRole` on `arn:aws:iam::*:role/DocTheRepoHubReadOnly-*` |
+| can be assumed without the External ID | The trust policy lacks the `sts:ExternalId` condition. The Hub refuses such a role |
+| missing permission … | The role works but lacks a call this connector makes |
+
+On success the form fills in `role_arn` and `external_id`. You can still type a role ARN and External ID of
+your own, or use access keys. The Hub renews the role's session (one hour) before it expires.
+
+**What the role may do.** You choose this when you create the role:
+
+- **Only what the Hub reads** (default for signal sources): an inline policy with exactly
+  `cloudwatch:DescribeAlarmHistory`, `cloudwatch:GetMetricData`, `cloudwatch:ListMetrics`,
+  `logs:FilterLogEvents`, `sqs:GetQueueAttributes` and `sqs:ListQueues`, on all resources. SQS **peek**
+  also needs `sqs:ReceiveMessage`. That call hides a message for a moment and counts as a receive, so it is
+  not included: add it to the role yourself if you turn peek on.
+- **Read-only access to everything** (default for the AWS MCP connection, which can ask about any service):
+  the AWS managed policy `ReadOnlyAccess`. It can read data too, such as S3 objects. Use it only if Ask may
+  see that.
+
+The trust policy allows `sts:AssumeRole` for the Hub's IAM principal only, with the condition
+`StringEquals {"sts:ExternalId": "<this connection's ID>"}`. Nothing in the template can write or change
+anything in your account.
+
+**Why an External ID.** It guards against the "confused deputy" problem. The Hub makes a new random ID
+(`dth-` and 160 random bits) for every connection, and the role accepts only that ID. The ID is not a
+secret, but knowing your role's ARN is not enough to make the Hub use your role: the caller also needs
+the ID the Hub picked for your connection.
+
+**Where it does not work.** The Hub needs an AWS identity of its own, the role the trust policy names: an ECS
+task role, an EKS pod role, an EC2 instance profile, or an IAM user's keys in its environment. A Hub on a
+laptop or outside AWS has none. The button then says so, and you use access keys or, for the AWS MCP server,
+**Sign in with AWS** in the browser. A Hub using the account's root credentials is refused. The Hub's role
+also needs `sts:AssumeRole` on `arn:aws:iam::*:role/DocTheRepoHubReadOnly-*` in its own policy.
+
+### Hosting the template
+
+The AWS console's quick-create links only take a template stored in Amazon S3. To get the one-click link:
+
+1. Download the generic template: `GET /api/v1/aws/role/template` as an admin. Without `external_id`, it has
+   no connection's values; the link passes them.
+2. Upload it to an S3 bucket the people creating roles can read, e.g.
+   `aws s3 cp doctherepo-hub-readonly.yaml s3://<bucket>/doctherepo-hub-readonly.yaml`.
+3. Set `aws.role_template_url` (`DTH_AWS_ROLE_TEMPLATE_URL`) to its https URL, e.g.
+   `https://<bucket>.s3.<region>.amazonaws.com/doctherepo-hub-readonly.yaml`.
+
+The link has the form
+`https://<region>.console.aws.amazon.com/cloudformation/home?region=<region>#/stacks/create/review?templateURL=…&stackName=…&param_HubPrincipalArn=…&param_ExternalId=…&param_RoleName=…&param_AccessLevel=…`.
+It is offered only in the standard `aws` partition. If the Hub's role has a path (`role/ops/hub`), set
+`aws.hub_principal_arn` (`DTH_AWS_HUB_PRINCIPAL_ARN`) to its full ARN. STS shows the session without the
+path.
 
 ## Model providers
 

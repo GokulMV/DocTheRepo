@@ -16,6 +16,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/GokulMV/DocTheRepo/internal/adapters/awsrole"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/codehost"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/knowledge/confluence"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/knowledge/jira"
@@ -498,6 +499,7 @@ func (a *app) v1Routes() []func(chi.Router) {
 			},
 			Estimate: a.estimateDocs, Export: a.exportDocs}),
 		api.MCPRoutes(api.MCPDeps{Auth: a.auth, Store: a.mcpStore, Manager: a.mcp, SealKeys: a.sealKeys, RequireSealed: a.cfg.Settings.RequireSealed}),
+		api.AWSRoleRoutes(api.AWSRoleDeps{Auth: a.auth, Hub: &awsrole.Hub{TemplateURL: a.cfg.AWS.RoleTemplateURL, PrincipalARN: a.cfg.AWS.HubPrincipalARN}}),
 	}
 }
 

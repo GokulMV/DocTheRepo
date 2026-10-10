@@ -2,6 +2,7 @@ import { ChevronDown } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { api } from '@/api/client';
 import { keys, useConnectors, useInvalidating } from '@/api/hooks';
+import { AwsRoleSetup } from '@/components/AwsRole';
 import { CopyField } from '@/components/CopyField';
 import { SealedHint } from '@/components/Sealed';
 import { Button, Dialog, DialogFooter, ErrorNote, Field, Input, Textarea } from '@/components/ui';
@@ -138,6 +139,10 @@ export function ConnectAlerts({ type, onClose }: { type: string; onClose: () => 
   const create = useInvalidating((body: object) => api.post<{ id: string; webhook_path: string }>('/connectors', body), keys.connectors);
   const saveSecret = useInvalidating((s: string) => seal(s, 'connector.webhook_secret').then((v) => api.patch(`/connectors/${made!.id}`, { webhook_secret: v })), keys.connectors);
   const canPull = spec.modes.some((m) => m === 'poll' || m === 'both');
+  const awsRole = spec.config?.some((c) => c.key === 'role_arn');
+  const roleSetup = awsRole && (
+    <AwsRoleSetup uses={type} region={config.region} onReady={(roleArn, externalId) => setConfig((c) => ({ ...c, role_arn: roleArn, external_id: externalId }))} />
+  );
 
   const submit = async () => {
     // A "theirs" secret is set after the tool shows it; until then a random one keeps deliveries out.
@@ -191,6 +196,7 @@ export function ConnectAlerts({ type, onClose }: { type: string; onClose: () => 
     <Dialog open onOpenChange={(o) => !o && onClose()} title={`Connect ${spec.label}`} description={pollOnly ? 'The Hub reads it on a schedule. Read-only: nothing changes in it.' : `The Hub makes a link for ${spec.label} to send alerts to. Nothing to fill in here.`}>
       <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); void submit(); }}>
         {pollOnly && required && <ConfigFields spec={spec} config={config} set={setConfig} which="required" />}
+        {pollOnly && roleSetup}
         {pollOnly && spec.credentials && (
           <Field label="Credentials" hint={`${spec.credentials}. Stored encrypted.`}>
             <Textarea rows={3} className="font-mono text-xs" value={creds} onChange={(e) => setCreds(e.target.value)} />
@@ -204,6 +210,7 @@ export function ConnectAlerts({ type, onClose }: { type: string; onClose: () => 
             </label>
           )}
           {pull && !pollOnly && required && <ConfigFields spec={spec} config={config} set={setConfig} which="required" />}
+          {pull && !pollOnly && roleSetup}
           {pull && <ConfigFields spec={spec} config={config} set={setConfig} which="optional" />}
           {pull && !pollOnly && spec.credentials && (
             <Field label="Credentials" hint={`${spec.credentials}. Stored encrypted.`}>

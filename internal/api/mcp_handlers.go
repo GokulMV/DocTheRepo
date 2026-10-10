@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/GokulMV/DocTheRepo/internal/adapters/awsrole"
 	"github.com/GokulMV/DocTheRepo/internal/auth"
 	"github.com/GokulMV/DocTheRepo/internal/mcpconn"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
@@ -69,6 +70,17 @@ func validMCPURL(raw string) error {
 	return nil
 }
 
+// validAWSRole checks the read-only role an AWS connection assumes (config role_arn, external_id).
+func validAWSRole(cfg map[string]string) error {
+	if a := strings.TrimSpace(cfg["role_arn"]); a != "" && !awsrole.ValidRoleARN(a) {
+		return errBadParam("role_arn must be an IAM role ARN (arn:aws:iam::123456789012:role/Name)")
+	}
+	if e := strings.TrimSpace(cfg["external_id"]); e != "" && !awsrole.ValidExternalID(e) {
+		return errBadParam("external_id may hold letters, digits and _+=,.@:/- (2 to 1224 characters)")
+	}
+	return nil
+}
+
 func validRole(r string) bool {
 	return r == "" || slices.Contains([]string{"viewer", "editor", "admin", "owner"}, r)
 }
@@ -110,6 +122,10 @@ func (h *mcpHandlers) create(w http.ResponseWriter, r *http.Request) {
 	}
 	if !slices.Contains(mcpAuthKinds, in.Auth) || !validRole(in.MinRole) {
 		fail(w, r, errBadParam("auth must be none, bearer, header, oauth, aws or google; min_role a role"))
+		return
+	}
+	if err := validAWSRole(in.Config); err != nil {
+		fail(w, r, err)
 		return
 	}
 	if err := openSealed(r.Context(), h.d.SealKeys, h.d.RequireSealed, &in.Secret, secrets.PurposeMCPSecret); err != nil {
@@ -164,6 +180,12 @@ func (h *mcpHandlers) patch(w http.ResponseWriter, r *http.Request) {
 	if in.MinRole != nil && !validRole(*in.MinRole) {
 		fail(w, r, errBadParam("min_role must be viewer, editor, admin or owner"))
 		return
+	}
+	if in.Config != nil {
+		if err := validAWSRole(*in.Config); err != nil {
+			fail(w, r, err)
+			return
+		}
 	}
 	if err := openSealed(r.Context(), h.d.SealKeys, h.d.RequireSealed, in.Secret, secrets.PurposeMCPSecret); err != nil {
 		fail(w, r, err)
