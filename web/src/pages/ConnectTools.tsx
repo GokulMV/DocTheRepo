@@ -6,6 +6,7 @@ import { CopyField } from '@/components/CopyField';
 import { SealedHint } from '@/components/Sealed';
 import { Button, Dialog, DialogFooter, ErrorNote, Field, Input, Textarea } from '@/components/ui';
 import { seal } from '@/lib/seal';
+import { AtlassianSignIn } from './ConnectAtlassian';
 import { knowledgeSpec, sourceSpec, type KnowledgeSpec, type SourceSpec } from './signalSources';
 
 export function randomSecret() {
@@ -231,9 +232,13 @@ const TOKEN_STEPS: Record<KnowledgeSpec['type'], ReactNode> = {
   notion: <>In Notion: {b('Settings → Connections → Develop or manage integrations → New integration')} (read content only), copy its token, then share the pages to sync with it from each page’s {b('••• → Connections')}.</>,
 };
 
-/** ConnectDocs connects Confluence, Jira or Notion: the site, what to sync, and a token. */
+/**
+ * ConnectDocs connects Confluence, Jira or Notion. Confluence and Jira Cloud sign in with Atlassian (recommended);
+ * the form below takes the site, what to sync, and an API token (Cloud) or personal access token (Data Center).
+ */
 export function ConnectDocs({ type, onClose, onDone }: { type: KnowledgeSpec['type']; onClose: () => void; onDone: (type: string) => void }) {
   const spec = knowledgeSpec(type)!;
+  const atlassian = type === 'confluence' || type === 'jira';
   const [config, setConfig] = useState<Record<string, string>>({});
   const [token, setToken] = useState('');
   const uniqueName = useUniqueName();
@@ -256,6 +261,12 @@ export function ConnectDocs({ type, onClose, onDone }: { type: KnowledgeSpec['ty
           onDone(type);
         }}
       >
+        {atlassian && (
+          <>
+            <AtlassianSignIn type={type} keys={config[type === 'jira' ? 'projects' : 'spaces']} site={config.base_url} />
+            <p className="pt-1 text-sm font-medium">Or use an API token (Cloud) or a personal access token (Data Center)</p>
+          </>
+        )}
         {main.map(field)}
         <Field label={spec.token?.label ?? 'API token'} hint={TOKEN_STEPS[type]}>
           <Input type="password" required value={token} onChange={(e) => setToken(e.target.value)} autoComplete="off" />

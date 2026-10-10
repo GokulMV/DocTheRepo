@@ -12,6 +12,7 @@ import { SealedBadge, SealedHint } from '@/components/Sealed';
 import { KNOWLEDGE, knowledgeSpec, SOURCES, sourceSpec } from './signalSources';
 import { ConnectAlerts, ConnectDocs, randomSecret } from './ConnectTools';
 import { McpSection } from './McpConnections';
+import { AtlassianReturn, isAtlassianOAuth, needsAtlassianSignIn, startAtlassian } from './ConnectAtlassian';
 import { Link } from 'react-router-dom';
 import { nameOf, sentence } from '@/lib/labels';
 
@@ -363,6 +364,9 @@ export default function Connectors() {
   const ghConnected = params.get('github') === 'connected' ? params.get('connector') : null;
   const ghError = params.get('github_error');
   const clearGitHub = () => setParams({}, { replace: true });
+  const atlassianBack = ['connected', 'choose_site'].includes(params.get('atlassian') ?? '') ? params.get('connector') : null;
+  const atlassianError = params.get('atlassian_error');
+  const signInAgain = useInvalidating((c: Connector) => startAtlassian({ type: c.type as 'confluence' | 'jira', connector_id: c.id }));
   const [testing, setTesting] = useState<string>();
   const [created, setCreated] = useState<{ id: string; type: string; secret: string }>();
   const [alertTool, setAlertTool] = useState<string>();
@@ -400,6 +404,13 @@ export default function Connectors() {
         </Card>
       )}
       {ghConnected && <PickRepos connectorId={ghConnected} onDone={clearGitHub} />}
+      {atlassianError && (
+        <Card title="Atlassian was not connected" className="mb-4">
+          <p className="text-sm text-red-700 dark:text-red-400">{atlassianError}</p>
+          <Button size="sm" variant="secondary" className="mt-2" onClick={clearGitHub}>Dismiss</Button>
+        </Card>
+      )}
+      {atlassianBack && <AtlassianReturn connectorId={atlassianBack} onDone={clearGitHub} />}
       {knowledge && (
         <Card title="Syncing" className="mb-4">
           <p className="text-sm">Connected. The first {knowledgeSpec(knowledge)?.label} sync starts within a minute; its pages then appear in Ask and Team docs.</p>
@@ -420,7 +431,7 @@ export default function Connectors() {
         </Card>
       )}
       {conns.isLoading && <Spinner />}
-      <ErrorNote error={conns.error ?? sync.error ?? del.error ?? toggle.error} />
+      <ErrorNote error={conns.error ?? sync.error ?? del.error ?? toggle.error ?? signInAgain.error} />
       {remote && <RemoteNotice name={remote.name} result={remote.result} onClose={() => setRemote(undefined)} />}
 
       <Group title="Code" text="The repositories the Hub documents and answers questions about.">
@@ -432,7 +443,7 @@ export default function Connectors() {
 
       <Group title="Team documents" text="Pages Ask can answer from, next to your code.">
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {KNOWLEDGE.map((k) => <Tile key={k.type} label={k.label} sub="Site, what to sync, a token" onClick={() => setDocTool(k.type)} />)}
+          {KNOWLEDGE.map((k) => <Tile key={k.type} label={k.label} sub={k.type === 'notion' ? 'What to sync, a token' : 'Sign in with Atlassian, or a token'} onClick={() => setDocTool(k.type)} />)}
           <Link to="/library" className={tileClass}><span className="font-medium">Upload files</span><span className="text-xs text-slate-500">Markdown, text or HTML, under Team docs</span></Link>
         </div>
         {docConns.length > 0 && <div className="mt-4"><ConnectorTable items={docConns} actions={rowActions} /></div>}
@@ -462,6 +473,8 @@ export default function Connectors() {
   function rowActions(c: Connector) {
     return (
       <div className="flex flex-wrap gap-1">
+        {needsAtlassianSignIn(c) && <Button size="sm" onClick={() => signInAgain.mutate(c)} disabled={signInAgain.isPending}>Sign in again</Button>}
+        {isAtlassianOAuth(c) && c.config?.oauth_status === 'choose_site' && <Button size="sm" onClick={() => setParams({ atlassian: 'choose_site', connector: c.id })}>Choose site</Button>}
         {(knowledgeSpec(c.type) || c.type === 'github' || c.type === 'gitlab') && <Button size="sm" variant="secondary" onClick={() => sync.mutate(c.id)}>Sync now</Button>}
         {(c.type === 'github' || c.type === 'gitlab') && <Button size="sm" variant="secondary" onClick={() => setTesting(c.id)}>Test</Button>}
         <Button size="sm" variant="ghost" onClick={() => confirmDisable(c) && toggle.mutate(c)}>{c.enabled ? 'Disable' : 'Enable'}</Button>
@@ -507,7 +520,8 @@ function ConnectorTable({ items, actions }: { items: Connector[]; actions: (c: C
           <tr key={c.id}>
             <Td>
               <span className="font-medium">{c.name}</span>{!c.enabled && <Badge tone="amber">Disabled</Badge>}
-              <p className="text-xs text-slate-500">{nameOf(c.type)}{c.mode !== 'poll' && sourceSpec(c.type) ? ' · link' : ''}</p>
+              <p className="text-xs text-slate-500">{nameOf(c.type)}{c.mode !== 'poll' && sourceSpec(c.type) ? ' · link' : ''}{isAtlassianOAuth(c) ? ` · Atlassian sign-in${c.config?.site_name ? ` (${c.config.site_name})` : ''}` : ''}</p>
+              {needsAtlassianSignIn(c) && <div className="mt-1"><Badge tone="red">Needs sign-in again</Badge></div>}
               {c.has_credentials && <div className="mt-1"><SealedBadge meta={c.credentials_meta} label="Credentials sealed" /></div>}
             </Td>
             <Td><Badge tone={statusTone(c.health)}>{c.health}</Badge>{c.last_error && <p className="max-w-xs truncate text-xs text-red-600" title={c.last_error}>{c.last_error}</p>}</Td>

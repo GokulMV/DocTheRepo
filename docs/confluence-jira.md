@@ -13,7 +13,75 @@ Cloud and Data Center are both supported. Notion pages and uploaded documents wo
 
 ## Connect
 
-In the UI, go to **Settings → Connections** and click **Confluence** or **Jira** under *Team documents*. With the API:
+In the UI, go to **Settings → Connections** and click **Confluence** or **Jira** under *Team documents*.
+
+- **Atlassian Cloud (recommended): Connect with Atlassian.** Click the button and approve read-only access on
+  Atlassian's own page, where you also pick the site. The browser comes back to Connections, where you enter
+  the spaces or projects to sync. There is no token to create or paste. This needs a [one-time
+  setup](#one-time-setup-for-connect-with-atlassian) by an admin.
+- **API token (Cloud) or personal access token (Data Center).** This is the alternative, in the same dialog:
+  the site URL, the spaces or projects, and the token.
+
+### One-time setup for Connect with Atlassian
+
+The Hub is self-hosted, so it signs in to Atlassian with an OAuth 2.0 (3LO) app that you register once. The
+dialog's **One-time setup** link shows the same steps, with this Hub's callback URL ready to copy.
+
+1. Open the [Atlassian developer console](https://developer.atlassian.com/console/myapps/) and choose
+   **Create → OAuth 2.0 integration**. Name it, for example, "DocTheRepo Hub".
+2. Under **Authorization**, add **OAuth 2.0 (3LO)** with this callback URL:
+   `<server.public_url>/api/v1/atlassian/connect/callback`, for example
+   `https://hub.acme.example/api/v1/atlassian/connect/callback`. It must match exactly. Without
+   `server.public_url` (`DTH_PUBLIC_URL`) the Hub uses the address you opened it at, which must be `https`
+   (or `localhost`).
+3. Under **Permissions**, add these read-only classic scopes:
+
+   | API | Scopes | Used for |
+   |---|---|---|
+   | Confluence API | `read:confluence-content.all`, `read:confluence-space.summary`, `search:confluence` | CQL search for changed pages with their bodies and labels, and each page's space |
+   | Jira API | `read:jira-work`, `read:jira-user` | JQL search and issues; the account's time zone (`/myself`) |
+
+   The Hub also asks for `offline_access`, which Atlassian grants without configuration, so that the
+   sign-in renews on its own.
+4. Under **Distribution**, make the app available to the users of your organization, so admins other than
+   the app's owner can connect too. A private app works only for its owner.
+5. Under **Settings**, copy the **Client ID** and **Secret** into the setup form, or use the API:
+
+   ```sh
+   curl -sS -X PUT "$HUB/api/v1/atlassian/oauth-app" -H "Authorization: Bearer $DTH_TOKEN" -H 'Content-Type: application/json' \
+     -d '{"client_id":"<client id>","client_secret":"<secret>"}'
+   # GET /api/v1/atlassian/oauth-app → {configured, client_id, callback_url, console_url, scopes}; never the secret
+   ```
+
+The secret is stored sealed and is covered by `dth-hub rotate-key`. Only admins can see or change the setup
+and connect.
+
+### How the sign-in behaves
+
+- **What is stored.** The Hub keeps the access token (valid about an hour) and the refresh token, sealed in
+  the connector's credentials. Neither is ever returned by the API or written to logs.
+- **Renewal.** Atlassian rotates refresh tokens: each renewal returns a new refresh token that replaces the
+  old one, and the Hub stores it before using the new access token. Atlassian ends a refresh token that is
+  not used for 90 days. A connector that syncs every 15 minutes never reaches that.
+- **When the sign-in ends.** If Atlassian refuses a renewal (the app's access was revoked, the account left
+  the site, or the token lapsed), the connector shows **Needs sign-in again** with the reason under Health,
+  and syncs stop. Click **Sign in again** on its row: the same connector, its spaces and its synced pages are
+  kept. The new sign-in must cover the same site.
+- **Several sites.** The site you choose on Atlassian's page is used. If the sign-in covers several sites,
+  the Hub uses the one whose URL you typed in **Site URL**. Otherwise it asks you to choose on the
+  Connections page.
+- **Whose access.** The connector reads what the account that signed in can read. Use a dedicated
+  read-only account if possible.
+- **API calls.** Requests go through Atlassian's API gateway (`https://api.atlassian.com/ex/confluence/<cloud
+  id>/…` and `…/ex/jira/<cloud id>/…`) with a bearer token. Links in answers still point at your site.
+- **Changing the app.** If you replace the client secret, existing connectors keep working. If you delete
+  the app or switch to a different one, their renewals fail and each needs **Sign in again**.
+
+With the API, start a sign-in with `POST /api/v1/atlassian/connect` (`{"type":"confluence","keys":"ENG"}`; add
+`"connector_id"` to sign an existing connector in again). It returns `{url}` for the browser to open. Choose a
+site with `POST /api/v1/atlassian/connectors/{id}/site` (`{"cloud_id":…}`).
+
+### With an API token or personal access token
 
 ```sh
 # Confluence Cloud: e-mail + API token. Data Center: omit email and use a personal access token.
@@ -35,7 +103,11 @@ curl -sS -X POST "$HUB/api/v1/connectors" -H "Authorization: Bearer $DTH_TOKEN" 
 | `timezone` | optional | optional | The account's time zone (IANA name). Jira reads it from the account profile if you leave it out. Without it, Confluence re-reads the last 14 hours on each sync to be safe. |
 | `jql` | | optional | An extra filter combined with every query using AND, e.g. `issuetype in (Bug, Incident)`. |
 | `lookback_days` | | optional | How far back the first sync reads. Defaults to 365. |
-| `api_version` | | optional | `3` for Cloud (the default when `email` is set), `2` for Data Center. |
+| `api_version` | | optional | `3` for Cloud (the default when `email` is set or the connector signs in with Atlassian), `2` for Data Center. |
+
+Connectors made with Connect with Atlassian also carry `auth: oauth`, `cloud_id`, `site_name` and, while
+needed, `oauth_status` (`choose_site` or `needs_sign_in`). The Hub manages these keys and `base_url`, and
+edits keep them.
 
 Use a dedicated read-only account and sync only spaces and projects that **every Hub user may read**. Synced
 content belongs to no repository, so every Hub viewer can see it. The Hub does not mirror per-page
@@ -94,6 +166,7 @@ curl -sS -X POST "$HUB/api/v1/known-issues/from-link" -H "Authorization: Bearer 
 | Page or issue not found, or the connector's account cannot see it | 404 | `NOT_FOUND` |
 | No model on the `suggest` route | 409 | `NO_ROUTE` |
 | Bad credentials (the connector's health shows the same) | 400 | `INVALID_CONNECTOR` |
+| The Atlassian sign-in expired or was revoked | 400 | `ATLASSIAN_SIGN_IN_REQUIRED` |
 
 ## Verify on first use
 
@@ -105,3 +178,6 @@ following:
 - Confluence Cloud: the account can run CQL searches (`/wiki/rest/api/content/search`).
 - Jira Cloud: the account can use the new search endpoint (`/rest/api/3/search/jql`).
 - Data Center: set `api_version: 2` for Jira.
+- Connect with Atlassian was tested against a fake Atlassian only. On first use, check that the consent
+  page lists the scopes above and that the connector syncs. If Atlassian answers 401 or 403 through the API
+  gateway, compare the app's scopes with the table above.

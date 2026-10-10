@@ -1,6 +1,6 @@
 // Package atlassian holds what the Confluence and Jira adapters share: site configuration and auth
-// (Cloud: e-mail + API token; Data Center: personal access token), read-only JSON GETs, query quoting, and
-// the time-zone handling CQL/JQL date filters need.
+// (Cloud: "Connect with Atlassian" OAuth or e-mail + API token; Data Center: personal access token),
+// read-only JSON GETs, query quoting, and the time-zone handling CQL/JQL date filters need.
 package atlassian
 
 import (
@@ -20,23 +20,46 @@ import (
 
 // Site is one configured Atlassian site.
 type Site struct {
-	// Base is the site's REST base without a trailing slash (Confluence Cloud: https://x.atlassian.net/wiki).
+	// Base is the site's browser base without a trailing slash (Confluence Cloud: https://x.atlassian.net/wiki);
+	// with an API token or PAT the REST APIs live under it too.
 	Base   string
 	base   *url.URL
 	header map[string]string
 	HTTP   *httpx.Client
+	// OAuth connectors call the API gateway (api is <gateway>/ex/<product>/<cloudid>) with a bearer token
+	// from tokens; api is "" otherwise.
+	api    string
+	tokens TokenSource
+	cc     ports.ConnectorConfig
 }
 
 func invalid(format string, args ...any) error {
 	return &ports.ValidationError{Code: "INVALID_CONNECTOR", Message: fmt.Sprintf(format, args...)}
 }
 
-// NewSite reads base_url, email (optional), and the credential (API token or personal access token).
-func NewSite(service string, cc ports.ConnectorConfig) (*Site, error) {
+var cloudIDRE = regexp.MustCompile(`^[A-Za-z0-9-]{1,64}$`) // a UUID in practice; safe in a path either way
+
+// NewSite reads base_url, email (optional), and the credential (API token or personal access token). An
+// OAuth connector (auth=oauth) instead names its site's cloud_id and takes tokens from ts.
+func NewSite(service string, cc ports.ConnectorConfig, ts TokenSource) (*Site, error) {
 	raw := strings.TrimRight(strings.TrimSpace(cc.Config["base_url"]), "/")
+	if IsOAuth(cc) {
+		switch {
+		case cc.Config["oauth_status"] == "choose_site":
+			return nil, invalid("%s: choose which Atlassian site to read on the Connections page", service)
+		case ts == nil:
+			return nil, invalid("%s: Atlassian sign-in is not available on this Hub", service)
+		case !cloudIDRE.MatchString(cc.Config["cloud_id"]):
+			return nil, invalid("%s: the connector has no Atlassian site; connect it again", service)
+		}
+	}
 	u, err := url.Parse(raw)
 	if raw == "" || err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" {
 		return nil, invalid("%s: base_url must be an http(s) URL", service)
+	}
+	if IsOAuth(cc) {
+		api := strings.TrimRight(ts.APIBase(), "/") + "/ex/" + service + "/" + cc.Config["cloud_id"]
+		return &Site{Base: raw, base: u, header: map[string]string{}, HTTP: httpx.New(service), api: api, tokens: ts, cc: cc}, nil
 	}
 	token := strings.TrimSpace(cc.Credentials)
 	if token == "" {
@@ -51,29 +74,75 @@ func NewSite(service string, cc ports.ConnectorConfig) (*Site, error) {
 	return &Site{Base: raw, base: u, header: h, HTTP: httpx.New(service)}, nil
 }
 
-// Get fetches pathAndQuery (relative to Base, starting with "/") as JSON. 404 maps to ports.ErrNotFound;
-// 401/403 to a validation error, since only an admin fixing the token helps.
+// APIBase is where REST paths are appended: the API gateway for OAuth connectors, else Base.
+func (s *Site) APIBase() string {
+	if s.api != "" {
+		return s.api
+	}
+	return s.Base
+}
+
+// Get fetches pathAndQuery (relative to the REST base, starting with "/") as JSON. 404 maps to
+// ports.ErrNotFound; 401/403 to a validation error, since only an admin fixing the credentials helps. An
+// OAuth connector retries a 401 once with a freshly refreshed token.
 func (s *Site) Get(ctx context.Context, pathAndQuery string, out any) error {
 	if !strings.HasPrefix(pathAndQuery, "/") {
 		return ports.Permanent(fmt.Errorf("%s: refusing non-relative link %q", s.HTTP.Service, pathAndQuery))
 	}
-	err := s.HTTP.JSON(ctx, http.MethodGet, s.Base+pathAndQuery, s.header, nil, out)
-	switch httpx.StatusOf(err) {
-	case http.StatusNotFound:
-		return fmt.Errorf("%s: %w", s.HTTP.Service, ports.ErrNotFound)
-	case http.StatusUnauthorized, http.StatusForbidden:
-		return invalid("%s rejected the credentials (HTTP %d): check the e-mail and API token", s.HTTP.Service, httpx.StatusOf(err))
+	if s.tokens == nil {
+		_, err := s.get(ctx, s.Base+pathAndQuery, s.header, out, "check the e-mail and API token")
+		return err
 	}
-	return err
+	for attempt := 0; ; attempt++ {
+		tok, err := s.tokens.Token(ctx, s.cc, attempt > 0)
+		if err != nil {
+			return err
+		}
+		status, err := s.get(ctx, s.api+pathAndQuery, map[string]string{"Authorization": "Bearer " + tok}, out,
+			"check that the account that connected can read it, and the OAuth app's scopes")
+		if attempt == 0 && status == http.StatusUnauthorized {
+			continue
+		}
+		return err
+	}
+}
+
+func (s *Site) get(ctx context.Context, u string, h map[string]string, out any, fix string) (int, error) {
+	err := s.HTTP.JSON(ctx, http.MethodGet, u, h, nil, out)
+	switch st := httpx.StatusOf(err); st {
+	case http.StatusNotFound:
+		return st, fmt.Errorf("%s: %w", s.HTTP.Service, ports.ErrNotFound)
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return st, invalid("%s rejected the credentials (HTTP %d): %s", s.HTTP.Service, st, fix)
+	}
+	return 0, err
 }
 
 // Owns reports whether a browser URL is on this site (same host, under the base path).
 func (s *Site) Owns(raw string) bool {
+	return under(raw, s.base)
+}
+
+// RelativeAPI turns an absolute link the API returned (a next page) into a path under the REST base, or ""
+// when it points anywhere else.
+func (s *Site) RelativeAPI(raw string) string {
+	for _, b := range []string{s.APIBase(), s.Base} {
+		base, err := url.Parse(b)
+		if err != nil || !under(raw, base) {
+			continue
+		}
+		u, _ := url.Parse(strings.TrimSpace(raw))
+		return strings.TrimPrefix(u.RequestURI(), strings.TrimRight(base.Path, "/"))
+	}
+	return ""
+}
+
+func under(raw string, base *url.URL) bool {
 	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || !strings.EqualFold(u.Hostname(), s.base.Hostname()) {
+	if err != nil || !strings.EqualFold(u.Hostname(), base.Hostname()) {
 		return false
 	}
-	return strings.HasPrefix(u.Path+"/", strings.TrimRight(s.base.Path, "/")+"/")
+	return strings.HasPrefix(u.Path+"/", strings.TrimRight(base.Path, "/")+"/")
 }
 
 var keyRE = regexp.MustCompile(`^~?[A-Za-z0-9_-]{1,255}$`)

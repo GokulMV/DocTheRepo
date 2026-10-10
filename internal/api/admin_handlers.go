@@ -377,6 +377,10 @@ func (h *adminHandlers) createConnector(w http.ResponseWriter, r *http.Request) 
 		fail(w, r, errBadParam("mode must be webhook, poll or both"))
 		return
 	}
+	if in.Config["auth"] == "oauth" {
+		fail(w, r, errBadParam("Atlassian sign-in connectors are made with Connect with Atlassian (POST /atlassian/connect)"))
+		return
+	}
 	if err := h.openSecret(r, &in.Credentials, secrets.PurposeConnectorCreds); err != nil {
 		fail(w, r, err)
 		return
@@ -405,6 +409,27 @@ func (h *adminHandlers) patchConnector(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := chi.URLParam(r, "id")
+	if in.Config != nil || in.Credentials != nil {
+		// "Connect with Atlassian" owns its connector's site and tokens: edits keep them.
+		if cur, err := h.d.Connectors.GetAny(r.Context(), id); err == nil && cur.Config["auth"] == "oauth" {
+			if in.Credentials != nil {
+				fail(w, r, errBadParam("this connector signs in with Atlassian: use Sign in again, or connect a new one with an API token"))
+				return
+			}
+			cfg := map[string]string{}
+			for k, v := range *in.Config {
+				cfg[k] = v
+			}
+			for _, k := range atlassianManaged {
+				if v, ok := cur.Config[k]; ok {
+					cfg[k] = v
+				} else {
+					delete(cfg, k)
+				}
+			}
+			in.Config = &cfg
+		}
+	}
 	if err := h.openSecret(r, in.Credentials, secrets.PurposeConnectorCreds); err != nil {
 		fail(w, r, err)
 		return

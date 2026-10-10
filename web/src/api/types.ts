@@ -245,6 +245,23 @@ export interface Connector {
   credentials_meta?: SecretMeta;
 }
 
+/** The Atlassian OAuth app registered once for "Connect with Atlassian" (never the secret). */
+export interface AtlassianApp {
+  configured: boolean;
+  client_id?: string;
+  updated_at?: string;
+  callback_url: string;
+  console_url: string;
+  scopes: Record<'confluence' | 'jira', string[]>;
+}
+
+/** A site an Atlassian sign-in can read (connector config oauth_sites, while the admin chooses). */
+export interface AtlassianSite {
+  id: string;
+  url: string;
+  name: string;
+}
+
 /** What a disable, enable or remove did on GitHub (GitHub App connectors only). */
 export interface RemoteResult {
   action: 'suspended' | 'resumed' | 'uninstalled';
