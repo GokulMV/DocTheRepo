@@ -98,7 +98,7 @@ jobs:
           cat docs-run/docs-report-summary.md 2>/dev/null || echo "(no report)"
           echo "===== DOCS SUMMARY END ====="
           if [ -f docs-run/docs-report-summary.md ]; then cat docs-run/docs-report-summary.md >> "$GITHUB_STEP_SUMMARY"; fi
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: docs-run
