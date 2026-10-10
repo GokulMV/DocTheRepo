@@ -56,11 +56,11 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U dth" --health-interval 2s --health-timeout 5s --health-retries 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
@@ -98,7 +98,7 @@ jobs:
           cat docs-run/docs-report-summary.md 2>/dev/null || echo "(no report)"
           echo "===== DOCS SUMMARY END ====="
           if [ -f docs-run/docs-report-summary.md ]; then cat docs-run/docs-report-summary.md >> "$GITHUB_STEP_SUMMARY"; fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: docs-run
