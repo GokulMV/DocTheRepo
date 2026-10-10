@@ -429,3 +429,16 @@ func TestProtect_ScrubsAlwaysRedactsPIIPerProvider(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"password=<PASSWORD> in config"}, e.emb.calls[0])
 }
+
+func TestChat_RouteWithoutModelUsesTheProviderDefault(t *testing.T) {
+	e := newEnv(t, 1e6, false)
+	e.routes[FeatureQA] = Route{ProviderID: "p1", ProviderKind: "anthropic", MaxOutputTokens: 1000,
+		Fallback: &Route{ProviderID: "p2", ProviderKind: "openai", MaxOutputTokens: 500}}
+	e.llms["p1"].steps = []step{ok("answer", 10, 2)}
+	_, err := e.gw.Chat(context.Background(), FeatureQA, CallMeta{}, ports.ChatRequest{Messages: msgs("q")})
+	require.NoError(t, err)
+	assert.Equal(t, "claude-haiku-5-5", e.llms["p1"].reqs[0].Model, "an Anthropic route with no model falls back to Haiku")
+	r, err := e.gw.Route(context.Background(), FeatureQA)
+	require.NoError(t, err)
+	assert.Equal(t, "", r.Fallback.Model, "providers without a default are left alone")
+}

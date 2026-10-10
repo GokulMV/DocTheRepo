@@ -40,7 +40,7 @@ func (g *Gateway) JudgeRoute(ctx context.Context) (Route, error) {
 			fb.Feature = FeatureSift
 			r.Fallback = &fb
 		}
-		return r, nil
+		return withDefaultModel(r), nil
 	}
 	return Route{}, ErrNoRoute
 }

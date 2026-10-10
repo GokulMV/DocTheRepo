@@ -22,8 +22,8 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/ports"
 )
 
-// DefaultModel is the seeded default route model for Claude providers.
-const DefaultModel = "claude-opus-5-5"
+// DefaultModel serves a request that names no model (the gateway fills the same one into routes).
+const DefaultModel = "claude-haiku-5-5"
 
 // Platform identifies where Claude is served from.
 type Platform string
@@ -135,7 +135,7 @@ const streamAbove = 16000
 // parameters). Effort is set explicitly when the route specifies it.
 func (a *Adapter) Chat(ctx context.Context, req ports.ChatRequest) (ports.ChatResponse, error) {
 	if req.Model == "" {
-		return ports.ChatResponse{}, ports.Permanent(errors.New("no model specified"))
+		req.Model = DefaultModel
 	}
 	maxTokens := int64(req.MaxOutputTokens)
 	if maxTokens <= 0 {

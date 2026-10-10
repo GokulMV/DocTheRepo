@@ -124,7 +124,24 @@ func (g *Gateway) Route(ctx context.Context, feature string) (Route, error) {
 		return r, err
 	}
 	r.Feature = feature
-	return r, nil
+	return withDefaultModel(r), nil
+}
+
+// defaultModels is the model a route uses when it names none: the provider's cheapest current model.
+var defaultModels = map[string]string{"anthropic": "claude-haiku-5-5"}
+
+// withDefaultModel fills in the provider's default model on a route (and its fallback) that names none,
+// so the call is priced, guarded and recorded against the model that actually serves it.
+func withDefaultModel(r Route) Route {
+	if r.Model == "" {
+		r.Model = defaultModels[r.ProviderKind]
+	}
+	if r.Fallback != nil && r.Fallback.Model == "" {
+		fb := *r.Fallback
+		fb.Model = defaultModels[fb.ProviderKind]
+		r.Fallback = &fb
+	}
+	return r
 }
 
 // Chat runs a chat call on the feature's route, falling back once on a transient failure.
