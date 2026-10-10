@@ -221,11 +221,29 @@ func LoadGuard(ctx context.Context, s *Store, allowUnlimited bool) (*spendguard.
 	}
 	prices := make(map[string]spendguard.Price, len(costs))
 	for _, c := range costs {
-		prices[spendguard.PriceKey(string(c.ProviderKind), c.Model)] = spendguard.Price{
-			InputPerMTok: c.InputPerMtokUsd, OutputPerMTok: c.OutputPerMtokUsd, EmbedPerMTok: c.EmbedPerMtokUsd,
-			CacheReadPerMTok: c.CacheReadPerMtokUsd, CacheWritePerMTok: c.CacheWritePerMtokUsd}
+		prices[spendguard.PriceKey(string(c.ProviderKind), c.Model)] = toPrice(c)
 	}
 	return spendguard.New(limits, prices, allowUnlimited)
+}
+
+// toPrice maps a cost_table row. A long-prompt tier needs a threshold; an unset long input or output price
+// keeps the base one.
+func toPrice(c gen.CostTable) spendguard.Price {
+	p := spendguard.Price{InputPerMTok: c.InputPerMtokUsd, OutputPerMTok: c.OutputPerMtokUsd, EmbedPerMTok: c.EmbedPerMtokUsd,
+		CacheReadPerMTok: c.CacheReadPerMtokUsd, CacheWritePerMTok: c.CacheWritePerMtokUsd}
+	if c.LongPromptThresholdTokens == nil || *c.LongPromptThresholdTokens <= 0 {
+		return p
+	}
+	long := spendguard.Price{InputPerMTok: p.InputPerMTok, OutputPerMTok: p.OutputPerMTok,
+		CacheReadPerMTok: c.LongCacheReadPerMtokUsd, CacheWritePerMTok: c.LongCacheWritePerMtokUsd}
+	if c.LongInputPerMtokUsd != nil {
+		long.InputPerMTok = *c.LongInputPerMtokUsd
+	}
+	if c.LongOutputPerMtokUsd != nil {
+		long.OutputPerMTok = *c.LongOutputPerMtokUsd
+	}
+	p.LongPromptThreshold, p.Long = int64(*c.LongPromptThresholdTokens), &long
+	return p
 }
 
 // Opener decrypts sealed secrets (secrets.Box).
