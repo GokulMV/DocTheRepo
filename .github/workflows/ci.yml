@@ -161,6 +161,8 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: e2e-report
+          # The hub log is under a dot-folder, which is skipped without this.
+          include-hidden-files: true
           path: |
             test/e2e/playwright-report
             test/e2e/test-results
