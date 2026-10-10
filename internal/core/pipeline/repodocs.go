@@ -13,6 +13,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/core/llmgateway"
 	"github.com/GokulMV/DocTheRepo/internal/core/manifest"
 	"github.com/GokulMV/DocTheRepo/internal/core/repodocs"
+	"github.com/GokulMV/DocTheRepo/internal/core/spendguard"
 	"github.com/GokulMV/DocTheRepo/internal/core/triage"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
 )
@@ -46,6 +47,9 @@ type DocsBudget func(ctx context.Context, repoID string, estimate func() (float6
 
 // ErrDocsBudget: the repository's monthly docs budget is used up.
 var ErrDocsBudget = errors.New("this repository's monthly docs budget is used up")
+
+// docsBudgetKey names a repository's docs budget in the spend guard (and in its blocks).
+func docsBudgetKey(repoID string) string { return "repo_docs:" + repoID + "/month" }
 
 // maxSpecialBytes caps each README, build or CI file read whole as context.
 const maxSpecialBytes = 12000
@@ -184,14 +188,22 @@ func (p *Pipeline) RepoDocs(ctx context.Context, job ports.Job) (ports.Outcome, 
 				}
 				return nil
 			}
+			// Every paid call of the run also counts against the cap, with what calls in flight have
+			// reserved and the safety buffer, so documents written at once cannot overshoot it together.
+			// Only the writing carries it: indexing the result (meta) is not docs spend.
+			opts.Meta.Budget = &spendguard.Budget{Key: docsBudgetKey(repo.ID), CapUSD: limit,
+				Spent: func(ctx context.Context) (float64, error) {
+					_, s, err := p.DocsBudget(ctx, repo.ID, nil)
+					return s, err
+				}}
 		}
 	}
 	res, err := p.RepoDocsGen.Run(ctx, facts, opts)
-	if errors.Is(err, ErrDocsBudget) {
+	var sb *ports.SpendBlockedError
+	if errors.Is(err, ErrDocsBudget) || (errors.As(err, &sb) && sb.Scope == docsBudgetKey(repo.ID)) {
 		_ = p.indexDocs(ctx, repo, meta, res) // keep what was written before the cap
 		return ports.Outcome{Status: ports.JobSpendBlocked, Message: ErrDocsBudget.Error() + "; the rest is written next month or when an admin raises it", Result: res}, nil
 	}
-	var sb *ports.SpendBlockedError
 	if errors.As(err, &sb) {
 		_ = p.indexDocs(ctx, repo, meta, res)
 		return ports.Outcome{Status: ports.JobSpendBlocked, Message: sb.Error(), Result: res}, nil

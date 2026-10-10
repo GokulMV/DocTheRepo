@@ -40,6 +40,7 @@ Unknown keys fail at start.
 | `DTH_SMTP_URL`, `DTH_EMAIL_FROM` | Email invite and password links ([users-and-sign-in.md](users-and-sign-in.md#email)); without them admins copy the link |
 | `DTH_DOCS_VERSION` | `2` (default): documents per repository, kept in the Hub; `1`: one doc per source file, landed as a docs PR ([docs-generation.md](docs-generation.md)) |
 | `DTH_DOCS_MODE` | Docs v1 only: cost mode `thorough`, `balanced` (default) or `economy` |
+| `DTH_SPEND_BUFFER_PCT` | Safety buffer kept free under every dollar spend limit and docs budget, in percent of it (`spend.buffer_pct`; default 5, at least $0.01; 0 = off). Calls stop at cap minus buffer ([architecture.md](architecture.md#3-flows)) |
 | `DTH_ASK_SIMILAR_ANSWER` | How alike a reworded question must be to reuse a cached answer (default 0.95, 0 = off; needs an embedding route) |
 | `DTH_ASK_AGENT_STEPS` | How far Ask may look when search finds too little (default 4, 0 = off) |
 | `DTH_ASK_SIFT`, `DTH_ASK_SIFT_KEEP_AT` | Ask's source picker: a cheap judge keeps only the sources an answer needs (`on` by default; skips itself when it would not save) ([ask-sources.md](ask-sources.md)) |

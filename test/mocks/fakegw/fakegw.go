@@ -38,6 +38,8 @@ type Options struct {
 	TokenLimit int64
 	// NoTriageRoute leaves the triage feature unrouted.
 	NoTriageRoute bool
+	// Prices is the cost table (keyed by spendguard.PriceKey); empty: calls are unpriced.
+	Prices map[string]spendguard.Price
 }
 
 // New builds the environment.
@@ -56,7 +58,7 @@ func New(o Options) *Env {
 	if o.TokenLimit > 0 {
 		limits = []spendguard.Limit{{Scope: spendguard.ScopeGlobal, Window: spendguard.WindowDay, MaxTokens: o.TokenLimit}}
 	}
-	g, err := spendguard.New(limits, nil, allowUnlimited)
+	g, err := spendguard.New(limits, o.Prices, allowUnlimited)
 	if err != nil {
 		panic(err)
 	}
