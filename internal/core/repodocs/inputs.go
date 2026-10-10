@@ -38,11 +38,34 @@ type env struct {
 	guides   map[string]*Doc // module key → guide, once written
 	read     Reader
 	symbols  []Symbol // every symbol, most called first
-	modEdges map[[2]string]int
+	modEdges map[[2]string]modEdge
+}
+
+// modEdge is how one module uses another: resolved calls, and files importing it.
+type modEdge struct{ calls, files int }
+
+func (m modEdge) weight() int { return m.calls + m.files }
+
+func (m modEdge) String() string {
+	var p []string
+	if m.files > 0 {
+		p = append(p, plural(m.files, "importing file"))
+	}
+	if m.calls > 0 {
+		p = append(p, plural(m.calls, "call"))
+	}
+	return strings.Join(p, ", ")
+}
+
+func plural(n int, s string) string {
+	if n == 1 {
+		return "1 " + s
+	}
+	return fmt.Sprintf("%d %ss", n, s)
 }
 
 func newEnv(f *Facts, mods []Module, cards map[string]Card, read Reader) *env {
-	e := &env{facts: f, files: f.FileByPath(), mods: mods, modOf: ModuleOf(mods), cards: cards, guides: map[string]*Doc{}, read: read, modEdges: map[[2]string]int{}}
+	e := &env{facts: f, files: f.FileByPath(), mods: mods, modOf: ModuleOf(mods), cards: cards, guides: map[string]*Doc{}, read: read, modEdges: map[[2]string]modEdge{}}
 	for _, fl := range f.Files {
 		e.symbols = append(e.symbols, fl.Symbols...)
 	}
@@ -50,7 +73,26 @@ func newEnv(f *Facts, mods []Module, cards map[string]Card, read Reader) *env {
 	for _, c := range f.Calls {
 		a, b := e.modOf[c.From], e.modOf[c.To]
 		if a != "" && b != "" && a != b {
-			e.modEdges[[2]string{a, b}] += c.N
+			m := e.modEdges[[2]string{a, b}]
+			m.calls += c.N
+			e.modEdges[[2]string{a, b}] = m
+		}
+	}
+	// An imported package belongs to the module of its (non-test) files; tests are not indexed.
+	dirMod := map[string]string{}
+	for _, fl := range f.Files {
+		if d := path.Dir(fl.Path); dirMod[d] == "" {
+			dirMod[d] = e.modOf[fl.Path]
+		}
+	}
+	seen := map[Import]bool{}
+	for _, im := range f.Imports {
+		a, b := e.modOf[im.From], dirMod[im.Dir]
+		if a != "" && b != "" && a != b && !seen[im] {
+			seen[im] = true
+			m := e.modEdges[[2]string{a, b}]
+			m.files++
+			e.modEdges[[2]string{a, b}] = m
 		}
 	}
 	return e
@@ -170,15 +212,15 @@ func factLines(fs []Fact, limit int) string {
 func (e *env) moduleGraph() (text, diagram string) {
 	type edge struct {
 		a, b string
-		n    int
+		m    modEdge
 	}
 	var edges []edge
-	for k, n := range e.modEdges {
-		edges = append(edges, edge{k[0], k[1], n})
+	for k, m := range e.modEdges {
+		edges = append(edges, edge{k[0], k[1], m})
 	}
 	sort.Slice(edges, func(i, j int) bool {
-		if edges[i].n != edges[j].n {
-			return edges[i].n > edges[j].n
+		if wi, wj := edges[i].m.weight(), edges[j].m.weight(); wi != wj {
+			return wi > wj
 		}
 		return edges[i].a+edges[i].b < edges[j].a+edges[j].b
 	})
@@ -191,7 +233,7 @@ func (e *env) moduleGraph() (text, diagram string) {
 		if i == 80 {
 			break
 		}
-		fmt.Fprintf(&t, "- %s → %s (%d calls)\n", title[ed.a], title[ed.b], ed.n)
+		fmt.Fprintf(&t, "- %s → %s (%s)\n", title[ed.a], title[ed.b], ed.m)
 	}
 	var d strings.Builder
 	d.WriteString("flowchart LR\n")
@@ -406,12 +448,12 @@ func (e *env) inputs(ctx context.Context, spec Spec, mod *Module, budget int) st
 			t, _ := e.moduleGraph()
 			if mod != nil {
 				var in, out []string
-				for k, n := range e.modEdges {
+				for k, m := range e.modEdges {
 					if k[0] == mod.Key {
-						out = append(out, fmt.Sprintf("- uses %s (%d calls)", e.titleOf(k[1]), n))
+						out = append(out, fmt.Sprintf("- uses %s (%s)", e.titleOf(k[1]), m))
 					}
 					if k[1] == mod.Key {
-						in = append(in, fmt.Sprintf("- used by %s (%d calls)", e.titleOf(k[0]), n))
+						in = append(in, fmt.Sprintf("- used by %s (%s)", e.titleOf(k[0]), m))
 					}
 				}
 				sort.Strings(in)

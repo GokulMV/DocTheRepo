@@ -75,6 +75,12 @@ type Call struct {
 	N        int
 }
 
+// Import is a file importing a package of the same repository, by the package's directory (Go). Calls
+// through values (a method on a struct field) are not resolved to their file, but the import is.
+type Import struct {
+	From, Dir string
+}
+
 // Facts are what the Hub knows about a repository at a commit, gathered without a model.
 type Facts struct {
 	RepoID   string
@@ -84,6 +90,7 @@ type Facts struct {
 	Files    []File
 	Facts    []Fact
 	Calls    []Call
+	Imports  []Import
 	AllPaths []string          // every path in the tree, including files that are not indexed (tests, docs, config)
 	Special  map[string]string // contents of README, build, deploy and CI files, clipped
 	Diagrams []string          // diagrams authored in the repository

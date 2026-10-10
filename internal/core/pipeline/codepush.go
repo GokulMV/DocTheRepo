@@ -210,7 +210,7 @@ func (p *Pipeline) CodePush(ctx context.Context, job ports.Job) (ports.Outcome, 
 		}
 	}
 	if !pl.DryRun {
-		if err := p.updateGraph(ctx, repo, head, proceed); err != nil {
+		if err := p.updateGraph(ctx, repo, head, goModuleOf(ctx, host, repo, head, proceed), proceed); err != nil {
 			return ports.Outcome{}, err
 		}
 	}
@@ -439,6 +439,26 @@ func (p *Pipeline) chunk(ctx context.Context, repo ports.RepoConfig, head string
 
 var goModuleRE = regexp.MustCompile(`(?m)^module\s+(\S+)`)
 
+// readGoModule returns the module path declared in the repository's root go.mod, or "".
+func readGoModule(ctx context.Context, host ports.CodeHost, repo, ref string) string {
+	if b, err := host.GetFile(ctx, repo, "go.mod", ref); err == nil {
+		if m := goModuleRE.FindSubmatch(b); m != nil {
+			return string(m[1])
+		}
+	}
+	return ""
+}
+
+// goModuleOf reads the module path only when the work has Go files (it costs a file fetch).
+func goModuleOf(ctx context.Context, host ports.CodeHost, repo ports.RepoConfig, head string, work []*fileWork) string {
+	for _, fw := range work {
+		if fw.analysis != nil && fw.analysis.Language == "go" {
+			return readGoModule(ctx, host, repo.FullName, head)
+		}
+	}
+	return ""
+}
+
 // generate decides how each target gets its doc, builds scoped context and calls docgen per file. All
 // paid calls happen here, before any write, so a spend block leaves nothing half-done.
 //
@@ -568,11 +588,7 @@ func (p *Pipeline) generate(ctx context.Context, host ports.CodeHost, repo ports
 		if repoFiles == nil {
 			repoFiles = []string{}
 		}
-		if b, err := host.GetFile(ctx, repo.FullName, "go.mod", head); err == nil {
-			if m := goModuleRE.FindSubmatch(b); m != nil {
-				goModule = string(m[1])
-			}
-		}
+		goModule = readGoModule(ctx, host, repo.FullName, head)
 	}
 	// Build each file's scoped context first (cheap, and it shares caches), then generate the files in
 	// parallel: a large repository has hundreds of files, and one model call at a time took tens of minutes.
@@ -1031,11 +1047,12 @@ func (p *Pipeline) persist(ctx context.Context, repo ports.RepoConfig, head stri
 // to the knowledge graph, which the Architecture view and Palace read. It runs as soon as the code is
 // parsed, before any model call, so the architecture follows every push even when docs cannot be
 // written (spend limit, model error, docs PR blocked). Writing a file's graph again is harmless.
-func (p *Pipeline) updateGraph(ctx context.Context, repo ports.RepoConfig, head string, work []*fileWork) error {
+// goModule is the module path from go.mod, so Go imports of the repository's own packages become edges.
+func (p *Pipeline) updateGraph(ctx context.Context, repo ports.RepoConfig, head, goModule string, work []*fileWork) error {
 	for _, fw := range work {
 		var g palace.Graph
 		if !fw.removed() {
-			g = extractGraph(repo, head, fw)
+			g = extractGraph(repo, head, goModule, fw)
 		}
 		if fw.fc.PreviousPath != "" && fw.fc.PreviousPath != fw.fc.Path {
 			if err := p.Graph.ReplaceSource(ctx, repo.ID, fw.fc.PreviousPath, palace.Graph{}); err != nil {
@@ -1058,10 +1075,11 @@ func (p *Pipeline) updateGraph(ctx context.Context, repo ports.RepoConfig, head 
 	return nil
 }
 
-func extractGraph(repo ports.RepoConfig, head string, fw *fileWork) palace.Graph {
+func extractGraph(repo ports.RepoConfig, head, goModule string, fw *fileWork) palace.Graph {
 	var g palace.Graph
 	if fw.analysis != nil {
 		g.Merge(palace.ExtractFile(repo.FullName, fw.fc.Path, head, fw.analysis, nil))
+		g.Merge(palace.ExtractImports(repo.FullName, fw.fc.Path, head, fw.analysis, goModule))
 	}
 	switch {
 	case triage.IsDependencyManifest(fw.fc.Path):

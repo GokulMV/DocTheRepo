@@ -7,6 +7,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/GokulMV/DocTheRepo/internal/core/chunker"
+	"github.com/GokulMV/DocTheRepo/internal/core/palace"
 	"github.com/GokulMV/DocTheRepo/internal/core/repodocs"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
 	"github.com/GokulMV/DocTheRepo/internal/store"
@@ -52,4 +54,20 @@ func TestWiringLinksRepositories(t *testing.T) {
 	links, err = rd.SystemLinks(ctx)
 	require.NoError(t, err)
 	assert.Empty(t, links, "facts removed, links gone")
+}
+
+// Go imports of the repository's own packages reach the Docs v2 facts, so a package used only through
+// method calls on its types still has its users.
+func TestRepoDocsFactsReadImports(t *testing.T) {
+	st, _, _, shop := fixture(t)
+	ctx := context.Background()
+	a := &chunker.FileAnalysis{Language: "go", Imports: []chunker.Import{
+		{Path: "acme.dev/shop/internal/mcpconn", Line: 4}, {Path: "context", Line: 3},
+	}}
+	g := palace.ExtractImports("acme/shop", "internal/api/server.go", "c1", a, "acme.dev/shop")
+	require.NoError(t, store.NewGraph(st).ReplaceSource(ctx, shop, "internal/api/server.go", g))
+
+	f, err := store.NewRepoDocs(st).Facts(ctx, shop)
+	require.NoError(t, err)
+	assert.Equal(t, []repodocs.Import{{From: "internal/api/server.go", Dir: "internal/mcpconn"}}, f.Imports)
 }

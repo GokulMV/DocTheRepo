@@ -49,6 +49,7 @@ const (
 	EdgeOwnedBy       = "owned_by"
 	EdgeRunbookFor    = "runbook_for"
 	EdgeDeployedAs    = "deployed_as"
+	EdgeImports       = "imports" // file → module (directory) of the same repository that it imports
 )
 
 // Ref identifies an entity by kind and key; keys are unique per kind.
@@ -309,6 +310,32 @@ func ExtractFile(repo, filePath, commit string, a *chunker.FileAnalysis, resolve
 				g.AddEdge(s, EdgeUsesDatastore, dr, ev(c.Line))
 			}
 		}
+	}
+	return g
+}
+
+// ExtractImports derives a file's imports of packages in the same repository, as file → module edges.
+// Only Go for now: an import path under goModule (the module path from go.mod) names a directory of the
+// repository exactly, and stdlib and external imports never match it. A call through a value (a method
+// on a struct field) cannot be resolved without types, but the import that brings the type in always
+// can, and that is what "used by" between modules needs.
+func ExtractImports(repo, filePath, commit string, a *chunker.FileAnalysis, goModule string) Graph {
+	var g Graph
+	if a == nil || a.Language != "go" || goModule == "" {
+		return g
+	}
+	own := path.Dir(filePath)
+	var f Ref
+	for _, im := range a.Imports {
+		dir, ok := strings.CutPrefix(im.Path, goModule+"/")
+		if !ok || dir == "" || dir == own {
+			continue
+		}
+		if f.Key == "" {
+			f = g.AddEntity(Entity{Ref: FileRef(repo, filePath), Name: filePath, Repo: repo, Attrs: map[string]string{"language": a.Language}})
+		}
+		m := g.AddEntity(Entity{Ref: ModuleRef(repo, dir), Name: dir, Repo: repo})
+		g.AddEdge(f, EdgeImports, m, Evidence{Path: filePath, Line: im.Line, Commit: commit})
 	}
 	return g
 }
