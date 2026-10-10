@@ -176,6 +176,45 @@ func TestExtractFile_ResolverAddsCrossFileCalls(t *testing.T) {
 	assert.Equal(t, []string{"acme/shop -> acme/shop:a.go"}, edgeSet(g, EdgeContains)[:1], "root files hang off the repo")
 }
 
+func TestExtractImports_GoPackagesOfTheSameModule(t *testing.T) {
+	// internal/api calls a method on a field typed by internal/mcpconn: no call edge can be resolved
+	// without types, but the import names the package exactly.
+	src := `package api
+
+import (
+	"context"
+
+	"github.com/stretchr/testify/assert"
+	conn "acme.dev/shop/internal/mcpconn"
+	"acme.dev/shop/internal/api/views"
+	"acme.dev/shop/internal/api"
+)
+
+type Server struct{ client *conn.Client }
+
+func (s *Server) Do(ctx context.Context) { s.client.Call(ctx); assert.True(nil, true) }
+`
+	a, err := chunker.Analyze(reg.ForPath("internal/api/server.go"), []byte(src))
+	require.NoError(t, err)
+	assert.Empty(t, edgeSet(ExtractFile("acme/shop", "internal/api/server.go", "c", a, nil), EdgeCalls), "the method call stays unresolved")
+
+	g := ExtractImports("acme/shop", "internal/api/server.go", "c", a, "acme.dev/shop")
+	assert.Equal(t, []string{
+		"acme/shop:internal/api/server.go -> acme/shop:internal/api/views",
+		"acme/shop:internal/api/server.go -> acme/shop:internal/mcpconn",
+	}, edgeSet(g, EdgeImports), "stdlib, external and same-package imports are left out")
+	for _, e := range g.EdgesOf(EdgeImports) {
+		assert.Equal(t, KindModule, e.Dst.Kind)
+		assert.Equal(t, "internal/api/server.go", e.Evidence.Path)
+		assert.Positive(t, e.Evidence.Line)
+	}
+
+	assert.Empty(t, ExtractImports("acme/shop", "internal/api/server.go", "c", a, "").Edges, "no go.mod, no edges")
+	ts, err := chunker.Analyze(reg.ForPath("web/a.ts"), []byte("import { x } from './b'\nexport const y = x\n"))
+	require.NoError(t, err)
+	assert.Empty(t, ExtractImports("acme/shop", "web/a.ts", "c", ts, "acme.dev/shop").Edges, "Go only")
+}
+
 func TestExtractManifest(t *testing.T) {
 	g := ExtractManifest("acme/shop", "web/package.json", "c", []byte(`{"dependencies":{"react":"^18"},"devDependencies":{"jest":"29"}}`))
 	assert.Equal(t, []string{"npm:jest", "npm:react"}, dsts(g, EdgeDependsOn))
