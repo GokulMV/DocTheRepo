@@ -36,6 +36,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/adapters/vector/pgvector"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/vector/qdrant"
 	"github.com/GokulMV/DocTheRepo/internal/api"
+	"github.com/GokulMV/DocTheRepo/internal/atlassianconn"
 	"github.com/GokulMV/DocTheRepo/internal/auth"
 	"github.com/GokulMV/DocTheRepo/internal/config"
 	"github.com/GokulMV/DocTheRepo/internal/core/aggregate"
@@ -113,6 +114,9 @@ type app struct {
 	systemHas bool
 	mcpStore  *store.MCPServers
 	mcp       *mcpconn.Manager
+	// Connect with Atlassian: the one-time OAuth app and the sign-in flow / token source.
+	atlassianApps *store.AtlassianApps
+	atlassian     *atlassianconn.Service
 }
 
 func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.Box, q *queue.Queue, log *slog.Logger, m *observability.Metrics) (*app, error) {
@@ -274,8 +278,10 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 		}}
 	knowledgeDocs := store.NewKnowledge(st, shelves)
 	a.knowledgeDocs = knowledgeDocs
+	a.atlassianApps = store.NewAtlassianApps(st, box, secrets.AtlassianSecretAAD)
+	a.atlassian = &atlassianconn.Service{Connectors: conns, Apps: a.atlassianApps, Seal: box.Seal, Open: box.Open, PublicURL: cfg.Server.PublicURL}
 	a.knowledge = &ingest.KnowledgeSync{Store: conns, Queue: q, Docs: knowledgeDocs, Rules: a.knownIssues, Uploads: knowledgeDocs,
-		Sources: map[string]ports.KnowledgeSource{"confluence": confluence.New(), "jira": jira.New(), "notion": notion.New()},
+		Sources: map[string]ports.KnowledgeSource{"confluence": &confluence.Source{OAuth: a.atlassian}, "jira": &jira.Source{OAuth: a.atlassian}, "notion": notion.New()},
 		Embed:   indexer.Embed, ReloadRules: a.signals.Reload,
 		Propose: func(ctx context.Context, text string) (ingest.Proposal, error) {
 			res, err := a.suggest.FromText(ctx, text, nil, "")
@@ -498,6 +504,7 @@ func (a *app) v1Routes() []func(chi.Router) {
 			},
 			Estimate: a.estimateDocs, Export: a.exportDocs}),
 		api.MCPRoutes(api.MCPDeps{Auth: a.auth, Store: a.mcpStore, Manager: a.mcp, SealKeys: a.sealKeys, RequireSealed: a.cfg.Settings.RequireSealed}),
+		api.AtlassianRoutes(api.AtlassianDeps{Auth: a.auth, Apps: a.atlassianApps, Service: a.atlassian, SealKeys: a.sealKeys, RequireSealed: a.cfg.Settings.RequireSealed}),
 	}
 }
 

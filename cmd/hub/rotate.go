@@ -26,6 +26,7 @@ var sealedColumns = []struct{ table, id, col, what string }{
 	{"auth_settings", "id", "oidc_secret_ciphertext", "single sign-on client secret"},
 	{"mcp_servers", "id", "secret_ciphertext", "MCP connection keys"},
 	{"mcp_servers", "id", "oauth_ciphertext", "MCP sign-in tokens"},
+	{"atlassian_oauth_app", "id", "client_secret_ct", "Atlassian OAuth app secret"},
 }
 
 // rotateKey is `dth-hub rotate-key`: it re-wraps every stored secret's data key under a new

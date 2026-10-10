@@ -24,8 +24,8 @@ Docs land as an auto-merged PR (default), directly, or as a PR for an approver, 
 
 | Source | Needs | Details |
 |---|---|---|
-| Confluence (Cloud or Data Center) | Site URL, space keys, and a read-only account: e-mail + API token (Cloud) or a personal access token (Data Center) | [confluence-jira.md](confluence-jira.md) |
-| Jira (Cloud or Data Center) | Site URL, project keys, the same kind of account; optional extra JQL | [confluence-jira.md](confluence-jira.md) |
+| Confluence (Cloud or Data Center) | Cloud: **Connect with Atlassian** (approve on Atlassian's page; one-time app setup by an admin) and space keys. Or the site URL, space keys, and a read-only account: e-mail + API token (Cloud) or a personal access token (Data Center) | [confluence-jira.md](confluence-jira.md) |
+| Jira (Cloud or Data Center) | The same choices, with project keys; optional extra JQL | [confluence-jira.md](confluence-jira.md) |
 
 ## Signal sources
 

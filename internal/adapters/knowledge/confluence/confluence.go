@@ -16,7 +16,8 @@ import (
 )
 
 // Config keys: base_url (Cloud: https://<site>.atlassian.net/wiki), spaces, email (Cloud; omit for a Data
-// Center personal access token), timezone (the token user's Confluence time zone; optional).
+// Center personal access token), timezone (the token user's Confluence time zone; optional). Connectors
+// made with "Connect with Atlassian" also carry auth=oauth and cloud_id (see atlassian.NewSite).
 const (
 	PageSize = 50
 	// MaxLabeled caps the known-issue label query.
@@ -25,7 +26,10 @@ const (
 )
 
 // Source is the Confluence adapter.
-type Source struct{}
+type Source struct {
+	// OAuth gives "Connect with Atlassian" connectors their tokens (nil: API tokens and PATs only).
+	OAuth atlassian.TokenSource
+}
 
 // New returns the adapter.
 func New() *Source { return &Source{} }
@@ -75,7 +79,7 @@ type searchResp struct {
 }
 
 func (s *Source) site(cc ports.ConnectorConfig) (*atlassian.Site, error) {
-	return atlassian.NewSite("confluence", cc)
+	return atlassian.NewSite("confluence", cc, s.OAuth)
 }
 
 // search runs a CQL query page by page; the next link must stay on the configured site.
@@ -98,17 +102,14 @@ func search(ctx context.Context, site *atlassian.Site, cql string, withBody bool
 	return nil
 }
 
-// relativeNext keeps a pagination link on the site: Cloud returns it relative to the /wiki base.
+// relativeNext keeps a pagination link on the site: Cloud returns it relative to the /wiki base (or to the
+// API gateway's base for OAuth connectors).
 func relativeNext(site *atlassian.Site, next string) string {
 	if next == "" {
 		return ""
 	}
 	if u, err := url.Parse(next); err == nil && u.IsAbs() {
-		if !site.Owns(next) {
-			return ""
-		}
-		base, _ := url.Parse(site.Base)
-		next = strings.TrimPrefix(u.RequestURI(), strings.TrimRight(base.Path, "/"))
+		next = site.RelativeAPI(next)
 	}
 	if !strings.HasPrefix(next, "/") {
 		return ""

@@ -209,4 +209,6 @@ const (
 	PurposeConnectorWebhook = "connector.webhook_secret"
 	PurposeOIDCClientSecret = "auth.oidc_client_secret"
 	PurposeMCPSecret        = "mcp.secret"
+	// PurposeAtlassianSecret is the Atlassian OAuth app's client secret (one-time setup).
+	PurposeAtlassianSecret = "atlassian.client_secret"
 )

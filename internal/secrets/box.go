@@ -126,6 +126,9 @@ func MCPSecretAAD(id string) []byte { return []byte("mcp_server:" + id + ":secre
 // MCPOAuthAAD binds an MCP connection's OAuth client and tokens to its row.
 func MCPOAuthAAD(id string) []byte { return []byte("mcp_server:" + id + ":oauth") }
 
+// AtlassianSecretAAD binds the Atlassian OAuth app's client secret to its row.
+var AtlassianSecretAAD = []byte("atlassian_oauth_app:1:client_secret")
+
 // KeyIDOf returns the key that sealed blob, without opening it.
 func KeyIDOf(blob []byte) (string, error) {
 	if len(blob) < 2 || blob[0] != formatV1 || len(blob) < 2+int(blob[1]) {

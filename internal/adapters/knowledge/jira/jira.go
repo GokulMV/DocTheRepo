@@ -18,8 +18,9 @@ import (
 )
 
 // Config keys: base_url, projects, email (Cloud; omit for a Data Center personal access token),
-// api_version (3 = Cloud, 2 = Data Center; default 3 with an e-mail, else 2), jql (extra filter ANDed into
-// every query, e.g. `issuetype in (Bug, Incident)`), lookback_days (first sync, default 365), timezone.
+// api_version (3 = Cloud, 2 = Data Center; default 3 with an e-mail or Atlassian OAuth, else 2), jql (extra
+// filter ANDed into every query, e.g. `issuetype in (Bug, Incident)`), lookback_days (first sync, default
+// 365), timezone. "Connect with Atlassian" connectors also carry auth=oauth and cloud_id.
 const (
 	PageSize       = 100
 	MaxLabeled     = 500
@@ -31,6 +32,8 @@ const (
 // Source is the Jira adapter.
 type Source struct {
 	Now func() time.Time
+	// OAuth gives "Connect with Atlassian" connectors their tokens (nil: API tokens and PATs only).
+	OAuth atlassian.TokenSource
 }
 
 // New returns the adapter.
@@ -88,14 +91,14 @@ type client struct {
 }
 
 func (s *Source) client(cc ports.ConnectorConfig) (*client, error) {
-	site, err := atlassian.NewSite("jira", cc)
+	site, err := atlassian.NewSite("jira", cc, s.OAuth)
 	if err != nil {
 		return nil, err
 	}
 	v := strings.TrimSpace(cc.Config["api_version"])
 	if v == "" {
 		v = "2"
-		if cc.Config["email"] != "" {
+		if cc.Config["email"] != "" || atlassian.IsOAuth(cc) {
 			v = "3"
 		}
 	}
@@ -324,7 +327,7 @@ func IssueKey(raw string) string {
 
 // Owns implements ports.KnowledgeSource.
 func (s *Source) Owns(cc ports.ConnectorConfig, raw string) bool {
-	site, err := atlassian.NewSite("jira", cc)
+	site, err := atlassian.NewSite("jira", cc, s.OAuth)
 	return err == nil && site.Owns(raw) && IssueKey(raw) != ""
 }
 
