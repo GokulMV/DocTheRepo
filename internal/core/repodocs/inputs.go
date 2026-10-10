@@ -501,7 +501,7 @@ func (e *env) inputs(ctx context.Context, spec Spec, mod *Module, budget int) st
 		case "owners":
 			add("Owners", factLines(e.factsOf("owner"), 100), 1)
 		case "module":
-			e.moduleInputs(mod, add)
+			e.moduleInputs(ctx, mod, add)
 		case "commits":
 			add("Recent commits (newest first)", commitLines(e.facts.Commits, 120, false), 1)
 		case "decisions":
@@ -558,7 +558,7 @@ func (e *env) handlerBodies(fs []Fact, n int) string {
 	return e.bodies(picked, n, 50)
 }
 
-func (e *env) moduleInputs(m *Module, add func(string, string, int)) {
+func (e *env) moduleInputs(ctx context.Context, m *Module, add func(string, string, int)) {
 	if m == nil {
 		return
 	}
@@ -608,7 +608,9 @@ func (e *env) moduleInputs(m *Module, add func(string, string, int)) {
 	})
 	add("Central code", e.bodies(syms, 8, 80), 4)
 	if len(m.Tests) > 0 {
-		add("Tests", strings.Join(m.Tests, "\n"), 5)
+		add("Tests", e.testMaterial(ctx, m), 5)
+	} else {
+		add("Tests", "No test files were found for this module (none next to its code, none under a test directory mirroring it).", 5)
 	}
 }
 

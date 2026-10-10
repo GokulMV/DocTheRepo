@@ -30,3 +30,13 @@ func TestParseIgnoreFile(t *testing.T) {
 		assert.Equal(t, want, tr.ignored(p), p)
 	}
 }
+
+func TestIgnoreMatcher(t *testing.T) {
+	ignored, err := IgnoreMatcher([]byte("secrets_test.go\nfixtures/\n!public.json\n"))
+	require.NoError(t, err)
+	assert.True(t, ignored("internal/vault/secrets_test.go"))
+	assert.True(t, ignored("tests/fixtures/keys.json"))
+	assert.False(t, ignored("tests/fixtures/public.json"), "re-included")
+	assert.False(t, ignored("internal/vault/vault_test.go"), "tests are not skipped by the built-in list here")
+	assert.False(t, ignored(".github/workflows/ci.yml"))
+}
