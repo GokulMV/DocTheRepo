@@ -1,7 +1,7 @@
 <!-- dth:generated source="internal/core/repodocs/generator.go" — edit only inside dth:human blocks -->
 # `internal/core/repodocs/generator.go`
 
-Generates repository documentation by orchestrating LLM calls with validation, cost tracking, and section assembly from templated specifications.
+Generator orchestrates the creation and updating of documentation for repository modules and specs, handling parallel batch processing, token budgeting, spend blocking, and storage persistence.
 
 <!-- dth:chunk 547f8c5b25080877 -->
 ## `Store`
@@ -41,7 +41,7 @@ Returns a unique document identifier by combining its type and key (e.g., "modul
 <!-- dth:chunk faff8b0d1d64254e -->
 ## `Generator.Run`
 
-**Run** orchestrates document generation for a repository. It splits the codebase into modules, writes or updates cards for changed files, identifies which documents need generation (by checking hashes and source changes), and processes them in parallel (module docs first, then repo-level). It also deletes obsolete documents and returns summary statistics. Respects the Guard and Progress callbacks, handles dry runs with token estimates, and integrates cost tracking.
+Orchestrates document generation by identifying which modules and specs need updates, executing generation jobs in parallel (with a stopper to gracefully halt when budget is exhausted or a Guard condition fails), and managing token usage, costs, and document storage. Returns a Result with metrics on modules processed, cards written, documents changed/unchanged/failed, and tokens/cost consumed. Jobs are run in two phases: module-level docs first (their results feed into repository-level docs), then repo-level docs, with final cleanup of unused stored documents.
 
 <!-- dth:chunk f24db71758049731 -->
 ## `Generator.wanted`
@@ -116,7 +116,27 @@ Extracts a code snippet around a citation. It finds the symbol containing the ci
 <!-- dth:chunk 26b81c56e6984679 -->
 ## `Generator.writeCards`
 
-Generates brief descriptions (cards) for files whose code structure changed, processing them in batches up to 24KB or 12 files each. Uses a fast model if available, otherwise falls back to the standard model. Runs up to 4 batches concurrently with spend-guard checks and progress callbacks. Stores results and updates the cards map; returns count of successfully written cards.
+Identifies files whose structure changed (stale files not yet cached or with different Shape hashes), batches them for efficient processing (max 24000 tokens or 12 files per batch), and submits batches in parallel to cardBatch using the fast model when available. Handles spend blocks by stopping new batches while preserving already-reserved results, and skips processing entirely in dry-run mode (only estimating tokens). Returns the count of card entries successfully written.
+
+<!-- dth:chunk b028fac10d7dfb9a -->
+## `stopper`
+
+stopper ends parallel work when the budget is used up (a spend block or the run's Guard) without cancelling what is in flight: those calls are reserved and paid for, so their results are kept. Work not yet started is skipped, and the first stopping error is the batch's result.
+
+<!-- dth:chunk 75aa3f253969e400 -->
+## `stopper.stop`
+
+Sets the stopper's error if one hasn't been set already, using a mutex to ensure thread-safe writes from concurrent goroutines. This allows the first error encountered (typically a spend block or Guard failure) to be recorded while subsequent calls are ignored.
+
+<!-- dth:chunk 950ebf14fd1f7b32 -->
+## `stopper.stopped`
+
+Returns the stopper's recorded error, or nil if no error has been set. Used by concurrent jobs to check whether work should be skipped due to a previous failure or spend block.
+
+<!-- dth:chunk e29fc15f085846b8 -->
+## `isSpendBlocked`
+
+Returns true if the error is a SpendBlockedError from the ports package, false otherwise. Used to distinguish budget exhaustion from other errors so that in-flight work can be preserved while new work is skipped.
 
 <!-- dth:chunk c41905ae6e3a877b -->
 ## `cardInputSize`

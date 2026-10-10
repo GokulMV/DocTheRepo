@@ -1,7 +1,7 @@
 <!-- dth:generated source="cmd/hub/wire.go" — edit only inside dth:human blocks -->
 # `cmd/hub/wire.go`
 
-wire.go bootstraps and wires all application dependencies and services for the hub service.
+Configures and initializes all application dependencies and wires them together into a cohesive system for document generation, retrieval, and signal processing.
 
 <!-- dth:chunk b0d4863acc8fd57f -->
 ## `app`
@@ -11,9 +11,7 @@ The composition root holding every adapter and core service built once and share
 <!-- dth:chunk d55b668ee8f9a791 -->
 ## `wire`
 
-### wire
-
-Constructs and wires together all application services and dependencies into an initialized `app` struct. It sets up the complete dependency graph including: storage connectors and repositories, spend guards and LLM gateway, vector indexing (Qdrant or pgvector), signal ingestion with multiple polling backends (Kafka, AWS, GCP, etc.), authentication (OIDC support), RAG engine with optional sifting, document processing pipeline with grammar and library support, code host integrations, security scanning, knowledge synchronization from external sources (Confluence, Jira, Notion), and architecture tracking. Returns an error if critical initialization fails (spend limits, grammar loading, auth setup, bootstrap owner creation). The function instruments LLM calls, token usage, and latency through metrics callbacks, and configures signal event tracking with automatic issue resolution and decode enqueueing.
+Dependency injection function that wires together all application components from configuration, storage, queue, secrets, and logging. It initializes and connects approximately 30 major subsystems including connectors, LLM gateway with spend enforcement, vector index (Qdrant or pgvector), signal ingestion and polling from multiple sources (Kafka, AWS services, Pub/Sub, RabbitMQ, CloudWatch, GCP Logging, Splunk, Wiz), document processing pipeline, RAG engine, security scanning, knowledge base synchronization, architecture tracking, authentication (with optional OIDC), and observability metrics collection. Returns an error if critical initialization fails (spend limits, authentication setup, grammar loading), but gracefully degrades on non-critical failures like unavailable SSO settings. Also configures conditional features such as doc generation v2 and AI-powered result filtering (sift) based on configuration.
 
 <!-- dth:chunk 50780c95cf04c34a -->
 ## `app.registerHandlers`

@@ -1,7 +1,7 @@
 <!-- dth:generated source="internal/core/pipeline/repodocs.go" — edit only inside dth:human blocks -->
 # `internal/core/pipeline/repodocs.go`
 
-Implements the repository documentation generation pipeline job handler.
+Handles the repo_docs job execution for generating and managing repository documentation.
 
 <!-- dth:chunk ee9de0dee06fce02 -->
 ## `RepoDocsPayload`
@@ -18,6 +18,11 @@ Payload structure for the `repo_docs` job that controls how repository documenta
 
 DocsBudget reports a repository's monthly docs cap and what this month's docs cost so far. estimate prices writing what is missing, for setting a first cap.
 
+<!-- dth:chunk 434d12d9f9f8b856 -->
+## `docsBudgetKey`
+
+docsBudgetKey names a repository's docs budget in the spend guard (and in its blocks).
+
 <!-- dth:chunk 3fba1aa14cf4f339 -->
 ## `skipPath`
 
@@ -26,7 +31,7 @@ Checks if a file path should be excluded from documentation processing based on 
 <!-- dth:chunk 89295343cfc1c07c -->
 ## `Pipeline.RepoDocs`
 
-Processes a `repo_docs` job by generating documentation for a repository. Decodes the job payload, validates the repository exists and is enabled, retrieves its file tree and metadata (commits from the last 90 days, special files like README), and passes this to `RepoDocsGen.Run()` to generate documentation. Reads files on-demand with caching to support the generation process. Respects `.dthignore` to exclude files and checks documentation budget limits before proceeding (can abort with `JobSpendBlocked` if over budget). On success, indexes the resulting documents and queues a follow-up system docs job if any documents changed. Returns `JobAborted` if the repository isn't tracked, is disabled, or hasn't been synced yet. Handles dry runs by estimating without writing. On budget overflow, persists partial results before returning blocked status.
+Processes a repo_docs job by reading repository files, applying .dthignore exclusions, collecting special files and recent commits, and running the document generation pipeline. Returns `JobAborted` if the repo is disabled, untracked, not yet synced, or Docs v2 is unconfigured. Enforces spend budgets via dry-run estimates and guards; if budget is exceeded, indexes partial results and returns `JobSpendBlocked`. On success, indexes generated documents, queues related system docs if any changed, and returns `JobDone` with a summary message. Caches file reads during special file collection and walks the file tree in a single pass.
 
 <!-- dth:chunk e47d2cfcfcd05d69 -->
 ## `Pipeline.readWiring`

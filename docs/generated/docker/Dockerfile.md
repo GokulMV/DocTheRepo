@@ -1,9 +1,11 @@
 <!-- dth:generated source="docker/Dockerfile" — edit only inside dth:human blocks -->
 # `docker/Dockerfile`
 
-Multistage Dockerfile that builds and packages the DocTheRepo Hub application for containerized deployment across multiple platforms.
+Dockerfile defining a multistage build for a containerized DocTheRepo Hub service with embedded UI, compiled Go binaries, and a minimal distroless runtime.
 
 <!-- dth:chunk 331cb0443ce9dcd3 -->
 ## `docker/Dockerfile`
 
-Multi-stage Docker image for DocTheRepo Hub, supporting Compose, ECS Fargate, Cloud Run, and Helm deployment. Stage 1 builds React UI static assets from `web/` using Node 22. Stage 2 compiles two Go binaries (`dth-hub` and `dth`) with CGO enabled for Tree-sitter C grammar support, embedding the web assets and initializing a `data/grammars` directory. Stage 3 uses `distroless/cc-debian12:nonroot` runtime with glibc and libstdc++ for size and security, running as uid 65532 with `/data` mounted for secrets and optional runtime grammars. Exposes ports 8080 (main) and 9090 (metrics) with a 10-second health check interval.
+Multistage Dockerfile that produces a minimal, secure container image for the DocTheRepo Hub service compatible with Compose, ECS Fargate, Cloud Run, and Helm.
+
+The build has three stages: (1) Node.js stage builds React UI assets, (2) Go stage compiles two binaries (`dth-hub` and `dth` tools) with CGO enabled for Tree-sitter grammar support and embeds the UI assets into the hub binary, (3) distroless runtime stage with glibc runs as non-root user 65532, exposing ports 8080 (main) and 9090 (metrics), with `/data` volume for persistent secrets and optional runtime grammars. A health check runs every 10s. The `VERSION` build argument defaults to "dev". The image uses BuildKit mount caches for faster rebuilds.
