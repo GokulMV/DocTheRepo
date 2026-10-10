@@ -1,7 +1,7 @@
 <!-- dth:generated source="internal/store/repodocs.go" — edit only inside dth:human blocks -->
 # `internal/store/repodocs.go`
 
-Provides database storage and retrieval for repository documentation (Docs v2), file cards, and repository facts extracted from the knowledge graph.
+repodocs.go provides a data access layer for reading repository documentation facts from a PostgreSQL-backed knowledge graph and code index.
 
 <!-- dth:chunk 9080289c452f7030 -->
 ## `RepoDocs`
@@ -16,7 +16,7 @@ NewRepoDocs returns the store.
 <!-- dth:chunk ce07ca0e456afe9e -->
 ## `RepoDocs.Facts`
 
-Gathers comprehensive facts about a repository from the knowledge graph: repository metadata, files with their symbols and call relationships, and declared facts (endpoints, env vars, datastores, topics, dependencies, owners, services, and diagrams). Returns `ErrNotFound` if the repository doesn't exist.
+Facts retrieves comprehensive metadata about a repository from the database by querying the knowledge graph and code index. It assembles repo identification (name, service, HEAD commit), files with their language and symbol metadata, inter-file call graphs, internal import patterns, and facts about exposed endpoints, environment variables, datastores, message topics, dependencies, ownership, and deployment. Returns an error if the repository is not found (ports.ErrNotFound) or if any database query fails; handles and closes row iterators even on errors.
 
 <!-- dth:chunk 77555eab9f129332 -->
 ## `sortedMapKeys`
