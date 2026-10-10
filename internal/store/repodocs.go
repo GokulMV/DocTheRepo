@@ -127,6 +127,28 @@ func (r *RepoDocs) Facts(ctx context.Context, repoID string) (*repodocs.Facts, e
 	}
 	sort.Slice(f.Calls, func(i, j int) bool { return f.Calls[i].From+f.Calls[i].To < f.Calls[j].From+f.Calls[j].To })
 
+	// Imports: file to the directory (package) of the same repository it imports.
+	rows, err = r.s.Pool.Query(ctx, `
+		SELECT DISTINCT coalesce(s.attrs->>'path', s.name), d.name
+		FROM edges ed JOIN entities s ON s.id = ed.src_id JOIN entities d ON d.id = ed.dst_id
+		WHERE ed.repo_id = $1 AND ed.kind = 'imports' AND ed.deleted_at IS NULL
+		ORDER BY 1, 2`, repoID)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var im repodocs.Import
+		if err := rows.Scan(&im.From, &im.Dir); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		f.Imports = append(f.Imports, im)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
 	for _, p := range sortedMapKeys(files) {
 		fa := files[p]
 		sort.SliceStable(fa.syms, func(i, j int) bool { return fa.syms[i].Line < fa.syms[j].Line })
