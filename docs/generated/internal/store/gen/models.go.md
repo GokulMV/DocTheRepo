@@ -1,12 +1,17 @@
 <!-- dth:generated source="internal/store/gen/models.go" — edit only inside dth:human blocks -->
 # `internal/store/gen/models.go`
 
-This file contains generated model structures for repository data objects used in the DocTheRepo system, with JSON serialization support for database operations.
+Defines generated model structures for the cost storage layer, including pricing data structures that serialize to JSON for database persistence.
 
 <!-- dth:chunk 59326f827e361503 -->
 ## `Chunk`
 
 Represents a distinct piece of source code (a function, type, class, etc.) with its metadata and content. Uniquely identified by `ChunkID` within a repository, it stores the code location (`Path`, `Symbol`), technical properties (`Language`, `ContentHash`, `Signature`), version control info (`CommitSha`, `Url`), and `RequiresRepos` listing dependencies. Supports soft deletion via `DeletedAt`.
+
+<!-- dth:chunk 659707c3ec25a4aa -->
+## `CostTable`
+
+Represents pricing information for an LLM model, storing base and optional premium pricing tiers. Includes standard token costs (`InputPerMtokUsd`, `OutputPerMtokUsd`, `EmbedPerMtokUsd`), optional prompt caching costs (`CacheReadPerMtokUsd`, `CacheWritePerMtokUsd`), and optional long-context pricing that applies above a token threshold (`LongPromptThresholdTokens`). All costs are in USD per million tokens. The `UpdatedBy`, `UpdatedAt`, `VerifiedAt`, and `Source` fields track modifications and data provenance. This struct is designed to be serialized to/from JSON and maps to a database row.
 
 <!-- dth:chunk 255d40c7879de26d -->
 ## `FileCard`
