@@ -90,7 +90,7 @@ jobs:
           format: cyclonedx
           output: sbom-image.cdx.json
           scan-type: image
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: sbom-image
           path: sbom-image.cdx.json
@@ -113,7 +113,7 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: CycloneDX SBOMs (hub, CLI, UI)
         run: cd web && npm ci --no-audit --no-fund && cd .. && make sbom
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: sbom
           path: dist/sbom
@@ -158,7 +158,7 @@ jobs:
         run: k6 inspect test/perf/push-burst.js >/dev/null && k6 inspect test/perf/qa.js >/dev/null
       - name: report and hub log on failure
         if: failure()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: e2e-report
           # The hub log is under a dot-folder, which is skipped without this.
