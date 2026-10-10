@@ -58,6 +58,86 @@ describe('Connections: MCP', () => {
     expect(openSealed(body.secret, 'mcp.secret')).toBe('NRAK-secret');
   });
 
+  const app = (over: Record<string, unknown> = {}) => ({
+    connector_id: 'c-app', name: 'GitHub (acme)', app_slug: 'docthrepo-acme', owner: 'acme', web: 'https://github.com',
+    client_id: 'Iv23liAPP', oauth: true, installed: true, ...over,
+  });
+
+  it('GitHub with the Hub’s GitHub App: signs in on GitHub’s page instead of a token', async () => {
+    const assign = vi.fn();
+    Object.defineProperty(window, 'location', { value: { ...realLocation, assign }, configurable: true });
+    const { calls } = mockApi({
+      'GET /connectors': { items: [] },
+      'GET /mcp/servers': { items: [], redirect_uri: 'https://hub/api/v1/mcp/oauth/callback', github_apps: [app()] },
+      'POST /mcp/servers': server({ id: 'g1', name: 'GitHub', catalog_key: 'github', status: 'needs_sign_in', signed_in: false, tools: [] }),
+      'POST /mcp/servers/g1/sign-in': { url: 'https://github.com/login/oauth/authorize?client_id=Iv23liAPP' },
+    });
+    renderAt('/connectors', <Route path="/connectors" element={<Connectors />} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Live lookups in GitHub' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Live lookups in GitHub' });
+    await waitFor(() => expect(within(dialog).getByLabelText('How it signs in')).toHaveValue('oauth'));
+    expect(within(dialog).queryByLabelText('Token')).not.toBeInTheDocument();
+    expect(dialog).toHaveTextContent('only in the repositories the App is installed on');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Sign in with GitHub' }));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('https://github.com/login/oauth/authorize?client_id=Iv23liAPP'));
+    const body = JSON.parse(String(calls.find((c) => c.method === 'POST' && c.url.endsWith('/mcp/servers'))!.init?.body));
+    expect(body).toMatchObject({ name: 'GitHub', url: 'https://api.githubcopilot.com/mcp/', auth: 'oauth', catalog_key: 'github', config: { github_app: 'c-app' }, secret: '' });
+  });
+
+  it('GitHub with the Hub’s GitHub App: a token is still an option', async () => {
+    const { calls } = mockApi({
+      'GET /connectors': { items: [] },
+      'GET /mcp/servers': { items: [], redirect_uri: '', github_apps: [app()] },
+      'POST /mcp/servers': server({ name: 'GitHub', auth: 'bearer', signed_in: false }),
+    });
+    renderAt('/connectors', <Route path="/connectors" element={<Connectors />} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Live lookups in GitHub' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Live lookups in GitHub' });
+    await waitFor(() => expect(within(dialog).getByLabelText('How it signs in')).toHaveValue('oauth'));
+    await userEvent.selectOptions(within(dialog).getByLabelText('How it signs in'), 'bearer');
+    await userEvent.type(within(dialog).getByLabelText('Token'), 'github_pat_x');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Connect' }));
+    await screen.findByRole('dialog', { name: 'GitHub: Connected' });
+    const body = JSON.parse(String(calls.find((c) => c.method === 'POST')!.init?.body));
+    expect(body.auth).toBe('bearer');
+    expect(body.config).toEqual({});
+    expect(openSealed(body.secret, 'mcp.secret')).toBe('github_pat_x');
+  });
+
+  it('GitHub without a GitHub App: the token form, and a hint to connect an App first', async () => {
+    mockApi({ 'GET /connectors': { items: [] }, 'GET /mcp/servers': { items: [], redirect_uri: '', github_apps: [] } });
+    renderAt('/connectors', <Route path="/connectors" element={<Connectors />} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Live lookups in GitHub' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Live lookups in GitHub' });
+    expect(within(dialog).getByLabelText('Token')).toBeInTheDocument();
+    expect(within(dialog).queryByLabelText('How it signs in')).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: 'Connect a GitHub App first' })).toHaveAttribute('href', '/connectors#code');
+    expect(dialog).toHaveTextContent('Connect a GitHub App first to sign in with GitHub');
+    expect(within(dialog).getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+  });
+
+  it('GitHub with an App but no client yet: adds the client ID and secret, then signs in with GitHub', async () => {
+    let apps = [app({ oauth: false, client_id: undefined })];
+    const { calls } = mockApi({
+      'GET /connectors': { items: [] },
+      'GET /mcp/servers': () => ({ items: [], redirect_uri: 'https://hub/api/v1/mcp/oauth/callback', github_apps: apps }),
+      'PUT /github/connect/c-app/oauth-client': () => { apps = [app()]; return app(); },
+    });
+    renderAt('/connectors', <Route path="/connectors" element={<Connectors />} />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Live lookups in GitHub' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Live lookups in GitHub' });
+    expect(within(dialog).getByLabelText('Token')).toBeInTheDocument();
+    expect(dialog).toHaveTextContent('https://hub/api/v1/mcp/oauth/callback');
+    await userEvent.type(within(dialog).getByLabelText('Client ID'), 'Iv23liAPP');
+    await userEvent.type(within(dialog).getByLabelText('Client secret'), 'app-secret');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save and use GitHub sign-in' }));
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Sign in with GitHub' })).toBeInTheDocument());
+    const put = calls.find((c) => c.method === 'PUT')!;
+    const body = JSON.parse(String(put.init?.body));
+    expect(body.client_id).toBe('Iv23liAPP');
+    expect(openSealed(body.client_secret, 'connector.oauth_client_secret')).toBe('app-secret');
+  });
+
   it('lists connections and turns tools on and off', async () => {
     const { calls } = mockApi({
       'GET /connectors': { items: [] }, 'GET /mcp/servers': { items: [server()], redirect_uri: '' }, 'PATCH /mcp/servers/m1': server(),

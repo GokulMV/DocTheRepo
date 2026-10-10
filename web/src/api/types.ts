@@ -605,6 +605,18 @@ export interface McpServer {
   created_at: string;
 }
 
+/** A GitHub App connector, as the MCP connections see it: oauth means admins can sign in with it. */
+export interface GitHubAppInfo {
+  connector_id: string;
+  name: string;
+  app_slug: string;
+  owner: string;
+  web: string;
+  client_id?: string;
+  oauth: boolean;
+  installed: boolean;
+}
+
 export type ConfidenceLabel = 'high' | 'medium' | 'low';
 
 /** A Docs v2 document in the navigation (no sections). */

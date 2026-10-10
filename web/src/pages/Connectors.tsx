@@ -11,7 +11,7 @@ import { seal } from '@/lib/seal';
 import { SealedBadge, SealedHint } from '@/components/Sealed';
 import { KNOWLEDGE, knowledgeSpec, SOURCES, sourceSpec } from './signalSources';
 import { ConnectAlerts, ConnectDocs, randomSecret } from './ConnectTools';
-import { McpSection } from './McpConnections';
+import { McpSection, useMcpServers } from './McpConnections';
 import { AtlassianReturn, isAtlassianOAuth, needsAtlassianSignIn, startAtlassian } from './ConnectAtlassian';
 import { Link } from 'react-router-dom';
 import { nameOf, sentence } from '@/lib/labels';
@@ -70,6 +70,9 @@ function ExistingGitHubApp({ base }: { base: string }) {
   const [appId, setAppId] = useState('');
   const [key, setKey] = useState('');
   const [keyFile, setKeyFile] = useState('');
+  const [clientId, setClientId] = useState('');
+  const [clientSecret, setClientSecret] = useState('');
+  const callback = useMcpServers().data?.redirect_uri || `${window.location.origin}/api/v1/mcp/oauth/callback`;
   const [choices, setChoices] = useState<string[]>();
   const [account, setAccount] = useState('');
   const [result, setResult] = useState<ExistingResult>();
@@ -88,6 +91,9 @@ function ExistingGitHubApp({ base }: { base: string }) {
     try {
       const r = await api.post<ExistingResult>('/github/connect/existing', {
         app_id: appId.trim(), private_key: await seal(key, 'connector.credentials'), base_url: base.trim() || undefined, account: account || undefined,
+        ...(clientId.trim() && clientSecret.trim()
+          ? { client_id: clientId.trim(), client_secret: await seal(clientSecret.trim(), 'connector.oauth_client_secret') }
+          : {}),
       });
       if (r.installed) finish(r.connector_id);
       else setResult(r);
@@ -159,6 +165,16 @@ function ExistingGitHubApp({ base }: { base: string }) {
           />
         </Field>
       </div>
+      <details className="text-xs">
+        <summary className="cursor-pointer text-slate-600 dark:text-slate-400">Also sign in to GitHub’s MCP server with this app (optional)</summary>
+        <p className="mt-2 text-slate-600 dark:text-slate-400">
+          On the same page, copy the <b>Client ID</b>, click <b>Generate a new client secret</b>, and add <code className="break-all">{callback}</code> under <b>Callback URL</b>. Admins can then connect “Live lookups in GitHub” by signing in on GitHub instead of pasting a token.
+        </p>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <Field label="Client ID"><Input aria-label="Client ID" autoComplete="off" value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="Iv23li…" /></Field>
+          <Field label="Client secret" hint="Sealed in your browser before it is sent."><Input aria-label="Client secret" type="password" autoComplete="off" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} /></Field>
+        </div>
+      </details>
       {choices && (
         <Field label="Installed on several accounts: which one?">
           <Select value={account} onChange={(e) => setAccount(e.target.value)}>
@@ -169,7 +185,7 @@ function ExistingGitHubApp({ base }: { base: string }) {
       )}
       <ErrorNote error={err} />
       <div className="flex gap-2">
-        <Button size="sm" disabled={busy || !appId || !key || (!!choices && !account)} onClick={submit}>{busy ? 'Checking with GitHub…' : 'Connect this app'}</Button>
+        <Button size="sm" disabled={busy || !appId || !key || (!!choices && !account) || !clientId.trim() !== !clientSecret.trim()} onClick={submit}>{busy ? 'Checking with GitHub…' : 'Connect this app'}</Button>
         <Button size="sm" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
       </div>
     </div>
@@ -434,7 +450,7 @@ export default function Connectors() {
       <ErrorNote error={conns.error ?? sync.error ?? del.error ?? toggle.error ?? signInAgain.error} />
       {remote && <RemoteNotice name={remote.name} result={remote.result} onClose={() => setRemote(undefined)} />}
 
-      <Group title="Code" text="The repositories the Hub documents and answers questions about.">
+      <Group id="code" title="Code" text="The repositories the Hub documents and answers questions about.">
         {codeConns.length === 0 ? (
           <div className="max-w-xl"><ConnectGitHub /></div>
         ) : <ConnectorTable items={codeConns} actions={rowActions} />}
@@ -498,9 +514,9 @@ function Tile({ label, sub, onClick }: { label: string; sub: string; onClick: ()
   );
 }
 
-function Group({ title, text, badge, children }: { title: string; text: string; badge?: string; children: React.ReactNode }) {
+function Group({ id, title, text, badge, children }: { id?: string; title: string; text: string; badge?: string; children: React.ReactNode }) {
   return (
-    <section className="mb-10">
+    <section id={id} className="mb-10 scroll-mt-4">
       <div className="mb-3 flex items-center gap-2">
         <h2 className="text-base font-semibold">{title}</h2>
         {badge && <Badge>{badge}</Badge>}

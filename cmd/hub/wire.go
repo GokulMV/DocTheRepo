@@ -243,7 +243,7 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 		Observe:    func(stage string, d time.Duration) { m.Retrieval.WithLabelValues(stage).Observe(d.Seconds()) },
 		AgentSteps: cfg.Ask.AgentSteps, SimilarAnswer: cfg.Ask.SimilarAnswer}
 	a.mcpStore = store.NewMCPServers(st, box, secrets.MCPSecretAAD, secrets.MCPOAuthAAD)
-	a.mcp = &mcpconn.Manager{Store: a.mcpStore, PublicURL: cfg.Server.PublicURL, Version: version}
+	a.mcp = &mcpconn.Manager{Store: a.mcpStore, GitHubApps: a.conns, PublicURL: cfg.Server.PublicURL, Version: version}
 	a.rag.Tools = mcpToolBox{a.mcp}
 	if cfg.Ask.Sift != "off" {
 		a.rag.Sift = &sift.Sifter{GW: gw, Cache: &sift.Memory{}, Cost: a.rag.Cost, KeepAt: cfg.Ask.SiftKeepAt}

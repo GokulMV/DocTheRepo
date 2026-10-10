@@ -34,10 +34,22 @@ type Store interface {
 	SetStatus(ctx context.Context, id, status, lastError string, tools []store.MCPTool) error
 }
 
+// GitHubApps is what the manager needs from store.Connectors: the Hub's GitHub Apps and their OAuth clients.
+type GitHubApps interface {
+	GitHubApps(ctx context.Context) ([]store.GitHubApp, error)
+	GitHubAppClient(ctx context.Context, id string) (store.GitHubAppClient, error)
+}
+
+// ConfigGitHubApp is the connection setting naming the GitHub App connector whose OAuth client signs in
+// (the GitHub MCP server takes GitHub App user tokens and does not let apps register themselves).
+const ConfigGitHubApp = "github_app"
+
 // Manager connects to MCP servers.
 type Manager struct {
 	Store Store
-	HTTP  *http.Client
+	// GitHubApps signs in with the Hub's GitHub App (optional).
+	GitHubApps GitHubApps
+	HTTP       *http.Client
 	// PublicURL is where browsers reach the Hub (for the OAuth callback).
 	PublicURL string
 	Version   string
@@ -186,6 +198,14 @@ func (m *Manager) accessToken(ctx context.Context, id string) (string, error) {
 	if o.Valid() {
 		return o.AccessToken, nil
 	}
+	if s, err := m.Store.Get(ctx, id); err == nil && s.Config[ConfigGitHubApp] != "" {
+		// The App's client secret may have been replaced since the sign-in: refresh with the current one.
+		c, err := m.GitHubAppClient(ctx, s.Config[ConfigGitHubApp])
+		if err != nil {
+			return "", err
+		}
+		o.ClientID, o.ClientSecret = c.ClientID, c.ClientSecret
+	}
 	if err := o.Refresh(ctx, m.httpClient()); err != nil {
 		if errors.Is(err, mcpclient.ErrSignInAgain) {
 			o.AccessToken, o.RefreshToken = "", ""
@@ -283,6 +303,14 @@ func (m *Manager) StartSignIn(ctx context.Context, id, base string) (string, err
 		return "", errors.New("sign-in providers only return to https addresses (or localhost): open the Hub over https, or set server.public_url")
 	}
 	hc := m.httpClient()
+	if app := s.Config[ConfigGitHubApp]; app != "" {
+		// The Hub's GitHub App signs in: its own client on GitHub's sign-in page, no discovery or registration.
+		c, err := m.GitHubAppClient(ctx, app)
+		if err != nil {
+			return "", err
+		}
+		return m.begin(ctx, id, mcpclient.GitHubApp(c.Web, c.ClientID, c.ClientSecret), redirect)
+	}
 	m.oauthMu.Lock()
 	defer m.oauthMu.Unlock()
 	var prev mcpclient.OAuth
@@ -321,6 +349,17 @@ func (m *Manager) StartSignIn(ctx context.Context, id, base string) (string, err
 			return "", err
 		}
 	}
+	return m.beginLocked(ctx, id, o, redirect)
+}
+
+func (m *Manager) begin(ctx context.Context, id string, o *mcpclient.OAuth, redirect string) (string, error) {
+	m.oauthMu.Lock()
+	defer m.oauthMu.Unlock()
+	return m.beginLocked(ctx, id, o, redirect)
+}
+
+// beginLocked records a pending sign-in (oauthMu held) and returns the address to open.
+func (m *Manager) beginLocked(ctx context.Context, id string, o *mcpclient.OAuth, redirect string) (string, error) {
 	state := id + "." + randomToken()
 	authURL, err := o.Begin(state, redirect)
 	if err != nil {
@@ -330,6 +369,22 @@ func (m *Manager) StartSignIn(ctx context.Context, id, base string) (string, err
 		return "", err
 	}
 	return authURL, nil
+}
+
+// GitHubAppClient opens the OAuth client of the GitHub App connector id.
+func (m *Manager) GitHubAppClient(ctx context.Context, id string) (store.GitHubAppClient, error) {
+	if m.GitHubApps == nil {
+		return store.GitHubAppClient{}, errors.New("no GitHub App is connected to this Hub")
+	}
+	return m.GitHubApps.GitHubAppClient(ctx, id)
+}
+
+// ListGitHubApps lists the Hub's GitHub Apps (none when GitHubApps is not set).
+func (m *Manager) ListGitHubApps(ctx context.Context) ([]store.GitHubApp, error) {
+	if m.GitHubApps == nil {
+		return []store.GitHubApp{}, nil
+	}
+	return m.GitHubApps.GitHubApps(ctx)
 }
 
 // FinishSignIn completes the sign-in the browser comes back from. It returns the connection's id.

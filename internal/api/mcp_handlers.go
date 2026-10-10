@@ -91,7 +91,30 @@ func (h *mcpHandlers) list(w http.ResponseWriter, r *http.Request) {
 		WriteErr(w, r, err)
 		return
 	}
-	WriteJSON(w, http.StatusOK, map[string]any{"items": items, "redirect_uri": h.d.Manager.RedirectURI(requestOrigin(r))})
+	// github_apps: the Hub's GitHub Apps, and whether each can sign in to the GitHub MCP server (oauth).
+	apps, err := h.d.Manager.ListGitHubApps(r.Context())
+	if err != nil {
+		apps = []store.GitHubApp{}
+	}
+	WriteJSON(w, http.StatusOK, map[string]any{"items": items, "redirect_uri": h.d.Manager.RedirectURI(requestOrigin(r)), "github_apps": apps})
+}
+
+// checkGitHubApp refuses a github_app setting that cannot sign in: not OAuth, or an App without a client.
+func (h *mcpHandlers) checkGitHubApp(ctx context.Context, auth string, cfg map[string]string) error {
+	app := cfg[mcpconn.ConfigGitHubApp]
+	if app == "" {
+		return nil
+	}
+	if auth != "oauth" {
+		return errBadParam("github_app is for connections that sign in with OAuth")
+	}
+	if _, err := h.d.Manager.GitHubAppClient(ctx, app); err != nil {
+		if errors.Is(err, ports.ErrNotFound) {
+			return errBadParam("github_app must be a connected GitHub App (Connectors → GitHub)")
+		}
+		return err
+	}
+	return nil
 }
 
 func (h *mcpHandlers) create(w http.ResponseWriter, r *http.Request) {
@@ -128,6 +151,10 @@ func (h *mcpHandlers) create(w http.ResponseWriter, r *http.Request) {
 		fail(w, r, err)
 		return
 	}
+	if err := h.checkGitHubApp(r.Context(), in.Auth, in.Config); err != nil {
+		fail(w, r, err)
+		return
+	}
 	if err := openSealed(r.Context(), h.d.SealKeys, h.d.RequireSealed, &in.Secret, secrets.PurposeMCPSecret); err != nil {
 		fail(w, r, err)
 		return
@@ -138,7 +165,7 @@ func (h *mcpHandlers) create(w http.ResponseWriter, r *http.Request) {
 		WriteError(w, r, http.StatusConflict, "CONFLICT", "could not add the connection (is the name taken?)", nil)
 		return
 	}
-	h.audit(r, "mcp_server.create", id, map[string]any{"name": in.Name, "url": in.URL, "auth": in.Auth})
+	h.audit(r, "mcp_server.create", id, map[string]any{"name": in.Name, "url": in.URL, "auth": in.Auth, "github_app": in.Config[mcpconn.ConfigGitHubApp]})
 	s, err := h.afterChange(r.Context(), id)
 	if err != nil {
 		WriteErr(w, r, err)
@@ -183,6 +210,17 @@ func (h *mcpHandlers) patch(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Config != nil {
 		if err := validAWSRole(*in.Config); err != nil {
+			fail(w, r, err)
+			return
+		}
+	}
+	if in.Config != nil && (*in.Config)[mcpconn.ConfigGitHubApp] != "" {
+		cur, err := h.d.Store.Get(r.Context(), id)
+		if err != nil {
+			WriteErr(w, r, err)
+			return
+		}
+		if err := h.checkGitHubApp(r.Context(), cur.Auth, *in.Config); err != nil {
 			fail(w, r, err)
 			return
 		}

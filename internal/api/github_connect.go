@@ -20,6 +20,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/GokulMV/DocTheRepo/internal/auth"
+	"github.com/GokulMV/DocTheRepo/internal/mcpconn"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
 	"github.com/GokulMV/DocTheRepo/internal/secrets"
 	"github.com/GokulMV/DocTheRepo/internal/store"
@@ -124,8 +125,14 @@ func GitHubConnectRoutes(d GitHubConnectDeps) func(chi.Router) {
 					"setup_url":       public + "/api/v1/github/connect/setup",
 					"setup_on_update": true,
 					"public":          false,
+					// Admins sign in to the GitHub MCP server with this App ("Sign in with GitHub"): GitHub only
+					// returns to a registered callback URL. Not during install: that sign-in starts from the Hub.
+					"callback_urls":            []string{public + mcpconn.CallbackPath},
+					"request_oauth_on_install": false,
+					// issues and actions (read) are for the GitHub MCP server's read-only lookups.
 					"default_permissions": map[string]string{
 						"contents": "write", "pull_requests": "write", "metadata": "read", "statuses": "read", "checks": "read", "members": "read",
+						"issues": "read", "actions": "read",
 					},
 				}
 				if webhook {
@@ -188,6 +195,9 @@ func GitHubConnectRoutes(d GitHubConnectDeps) func(chi.Router) {
 					Name          string `json:"name"`
 					Account       string `json:"account"` // which installation, when the App has several
 					WebhookSecret string `json:"webhook_secret"`
+					// Optional: the App's OAuth client, to sign in to the GitHub MCP server with it.
+					ClientID     string `json:"client_id"`
+					ClientSecret string `json:"client_secret"` // sealed (connector.oauth_client_secret)
 				}
 				if err := decodeJSON(w, r, &in); err != nil {
 					WriteErr(w, r, err)
@@ -195,6 +205,15 @@ func GitHubConnectRoutes(d GitHubConnectDeps) func(chi.Router) {
 				}
 				if !validAppID(in.AppID) {
 					WriteErr(w, r, errBadParam("app_id is the number shown as \"App ID\" on the App's settings page"))
+					return
+				}
+				if err := openSealed(r.Context(), d.SealKeys, d.RequireSealed, &in.ClientSecret, secrets.PurposeConnectorOAuthClient); err != nil {
+					WriteErr(w, r, err)
+					return
+				}
+				in.ClientID, in.ClientSecret = strings.TrimSpace(in.ClientID), strings.TrimSpace(in.ClientSecret)
+				if (in.ClientID == "") != (in.ClientSecret == "") || (in.ClientID != "" && !ghClientID.MatchString(in.ClientID)) {
+					WriteErr(w, r, errBadParam("client_id and client_secret go together: copy both from the App's settings page (Client ID, Generate a new client secret)"))
 					return
 				}
 				if err := openSealed(r.Context(), d.SealKeys, d.RequireSealed, &in.PrivateKey, secrets.PurposeConnectorCreds); err != nil {
@@ -250,9 +269,16 @@ func GitHubConnectRoutes(d GitHubConnectDeps) func(chi.Router) {
 				if d.SealKeys != nil {
 					_ = d.SealKeys.SetConnectorCredsHint(r.Context(), id, in.PrivateKey)
 				}
+				if in.ClientID != "" {
+					if err := d.Connectors.SetOAuthClient(r.Context(), id, in.ClientID, in.ClientSecret); err != nil {
+						WriteErr(w, r, err)
+						return
+					}
+				}
 				_ = d.Auth.Audit(r.Context(), auth.FromContext(r.Context()), "github.connect.existing", "connector", id,
-					map[string]any{"app_id": appID, "slug": app.Slug, "owner": app.Owner.Login, "installed": inst != nil}, clientIP(r))
-				out := map[string]any{"connector_id": id, "app_slug": app.Slug, "app_name": app.Name, "owner": app.Owner.Login, "installed": inst != nil}
+					map[string]any{"app_id": appID, "slug": app.Slug, "owner": app.Owner.Login, "installed": inst != nil, "oauth_client": in.ClientID != ""}, clientIP(r))
+				out := map[string]any{"connector_id": id, "app_slug": app.Slug, "app_name": app.Name, "owner": app.Owner.Login, "installed": inst != nil,
+					"oauth": in.ClientID != ""}
 				if inst == nil {
 					out["install_url"] = installURL(web, app.Slug)
 				} else {
@@ -315,6 +341,58 @@ func GitHubConnectRoutes(d GitHubConnectDeps) func(chi.Router) {
 				WriteJSON(w, http.StatusOK, map[string]any{"installed": true, "account": inst.Account.Login})
 			})
 
+			// oauth-client stores (or, with both empty, removes) a GitHub App's OAuth client: for Apps connected
+			// before the Hub kept it, or with a new client secret. It lets admins sign in to the GitHub MCP server.
+			r.Put("/github/connect/{id}/oauth-client", func(w http.ResponseWriter, r *http.Request) {
+				id := chi.URLParam(r, "id")
+				var in struct {
+					ClientID     string `json:"client_id"`
+					ClientSecret string `json:"client_secret"` // sealed (connector.oauth_client_secret); empty keeps the stored one
+				}
+				if err := decodeJSON(w, r, &in); err != nil {
+					WriteErr(w, r, err)
+					return
+				}
+				if err := openSealed(r.Context(), d.SealKeys, d.RequireSealed, &in.ClientSecret, secrets.PurposeConnectorOAuthClient); err != nil {
+					WriteErr(w, r, err)
+					return
+				}
+				in.ClientID, in.ClientSecret = strings.TrimSpace(in.ClientID), strings.TrimSpace(in.ClientSecret)
+				if in.ClientID != "" && !ghClientID.MatchString(in.ClientID) {
+					WriteErr(w, r, errBadParam("client_id is the \"Client ID\" on the App's settings page (not the App ID)"))
+					return
+				}
+				if in.ClientID == "" && in.ClientSecret != "" {
+					WriteErr(w, r, errBadParam("client_id is required with a client_secret"))
+					return
+				}
+				cc, err := d.Connectors.GetAny(r.Context(), id)
+				if err != nil {
+					WriteErr(w, r, err)
+					return
+				}
+				if cc.Type != "github" || cc.Config["app_id"] == "" {
+					WriteErr(w, r, errBadParam("this connector is not a GitHub App"))
+					return
+				}
+				if err := d.Connectors.SetOAuthClient(r.Context(), id, in.ClientID, in.ClientSecret); err != nil {
+					WriteErr(w, r, err)
+					return
+				}
+				_ = d.Auth.Audit(r.Context(), auth.FromContext(r.Context()), "github.connect.oauth_client", "connector", id,
+					map[string]any{"client_id": in.ClientID, "secret_changed": in.ClientSecret != "", "removed": in.ClientID == ""}, clientIP(r))
+				if in.ClientID == "" {
+					w.WriteHeader(http.StatusNoContent)
+					return
+				}
+				c, err := d.Connectors.GitHubAppClient(r.Context(), id)
+				if err != nil {
+					WriteErr(w, r, err) // a client ID without any secret stored yet
+					return
+				}
+				WriteJSON(w, http.StatusOK, c.GitHubApp)
+			})
+
 			// GitHub sends the browser here after "Create GitHub App" with a one-time code.
 			r.Get("/github/connect/callback", func(w http.ResponseWriter, r *http.Request) {
 				st, err := open(r)
@@ -350,8 +428,15 @@ func GitHubConnectRoutes(d GitHubConnectDeps) func(chi.Router) {
 					fail(w, r, fmt.Errorf("the GitHub App %q was created but could not be saved (is the name %q taken?)", app.Slug, name))
 					return
 				}
+				oauth := app.ClientID != "" && app.ClientSecret != ""
+				if oauth {
+					// Keep the App's OAuth client (sealed) so admins can "Sign in with GitHub" for the GitHub MCP server.
+					if err := d.Connectors.SetOAuthClient(r.Context(), id, app.ClientID, app.ClientSecret); err != nil {
+						oauth = false
+					}
+				}
 				_ = d.Auth.Audit(r.Context(), auth.FromContext(r.Context()), "github.connect.app", "connector", id,
-					map[string]any{"app_id": app.ID, "slug": app.Slug, "owner": app.Owner.Login}, clientIP(r))
+					map[string]any{"app_id": app.ID, "slug": app.Slug, "owner": app.Owner.Login, "oauth_client": oauth}, clientIP(r))
 				st.Expires = time.Now().Add(30 * time.Minute)
 				state, err := seal(r.Context(), st)
 				if err != nil {
@@ -413,6 +498,8 @@ var (
 	ghLogin  = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$`)
 	ghCode   = regexp.MustCompile(`^[A-Za-z0-9_-]{1,100}$`)
 	ghDigits = regexp.MustCompile(`^[0-9]{1,20}$`)
+	// A GitHub App's client ID (Iv1.…, Iv23…): letters, digits and dots.
+	ghClientID = regexp.MustCompile(`^[A-Za-z0-9.]{8,64}$`)
 )
 
 // githubURLs returns the web and API bases for github.com (empty input) or a GitHub Enterprise Server URL.
@@ -476,6 +563,8 @@ type ghApp struct {
 	Slug          string `json:"slug"`
 	PEM           string `json:"pem"`
 	WebhookSecret string `json:"webhook_secret"`
+	ClientID      string `json:"client_id"`
+	ClientSecret  string `json:"client_secret"`
 	Owner         struct {
 		Login string `json:"login"`
 	} `json:"owner"`

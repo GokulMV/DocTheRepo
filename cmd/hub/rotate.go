@@ -22,6 +22,7 @@ var sealedColumns = []struct{ table, id, col, what string }{
 	{"llm_providers", "id", "key_ciphertext", "model provider keys"},
 	{"connectors", "id", "creds_ciphertext", "connector credentials"},
 	{"connectors", "id", "webhook_secret_ct", "webhook secrets"},
+	{"connectors", "id", "oauth_client_secret_ct", "GitHub App client secrets"},
 	{"seal_keys", "id", "private_ct", "sealing keys"},
 	{"auth_settings", "id", "oidc_secret_ciphertext", "single sign-on client secret"},
 	{"mcp_servers", "id", "secret_ciphertext", "MCP connection keys"},
