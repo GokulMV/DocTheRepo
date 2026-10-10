@@ -1,7 +1,7 @@
 <!-- dth:generated source="internal/core/repodocs/inputs.go" — edit only inside dth:human blocks -->
 # `internal/core/repodocs/inputs.go`
 
-Defines the environment and methods for assembling repository facts into LLM prompt inputs for documentation generation, tracking inter-module dependencies and aggregating code metadata.
+Assembles and structures prompt material for documentation generation from repository analysis by collecting and prioritizing repository facts, code structure, and metadata.
 
 <!-- dth:chunk 3d1901d7cebb28a5 -->
 ## `Reader`
@@ -21,32 +21,12 @@ CardSymbol is one declaration on a card.
 <!-- dth:chunk 4c54561471cc76d2 -->
 ## `env`
 
-Aggregates all state for a single documentation run: repository facts, files, modules, symbols sorted by call frequency, inter-module dependencies (as edge weights), cached guides, and a reader for file content.
-
-<!-- dth:chunk f00a7d50f1f6bb90 -->
-## `modEdge`
-
-modEdge is how one module uses another: resolved calls, and files importing it.
-
-<!-- dth:chunk 621f3b3b5d054c18 -->
-## `modEdge.weight`
-
-Computes the total weight of an inter-module edge as the sum of resolved calls and importing files, used for prioritizing dependencies in the module graph.
-
-<!-- dth:chunk bd882454c229adf0 -->
-## `modEdge.String`
-
-Formats an inter-module edge as a human-readable string listing the number of importing files and calls, e.g., "2 importing files, 5 calls". Omits counts that are zero.
-
-<!-- dth:chunk 6181a1dba80dbf68 -->
-## `plural`
-
-Formats a count and noun into an English phrase, pluralizing the noun when the count is not 1 (e.g., "1 call" vs. "3 calls").
+The state and context for one documentation generation run, shared by all input builder functions. Holds facts about the codebase (symbols, files, calls), module information and structure (modules and their dependencies), user-provided cards describing files, cached module guides, a file reader, all symbols sorted by call frequency, and module-to-module dependency edge counts.
 
 <!-- dth:chunk ced391a83602143e -->
 ## `newEnv`
 
-Initializes an env by collecting all symbols from facts and sorting them by frequency, then aggregating inter-module dependencies by counting both function calls and file imports between different modules. Imports are assigned to the module of their importing file's directory.
+Initializes a new environment by collecting symbols from all files, sorting them by call count in descending order, and computing inter-module dependency edges by filtering and counting function calls between different modules. Returns the initialized state ready for input generation.
 
 <!-- dth:chunk f8fa51a21e5b84a7 -->
 ## `env.module`
@@ -91,7 +71,7 @@ Formats a list of facts as a markdown bullet list, deduplicating by (kind, name,
 <!-- dth:chunk 560a670fcbc231f7 -->
 ## `env.moduleGraph`
 
-Generates both a text listing and a mermaid flowchart diagram of module dependencies, sorted by edge weight and limited to the top 80 text entries and 40 diagram edges. Returns the text description and diagram source separately.
+Generates two representations of module dependencies: a text list of the top 80 calls between modules sorted by frequency, and a Mermaid flowchart diagram of the top 40 dependencies with module titles. Returns both the text list and diagram as strings.
 
 <!-- dth:chunk 58e3ed3fcf34d335 -->
 ## `mermaidID`
@@ -146,7 +126,7 @@ Finds symbols with names containing "err", "exception", or "fault" (case-insensi
 <!-- dth:chunk c8550d67ce47cc85 -->
 ## `env.inputs`
 
-Assembles prompt material for document generation by collecting blocks of content (modules, guides, dependency graph, facts, code samples, tests, decisions) according to a spec's needs list, then prioritizes them within the supplied token budget. Generates module-specific views when a target module is provided.
+Assembles prompt material for document generation by building a list of content blocks based on a specification. Each item in `spec.Needs` triggers collection of specific repository information—modules, dependency graphs, declared facts (endpoints, datastores, topics), entry points, tests, CI configuration, decisions, and more. The blocks are prioritized (lower numbers appear earlier) and passed to `render()` which selects them to fit the given token budget.
 
 <!-- dth:chunk 4861bde80838196e -->
 ## `env.titleOf`
@@ -166,7 +146,7 @@ Extracts the first `n` handler/producer/consumer function bodies associated with
 <!-- dth:chunk 6297454cd3d6f165 -->
 ## `env.moduleInputs`
 
-Collects detailed inputs for a specific module: its metadata, file list with card notes, exported symbols sorted by call frequency (up to 120), facts the module declares, and central code by call count and lines (up to 8 bodies). Calls the provided add function with each block title, content, and priority.
+Populates a module-specific document with five sections: basic metadata (file count, line count, directory), a file listing with line counts and summaries, exported declarations sorted by usage frequency (capped at 120), facts this module declares (endpoints, environment variables, datastores, topics), and the module's most-called internal code. If test files exist, includes test material; otherwise notes their absence. The `add` callback registers each section with a priority level.
 
 <!-- dth:chunk 888f8d4405590ff4 -->
 ## `commitLines`

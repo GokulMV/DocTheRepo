@@ -1,7 +1,7 @@
 <!-- dth:generated source="internal/core/pipeline/repodocs.go" — edit only inside dth:human blocks -->
 # `internal/core/pipeline/repodocs.go`
 
-This file implements repository documentation generation as a pipeline job, extracting facts, configuration wiring, and generating structured docs with budget enforcement.
+Implements the repository documentation generation pipeline job handler.
 
 <!-- dth:chunk ee9de0dee06fce02 -->
 ## `RepoDocsPayload`
@@ -26,7 +26,7 @@ Checks if a file path should be excluded from documentation processing based on 
 <!-- dth:chunk 89295343cfc1c07c -->
 ## `Pipeline.RepoDocs`
 
-`Pipeline.RepoDocs` executes a repository documentation generation job. It fetches repository state and facts, collects files from the repository tree (excluding certain directories), reads special files and wiring configuration, invokes the docs generator, and indexes results. It handles budget checks, dry runs, retry logic, and progress reporting. Returns aborted outcomes for missing/disabled repos or uninitialized Docs v2, spend-blocked outcomes when monthly budget is exceeded, and includes cost tracking and change queuing.
+Processes a `repo_docs` job by generating documentation for a repository. Decodes the job payload, validates the repository exists and is enabled, retrieves its file tree and metadata (commits from the last 90 days, special files like README), and passes this to `RepoDocsGen.Run()` to generate documentation. Reads files on-demand with caching to support the generation process. Respects `.dthignore` to exclude files and checks documentation budget limits before proceeding (can abort with `JobSpendBlocked` if over budget). On success, indexes the resulting documents and queues a follow-up system docs job if any documents changed. Returns `JobAborted` if the repository isn't tracked, is disabled, or hasn't been synced yet. Handles dry runs by estimating without writing. On budget overflow, persists partial results before returning blocked status.
 
 <!-- dth:chunk e47d2cfcfcd05d69 -->
 ## `Pipeline.readWiring`
