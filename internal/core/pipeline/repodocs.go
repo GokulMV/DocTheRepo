@@ -13,6 +13,7 @@ import (
 	"github.com/GokulMV/DocTheRepo/internal/core/llmgateway"
 	"github.com/GokulMV/DocTheRepo/internal/core/manifest"
 	"github.com/GokulMV/DocTheRepo/internal/core/repodocs"
+	"github.com/GokulMV/DocTheRepo/internal/core/triage"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
 )
 
@@ -101,8 +102,17 @@ func (p *Pipeline) RepoDocs(ctx context.Context, job ports.Job) (ports.Outcome, 
 	if err != nil {
 		return ports.Outcome{}, fmt.Errorf("list files: %w", err)
 	}
+	// Paths the repository's .dthignore skips are never read for its documents (test material included).
+	ignored := func(string) bool { return false }
+	if raw, err := host.GetFile(ctx, repo.FullName, triage.IgnoreFile, facts.Head); err == nil {
+		if ignored, err = triage.IgnoreMatcher(raw); err != nil {
+			return ports.Outcome{}, ports.Permanent(err)
+		}
+	} else if !errors.Is(err, ports.ErrNotFound) {
+		return ports.Outcome{}, fmt.Errorf("read %s: %w", triage.IgnoreFile, err)
+	}
 	for _, t := range tree {
-		if !skipPath(t) {
+		if !skipPath(t) && !ignored(t) {
 			facts.AllPaths = append(facts.AllPaths, t)
 		}
 	}

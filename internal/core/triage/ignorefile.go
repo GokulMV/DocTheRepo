@@ -46,3 +46,18 @@ func ParseIgnoreFile(content []byte) (ignore, keep []string) {
 	}
 	return ignore, keep
 }
+
+// IgnoreMatcher reports the paths a .dthignore's own lines skip ("!" lines re-include). The built-in
+// list is left out: it skips tests and CI files, which repository documents still read.
+func IgnoreMatcher(content []byte) (func(string) bool, error) {
+	ignore, keep := ParseIgnoreFile(content)
+	ig, err := compileGlobs(ignore)
+	if err != nil {
+		return nil, err
+	}
+	kp, err := compileGlobs(keep)
+	if err != nil {
+		return nil, err
+	}
+	return func(p string) bool { return matchAny(ig, p) && !matchAny(kp, p) }, nil
+}

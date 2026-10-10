@@ -71,7 +71,8 @@ type Spec struct {
 }
 
 // SpecVersion changes when the catalogue changes in a way that should rewrite documents.
-const SpecVersion = "v2.2"
+// v2.3: module guides are given their tests' names and excerpts.
+const SpecVersion = "v2.3"
 
 func s(key, title string, words int, required, cite bool, guide string) Section {
 	return Section{Key: key, Title: title, Words: words, Required: required, Cite: cite, Guide: guide}
@@ -175,7 +176,7 @@ var Catalog = []Spec{
 			s("files", "Files", 0, true, false, "A table: File | Role (one line). Every file in the module."),
 			s("change", "Where to change things", 150, true, true, "5-8 bullets: 'To <common change>, edit `<function>` in [path:line]'. Every bullet cites where to start."),
 			s("dos", "Do's and don'ts", 120, false, true, "Rules to keep when changing this module."),
-			s("tests", "Tests", 100, false, false, "Which tests cover this module and how to run them; what is not covered."),
+			s("tests", "Tests", 100, false, true, "From the test names listed in the material: what the tests cover (name the main tests and cite each as [path:line]), how to run them (the package's test command), and the notable gaps: central code or error paths no listed test exercises."),
 		},
 	},
 	{
