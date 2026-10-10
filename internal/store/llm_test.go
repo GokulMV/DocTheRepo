@@ -64,7 +64,7 @@ func TestLoadGuard_SeededDefaults(t *testing.T) {
 	c, _ = g.Cost("anthropic", "claude-haiku-5-5", "qa", 100_001, 1_000_000)
 	assert.InDelta(t, 0.100001*0.5+2.5, c, 1e-9, "over the threshold: $0.50 in + $2.50 out per MTok")
 	c, _ = g.CostUsage("anthropic", "claude-haiku-5-5", "qa", 120_000, 0, 60_000, 0)
-	assert.InDelta(t, 0.12*0.5, c, 1e-9, "cache reads count toward the prompt; no cache price yet, so at the long input price")
+	assert.InDelta(t, 0.06*0.5+0.06*0.05, c, 1e-9, "cache reads count toward the prompt and are billed at the long cache-read price")
 	c, _ = g.Cost("anthropic", "claude-opus-5-5", "qa", 2_000_000, 0)
 	assert.InDelta(t, 8.0, c, 1e-9)
 
