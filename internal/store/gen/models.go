@@ -1284,6 +1284,13 @@ type ArchitectureDiagram struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+type AtlassianOauthApp struct {
+	ID             int16     `json:"id"`
+	ClientID       string    `json:"client_id"`
+	ClientSecretCt []byte    `json:"client_secret_ct"`
+	UpdatedAt      time.Time `json:"updated_at"`
+}
+
 type AuditLog struct {
 	ID          string          `json:"id"`
 	At          time.Time       `json:"at"`
@@ -1328,23 +1335,25 @@ type Chunk struct {
 }
 
 type Connector struct {
-	ID                string          `json:"id"`
-	Type              ConnectorType   `json:"type"`
-	Name              string          `json:"name"`
-	Config            json.RawMessage `json:"config"`
-	CredsCiphertext   []byte          `json:"creds_ciphertext"`
-	WebhookSecretHash []byte          `json:"webhook_secret_hash"`
-	WebhookSecretCt   []byte          `json:"webhook_secret_ct"`
-	Mode              ConnectorMode   `json:"mode"`
-	PollInterval      pgtype.Interval `json:"poll_interval"`
-	Enabled           bool            `json:"enabled"`
-	Health            HealthState     `json:"health"`
-	LastError         string          `json:"last_error"`
-	LastSyncAt        *time.Time      `json:"last_sync_at"`
-	CreatedAt         time.Time       `json:"created_at"`
-	UpdatedAt         time.Time       `json:"updated_at"`
-	CredsHint         string          `json:"creds_hint"`
-	CredsSetAt        *time.Time      `json:"creds_set_at"`
+	ID                  string          `json:"id"`
+	Type                ConnectorType   `json:"type"`
+	Name                string          `json:"name"`
+	Config              json.RawMessage `json:"config"`
+	CredsCiphertext     []byte          `json:"creds_ciphertext"`
+	WebhookSecretHash   []byte          `json:"webhook_secret_hash"`
+	WebhookSecretCt     []byte          `json:"webhook_secret_ct"`
+	Mode                ConnectorMode   `json:"mode"`
+	PollInterval        pgtype.Interval `json:"poll_interval"`
+	Enabled             bool            `json:"enabled"`
+	Health              HealthState     `json:"health"`
+	LastError           string          `json:"last_error"`
+	LastSyncAt          *time.Time      `json:"last_sync_at"`
+	CreatedAt           time.Time       `json:"created_at"`
+	UpdatedAt           time.Time       `json:"updated_at"`
+	CredsHint           string          `json:"creds_hint"`
+	CredsSetAt          *time.Time      `json:"creds_set_at"`
+	OauthClientID       string          `json:"oauth_client_id"`
+	OauthClientSecretCt []byte          `json:"oauth_client_secret_ct"`
 }
 
 type ConnectorCursor struct {
