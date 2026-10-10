@@ -186,7 +186,7 @@ func (q *Queries) InsertUsageEvent(ctx context.Context, arg InsertUsageEventPara
 }
 
 const listCostTable = `-- name: ListCostTable :many
-SELECT provider_kind, model, input_per_mtok_usd, output_per_mtok_usd, embed_per_mtok_usd, updated_by, updated_at, source, verified_at, cache_read_per_mtok_usd, cache_write_per_mtok_usd FROM cost_table ORDER BY provider_kind, model
+SELECT provider_kind, model, input_per_mtok_usd, output_per_mtok_usd, embed_per_mtok_usd, updated_by, updated_at, source, verified_at, cache_read_per_mtok_usd, cache_write_per_mtok_usd, long_prompt_threshold_tokens, long_input_per_mtok_usd, long_output_per_mtok_usd, long_cache_read_per_mtok_usd, long_cache_write_per_mtok_usd FROM cost_table ORDER BY provider_kind, model
 `
 
 func (q *Queries) ListCostTable(ctx context.Context) ([]CostTable, error) {
@@ -210,6 +210,11 @@ func (q *Queries) ListCostTable(ctx context.Context) ([]CostTable, error) {
 			&i.VerifiedAt,
 			&i.CacheReadPerMtokUsd,
 			&i.CacheWritePerMtokUsd,
+			&i.LongPromptThresholdTokens,
+			&i.LongInputPerMtokUsd,
+			&i.LongOutputPerMtokUsd,
+			&i.LongCacheReadPerMtokUsd,
+			&i.LongCacheWritePerMtokUsd,
 		); err != nil {
 			return nil, err
 		}

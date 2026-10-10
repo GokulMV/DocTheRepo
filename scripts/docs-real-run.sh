@@ -11,7 +11,8 @@
 #   RUN_API_KEY          the provider key (never printed)
 #   RUN_GITHUB_TOKEN     a token that can read RUN_REPO
 # Optional: RUN_PRICE_IN / RUN_PRICE_OUT (USD per million tokens; required for a model the hub has no price
-# for, so the cap can be enforced), RUN_BASE_URL, RUN_GITHUB_API_URL (default https://api.github.com/), RUN_FAST_MODEL (short code docs; defaults to RUN_MODEL), RUN_REPO
+# for, so the cap can be enforced), RUN_LONG_PROMPT_THRESHOLD with RUN_PRICE_LONG_IN / RUN_PRICE_LONG_OUT (the
+# whole request's prices once a prompt is over that many tokens; without them a stored tier is kept), RUN_BASE_URL, RUN_GITHUB_API_URL (default https://api.github.com/), RUN_FAST_MODEL (short code docs; defaults to RUN_MODEL), RUN_REPO
 # (default GokulMV/DocTheRepo), RUN_CAP_USD (default 3), RUN_TIMEOUT_MIN (default 40), RUN_OUT (default .)
 set -euo pipefail
 
@@ -51,11 +52,16 @@ api() { # api METHOD PATH [JSON]
 # The cap only holds when the model has a price: set one, or refuse to spend blind.
 sql() { psql "$DTH_DATABASE_URL" -v ON_ERROR_STOP=1 -tAq "$@"; }
 if [ -n "${RUN_PRICE_IN:-}" ] && [ -n "${RUN_PRICE_OUT:-}" ]; then
-  sql -v k="$RUN_PROVIDER_KIND" -v m="$RUN_MODEL" -v i="$RUN_PRICE_IN" -v o="$RUN_PRICE_OUT" <<'SQL'
-INSERT INTO cost_table (provider_kind, model, input_per_mtok_usd, output_per_mtok_usd, source)
-VALUES (:'k', :'m', :'i', :'o', 'operator')
+  sql -v k="$RUN_PROVIDER_KIND" -v m="$RUN_MODEL" -v i="$RUN_PRICE_IN" -v o="$RUN_PRICE_OUT" \
+    -v t="${RUN_LONG_PROMPT_THRESHOLD:-}" -v li="${RUN_PRICE_LONG_IN:-}" -v lo="${RUN_PRICE_LONG_OUT:-}" <<'SQL'
+INSERT INTO cost_table (provider_kind, model, input_per_mtok_usd, output_per_mtok_usd, source,
+  long_prompt_threshold_tokens, long_input_per_mtok_usd, long_output_per_mtok_usd)
+VALUES (:'k', :'m', :'i', :'o', 'operator', nullif(:'t', '')::integer, nullif(:'li', '')::numeric, nullif(:'lo', '')::numeric)
 ON CONFLICT (provider_kind, model) DO UPDATE SET input_per_mtok_usd = EXCLUDED.input_per_mtok_usd,
-  output_per_mtok_usd = EXCLUDED.output_per_mtok_usd, source = 'operator';
+  output_per_mtok_usd = EXCLUDED.output_per_mtok_usd, source = 'operator',
+  long_prompt_threshold_tokens = coalesce(EXCLUDED.long_prompt_threshold_tokens, cost_table.long_prompt_threshold_tokens),
+  long_input_per_mtok_usd = coalesce(EXCLUDED.long_input_per_mtok_usd, cost_table.long_input_per_mtok_usd),
+  long_output_per_mtok_usd = coalesce(EXCLUDED.long_output_per_mtok_usd, cost_table.long_output_per_mtok_usd);
 SQL
 fi
 for m in "$RUN_MODEL" "$FAST"; do
