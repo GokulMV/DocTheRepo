@@ -58,6 +58,16 @@ func TestLoadGuard_SeededDefaults(t *testing.T) {
 	assert.True(t, ok)
 	assert.InDelta(t, 0.5*0.4+0.5*5, c, 1e-9)
 
+	// Haiku 5.5 prompts over 100K tokens cost 5x for the whole request; other models have no tier.
+	c, _ = g.Cost("anthropic", "claude-haiku-5-5", "qa", 100_000, 1_000_000)
+	assert.InDelta(t, 0.1*0.1+0.5, c, 1e-9, "at the threshold: $0.10 in + $0.50 out per MTok")
+	c, _ = g.Cost("anthropic", "claude-haiku-5-5", "qa", 100_001, 1_000_000)
+	assert.InDelta(t, 0.100001*0.5+2.5, c, 1e-9, "over the threshold: $0.50 in + $2.50 out per MTok")
+	c, _ = g.CostUsage("anthropic", "claude-haiku-5-5", "qa", 120_000, 0, 60_000, 0)
+	assert.InDelta(t, 0.12*0.5, c, 1e-9, "cache reads count toward the prompt; no cache price yet, so at the long input price")
+	c, _ = g.Cost("anthropic", "claude-opus-5-5", "qa", 2_000_000, 0)
+	assert.InDelta(t, 8.0, c, 1e-9)
+
 	// The ledger keeps the cache split.
 	require.NoError(t, store.NewLedger(st).Record(context.Background(), ports.UsageRecord{At: time.Now(), Feature: "qa", ProviderKind: "anthropic",
 		Model: "claude-opus-5-5", InputTokens: 1000, OutputTokens: 10, CacheReadTokens: 800, CacheWriteTokens: 100}))
