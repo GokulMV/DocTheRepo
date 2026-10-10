@@ -11,7 +11,7 @@ COPY web/ ./
 RUN npm run build
 
 # 2. Go binaries. CGO stays on: the built-in Tree-sitter grammars are C, and runtime grammars are dlopen'd.
-FROM golang:1.27.0-bookworm AS build
+FROM golang:1.27.2-bookworm AS build
 WORKDIR /src
 ENV GOTOOLCHAIN=local CGO_ENABLED=1
 COPY go.mod go.sum ./
