@@ -141,6 +141,15 @@ Two caches keep repeated questions cheap:
   pre-call estimate uses the same rule. A long cache price left empty is the long input price. Claude
   Haiku 5.5 is seeded with a 100K-token threshold at 5x its base prices. Rows without a tier price every
   prompt the same.
+- **Spend limits are not exceeded by calls in flight.** Before a paid call the gateway reserves its worst
+  case (estimated input plus the full `max_output_tokens`, long-prompt rule included) against every limit
+  it counts against and the run's docs budget, and releases it once the actual usage is in the ledger (on
+  errors and cancellation too). A call is allowed only if spent + reserved + its worst case stays within
+  the ceiling; dollar ceilings and docs budgets also keep a safety buffer free (`spend.buffer_pct` /
+  `DTH_SPEND_BUFFER_PCT`, default 5% of the cap, at least $0.01, 0 = off) for what the estimate cannot see.
+  A blocked call is `spend_blocked` as before, and parallel docs work stops starting new documents while the
+  ones in flight finish. Reservations are held in each Hub process: calls of one job never overshoot
+  together, while replicas only see each other's calls once recorded, which the buffer absorbs.
 
 ## 4. Data
 

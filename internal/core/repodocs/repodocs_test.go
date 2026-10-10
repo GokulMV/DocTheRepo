@@ -7,12 +7,14 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/GokulMV/DocTheRepo/internal/core/llmgateway"
 	"github.com/GokulMV/DocTheRepo/internal/core/repodocs"
+	"github.com/GokulMV/DocTheRepo/internal/core/spendguard"
 	"github.com/GokulMV/DocTheRepo/internal/ports"
 	"github.com/GokulMV/DocTheRepo/test/mocks/fakegw"
 )
@@ -310,6 +312,60 @@ func TestDryRunEstimatesWithoutCalls(t *testing.T) {
 	assert.Contains(t, res.WouldWrite, "overview/overview")
 	assert.Greater(t, res.EstimatedTokens, int64(0))
 	assert.Empty(t, st.docs)
+}
+
+func TestRun_BudgetStopsNewWorkAndIsNeverExceeded(t *testing.T) {
+	prices := map[string]spendguard.Price{spendguard.PriceKey("anthropic", "claude-opus-5-5"): {InputPerMTok: 5, OutputPerMTok: 25}}
+	types := []string{"overview", "architecture", "module", "api"}
+	spent := func(env *fakegw.Env) float64 {
+		t, _ := env.Ledger.Spent(context.Background(), ports.SpendFilter{RepoID: "r1"})
+		return t.CostUSD
+	}
+	run := func(b *spendguard.Budget) (*fakegw.Env, *memStore, repodocs.Result, error) {
+		env := fakegw.New(fakegw.Options{Prices: prices})
+		var calls []string
+		var mu sync.Mutex
+		fakeDocs(t, env, &calls, &mu)
+		reply := env.Model.Handler
+		env.Model.Handler = func(r ports.ChatRequest) (ports.ChatResponse, error) {
+			time.Sleep(20 * time.Millisecond) // documents are in flight together
+			return reply(r)
+		}
+		st := &memStore{cards: map[string]repodocs.Card{}, docs: map[string]repodocs.Doc{}}
+		g := &repodocs.Generator{GW: env.GW, Store: st, Types: types}
+		if b != nil {
+			b.Spent = func(context.Context) (float64, error) { return spent(env), nil }
+		}
+		res, err := g.Run(context.Background(), facts(), repodocs.RunOptions{Meta: llmgateway.CallMeta{RepoID: "r1", Budget: b}})
+		return env, st, res, err
+	}
+	env, _, full, err := run(nil)
+	require.NoError(t, err)
+	total := spent(env)
+	require.Positive(t, total)
+
+	// Each call holds its worst case (a full max_output_tokens), far above what these short replies cost,
+	// so caps are swept: whatever the cap, the run never passes cap - buffer; a cap that runs out midway
+	// stops new work and keeps the documents already finished.
+	partial := false
+	for capUSD := 0.25; capUSD <= 2; capUSD += 0.25 {
+		env, st, res, err := run(&spendguard.Budget{Key: "repo_docs:r1/month", CapUSD: capUSD})
+		assert.LessOrEqual(t, spent(env), capUSD-spendguard.BufferUSD(capUSD, spendguard.DefaultBufferPct)+1e-9, "cap $%.2f", capUSD)
+		var sb *ports.SpendBlockedError
+		if err == nil {
+			assert.ElementsMatch(t, full.Written, res.Written)
+			continue
+		}
+		require.ErrorAs(t, err, &sb)
+		assert.Equal(t, "repo_docs:r1/month", sb.Scope)
+		for _, id := range res.Written {
+			assert.Equal(t, "ok", st.docs[id].Status, "documents finished before the stop are kept")
+		}
+		if len(res.Written) > 0 && len(res.Written) < len(full.Written) {
+			partial = true
+		}
+	}
+	assert.True(t, partial, "some cap stopped the run midway")
 }
 
 func TestChunksCarryBreadcrumbs(t *testing.T) {

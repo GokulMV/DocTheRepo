@@ -70,8 +70,10 @@ func (g *Gateway) judgeNative(ctx context.Context, r Route, meta CallMeta, j por
 	}
 	outEst := int64(4 * len(req.Questions))
 	sreq := spendguard.Request{Feature: r.Feature, ProviderID: r.ProviderID, ProviderKind: r.ProviderKind, Model: r.Model,
-		RepoID: meta.RepoID, InputTokens: inEst, OutputTokens: outEst, Override: meta.Override}
-	if _, err := g.enforcer.Check(ctx, sreq); err != nil {
+		RepoID: meta.RepoID, InputTokens: inEst, OutputTokens: outEst, Override: meta.Override, Budget: meta.Budget}
+	_, release, err := g.enforcer.Reserve(ctx, sreq)
+	defer release()
+	if err != nil {
 		g.observe(r, "blocked", ports.TokenUsage{}, 0, false)
 		return ports.Judgment{}, err
 	}
