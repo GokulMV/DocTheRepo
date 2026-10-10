@@ -152,8 +152,10 @@ The first run writes every document, and it is the expensive one: roughly one do
 - The first run sets it to twice the estimate, at least $10, unless `docs.repo_monthly_cap_usd` (in config) sets one for every repository.
 - The Docs page shows what this month cost and turns amber at 80%.
 - When the budget is used up, documents pause until next month or until an admin raises it with **Change budget**. What was written before the cap is kept.
+- **The budget is never exceeded,** even with several documents written at once. Every model call of the run first reserves its worst case (its prompt plus its full output allowance) against the budget, and a call starts only if this month's spend, what calls in flight have reserved and its own worst case fit under the budget less a safety buffer (5% by default, at least $0.01: `DTH_SPEND_BUFFER_PCT`). A $3.00 budget stops at $2.85. When a call does not fit, no new document starts; documents already being written finish and are kept.
+- Because a call reserves its whole output allowance, a run can stop with some of the budget unused (up to one document's worst case); raise the budget if a run stops short.
 
-The global spend limits still apply on top.
+The global spend limits still apply on top, the same way.
 
 ## A first run on a real model, and the run report
 

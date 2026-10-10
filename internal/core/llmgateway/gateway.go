@@ -70,6 +70,9 @@ type CallMeta struct {
 	IssueID string
 	// Override is set only for an operator retry of a spend-blocked job.
 	Override bool
+	// Budget is an extra dollar cap every call made with this meta counts against (a repository's docs
+	// budget); optional.
+	Budget *spendguard.Budget
 }
 
 // CallRecord is emitted after every call for metrics.
@@ -169,8 +172,11 @@ func (g *Gateway) chatOn(ctx context.Context, r Route, meta CallMeta, req ports.
 		inEst += spendguard.EstimateTokens(m.Content)
 	}
 	sreq := spendguard.Request{Feature: r.Feature, ProviderID: r.ProviderID, ProviderKind: r.ProviderKind, Model: r.Model,
-		RepoID: meta.RepoID, InputTokens: inEst, OutputTokens: int64(req.MaxOutputTokens), Override: meta.Override}
-	if _, err := g.enforcer.Check(ctx, sreq); err != nil {
+		RepoID: meta.RepoID, InputTokens: inEst, OutputTokens: int64(req.MaxOutputTokens), Override: meta.Override, Budget: meta.Budget}
+	// The worst case (max output) is held against the ceilings until the actual usage is recorded.
+	_, release, err := g.enforcer.Reserve(ctx, sreq)
+	defer release()
+	if err != nil {
 		g.observe(r, "blocked", ports.TokenUsage{}, 0, false)
 		return ports.ChatResponse{}, err
 	}
@@ -348,32 +354,43 @@ func (g *Gateway) Embed(ctx context.Context, meta CallMeta, texts []string) ([][
 		for i, t := range texts[start:end] {
 			part[i] = g.protect(route, t)
 		}
-		est := spendguard.EstimateTokens(part...)
-		if _, err := g.enforcer.Check(ctx, spendguard.Request{Feature: FeatureEmbedding, ProviderID: route.ProviderID,
-			ProviderKind: route.ProviderKind, Model: route.Model, RepoID: meta.RepoID, InputTokens: est, Override: meta.Override}); err != nil {
-			g.observe(route, "blocked", ports.TokenUsage{}, 0, false)
-			return nil, route, err
-		}
-		t0 := g.now()
-		res, err := emb.Embed(ctx, route.Model, part)
-		lat := g.now().Sub(t0)
+		vecs, err := g.embedBatch(ctx, emb, route, meta, part)
 		if err != nil {
-			_ = g.record(ctx, route, route.Model, meta, ports.TokenUsage{}, lat, false, "error")
-			g.observe(route, "error", ports.TokenUsage{}, lat, false)
 			return nil, route, err
 		}
-		usage, estimated := res.Usage, false
-		if !usage.Reported {
-			usage, estimated = ports.TokenUsage{InputTokens: est}, true
-		}
-		_ = g.record(ctx, route, route.Model, meta, usage, lat, estimated, "ok")
-		g.observe(route, "ok", usage, lat, estimated)
-		if len(res.Vectors) != len(part) {
-			return nil, route, ports.Transient(fmt.Errorf("embedder returned %d vectors for %d texts", len(res.Vectors), len(part)))
-		}
-		out = append(out, res.Vectors...)
+		out = append(out, vecs...)
 	}
 	return out, route, nil
+}
+
+// embedBatch embeds one batch, spend-guarded and recorded.
+func (g *Gateway) embedBatch(ctx context.Context, emb ports.Embedder, route Route, meta CallMeta, part []string) ([][]float32, error) {
+	est := spendguard.EstimateTokens(part...)
+	_, release, err := g.enforcer.Reserve(ctx, spendguard.Request{Feature: FeatureEmbedding, ProviderID: route.ProviderID,
+		ProviderKind: route.ProviderKind, Model: route.Model, RepoID: meta.RepoID, InputTokens: est, Override: meta.Override, Budget: meta.Budget})
+	defer release()
+	if err != nil {
+		g.observe(route, "blocked", ports.TokenUsage{}, 0, false)
+		return nil, err
+	}
+	t0 := g.now()
+	res, err := emb.Embed(ctx, route.Model, part)
+	lat := g.now().Sub(t0)
+	if err != nil {
+		_ = g.record(ctx, route, route.Model, meta, ports.TokenUsage{}, lat, false, "error")
+		g.observe(route, "error", ports.TokenUsage{}, lat, false)
+		return nil, err
+	}
+	usage, estimated := res.Usage, false
+	if !usage.Reported {
+		usage, estimated = ports.TokenUsage{InputTokens: est}, true
+	}
+	_ = g.record(ctx, route, route.Model, meta, usage, lat, estimated, "ok")
+	g.observe(route, "ok", usage, lat, estimated)
+	if len(res.Vectors) != len(part) {
+		return nil, ports.Transient(fmt.Errorf("embedder returned %d vectors for %d texts", len(res.Vectors), len(part)))
+	}
+	return res.Vectors, nil
 }
 
 // GenerateDocs runs an external documentation engine on the docgen route: spend-guarded, with one repair
@@ -401,8 +418,10 @@ func (g *Gateway) GenerateDocs(ctx context.Context, meta CallMeta, task contract
 	inEst := spendguard.EstimateTokens(task.Context)
 	outEst := int64(perChunk * max(1, len(task.ChunksToGenerate)))
 	run := func(t contract.DocGenTask) (contract.DocGenResult, error) {
-		if _, err := g.enforcer.Check(ctx, spendguard.Request{Feature: FeatureDocGen, ProviderID: route.ProviderID, ProviderKind: route.ProviderKind,
-			Model: route.Model, RepoID: meta.RepoID, InputTokens: inEst, OutputTokens: outEst, Override: meta.Override}); err != nil {
+		_, release, err := g.enforcer.Reserve(ctx, spendguard.Request{Feature: FeatureDocGen, ProviderID: route.ProviderID, ProviderKind: route.ProviderKind,
+			Model: route.Model, RepoID: meta.RepoID, InputTokens: inEst, OutputTokens: outEst, Override: meta.Override, Budget: meta.Budget})
+		defer release()
+		if err != nil {
 			g.observe(route, "blocked", ports.TokenUsage{}, 0, false)
 			return contract.DocGenResult{}, err
 		}

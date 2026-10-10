@@ -49,11 +49,18 @@ type fakeLLM struct {
 	kind  string
 	steps []step
 	reqs  []ports.ChatRequest
+	// started and gate, when set, hold a call in flight: Chat signals started and waits for gate.
+	started chan struct{}
+	gate    chan struct{}
 }
 
 func (f *fakeLLM) Kind() string { return f.kind }
 func (f *fakeLLM) Chat(ctx context.Context, r ports.ChatRequest) (ports.ChatResponse, error) {
 	f.reqs = append(f.reqs, r)
+	if f.gate != nil {
+		f.started <- struct{}{}
+		<-f.gate
+	}
 	if len(f.steps) == 0 {
 		return ports.ChatResponse{}, errors.New("no scripted response")
 	}
@@ -191,6 +198,55 @@ func TestChat_SpendBlockedNeverReachesProvider(t *testing.T) {
 	_, err = e.gw.Chat(context.Background(), FeatureQA, CallMeta{Override: true}, ports.ChatRequest{Messages: msgs("q")})
 	assert.Error(t, err, "no scripted response — but the override did let the call through to the provider")
 	assert.Len(t, e.llms["p1"].reqs, 1)
+}
+
+func TestChat_InFlightCallHoldsItsWorstCase(t *testing.T) {
+	// 1500 tokens: one call's worst case (tiny input + 1000 max output) fits, two at once do not.
+	e := newEnv(t, 1500, false)
+	llm := e.llms["p1"]
+	llm.started, llm.gate = make(chan struct{}), make(chan struct{})
+	llm.steps = []step{ok("first", 100, 20)}
+	done := make(chan error)
+	go func() {
+		_, err := e.gw.Chat(context.Background(), FeatureQA, CallMeta{}, ports.ChatRequest{Messages: msgs("q")})
+		done <- err
+	}()
+	<-llm.started
+	assert.Equal(t, int64(1001), e.gw.enforcer.Reserved().Tokens)
+	_, err := e.gw.Chat(context.Background(), FeatureQA, CallMeta{}, ports.ChatRequest{Messages: msgs("q")})
+	var sb *ports.SpendBlockedError
+	require.ErrorAs(t, err, &sb, "the first call's reservation leaves no room")
+	assert.Contains(t, sb.Reason, "reserved by calls in flight")
+	close(llm.gate)
+	require.NoError(t, <-done)
+	assert.Zero(t, e.gw.enforcer.Reserved().Tokens, "released once recorded")
+
+	// Recorded at its actual 125 tokens, the first call leaves room for another.
+	llm.gate = nil
+	llm.steps = []step{ok("second", 100, 20)}
+	_, err = e.gw.Chat(context.Background(), FeatureQA, CallMeta{}, ports.ChatRequest{Messages: msgs("q")})
+	require.NoError(t, err)
+
+	// A failed call releases its reservation too.
+	llm.steps = []step{{err: errors.New("boom")}}
+	_, err = e.gw.Chat(context.Background(), FeatureQA, CallMeta{}, ports.ChatRequest{Messages: msgs("q")})
+	require.Error(t, err)
+	assert.Zero(t, e.gw.enforcer.Reserved().Tokens)
+}
+
+func TestChat_BudgetFromMeta(t *testing.T) {
+	e := newEnv(t, 1e6, false)
+	g, err := spendguard.New([]spendguard.Limit{{ID: "g", Scope: spendguard.ScopeGlobal, Window: spendguard.WindowDay, MaxTokens: 1e6}},
+		map[string]spendguard.Price{spendguard.PriceKey("anthropic", "claude-opus-5-5"): {InputPerMTok: 5, OutputPerMTok: 25}}, false)
+	require.NoError(t, err)
+	e.gw.enforcer.SetGuard(g)
+	// 1000 max output at $25/MTok is $0.025 worst case; $0.95 spent of a $1 budget (less $0.05) leaves none.
+	b := &spendguard.Budget{Key: "repo_docs:r1/month", CapUSD: 1, Spent: func(context.Context) (float64, error) { return 0.95, nil }}
+	_, err = e.gw.Chat(context.Background(), FeatureQA, CallMeta{RepoID: "r1", Budget: b}, ports.ChatRequest{Messages: msgs("q")})
+	var sb *ports.SpendBlockedError
+	require.ErrorAs(t, err, &sb)
+	assert.Equal(t, "repo_docs:r1/month", sb.Scope)
+	assert.Empty(t, e.llms["p1"].reqs)
 }
 
 func TestChat_EstimatesWhenUsageUnreported(t *testing.T) {

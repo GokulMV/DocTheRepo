@@ -165,3 +165,26 @@ func TestValidateEmail(t *testing.T) {
 	t.Setenv("DTH_SMTP_URL", "")
 	require.Equal(t, "", c.Email.SMTPURL())
 }
+
+func TestSpendBufferPct(t *testing.T) {
+	cfg, err := Load("")
+	require.NoError(t, err)
+	assert.Equal(t, 5.0, cfg.Spend.BufferPct, "a 5% buffer by default")
+
+	t.Setenv("DTH_SPEND_BUFFER_PCT", "10%")
+	cfg, err = Load("")
+	require.NoError(t, err)
+	assert.Equal(t, 10.0, cfg.Spend.BufferPct)
+
+	t.Setenv("DTH_SPEND_BUFFER_PCT", "0")
+	cfg, err = Load("")
+	require.NoError(t, err)
+	assert.Zero(t, cfg.Spend.BufferPct, "0 turns it off")
+
+	t.Setenv("DTH_SPEND_BUFFER_PCT", "60")
+	_, err = Load("")
+	assert.ErrorContains(t, err, "spend.buffer_pct")
+	t.Setenv("DTH_SPEND_BUFFER_PCT", "lots")
+	_, err = Load("")
+	assert.ErrorContains(t, err, "DTH_SPEND_BUFFER_PCT")
+}

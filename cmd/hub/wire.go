@@ -128,6 +128,9 @@ func wire(ctx context.Context, cfg config.Config, st *store.Store, box *secrets.
 		return nil, fmt.Errorf("load spend limits: %w", err)
 	}
 	a.enforcer = spendguard.NewEnforcer(guard, store.NewLedger(st), nil)
+	if err := a.enforcer.SetBufferPct(cfg.Spend.BufferPct); err != nil {
+		return nil, err
+	}
 	a.provSrc = &store.ProviderSource{Providers: store.NewProviders(st), Box: box, AAD: secrets.ProviderKeyAAD}
 	a.llmPool = llm.NewPool(a.provSrc, 5*time.Minute)
 	a.routes = store.NewRoutes(st)

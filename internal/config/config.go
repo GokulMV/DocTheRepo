@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -211,6 +212,9 @@ type DocsConfig struct {
 type SpendConfig struct {
 	AllowUnlimited       bool `yaml:"allow_unlimited"`
 	AllowUnreportedUsage bool `yaml:"allow_unreported_usage"`
+	// BufferPct is the safety buffer kept free under every dollar ceiling and docs budget, in percent of it
+	// (DTH_SPEND_BUFFER_PCT; default 5, at least $0.01; 0 turns it off). Calls stop at cap - buffer.
+	BufferPct float64 `yaml:"buffer_pct"`
 }
 
 // RetentionConfig controls garbage collection windows.
@@ -276,6 +280,7 @@ func Default() Config {
 		Docs:      DocsConfig{DefaultPath: "docs/generated/", PRSweepInterval: 5 * time.Minute, Version: 2},
 		Vector:    VectorConfig{Backend: "pgvector", QdrantKeyEnv: "DTH_QDRANT_API_KEY"},
 		Retention: RetentionConfig{EventDays: 30, ChunkGCDays: 14},
+		Spend:     SpendConfig{BufferPct: 5},
 		Grammars:  GrammarsConfig{LoadDir: "./grammars"},
 		Decide:    DecideConfig{GateThreshold: 0.9},
 		Ask:       AskConfig{AgentSteps: 4, SimilarAnswer: 0.95, Sift: "on", SiftKeepAt: 0.5},
@@ -389,6 +394,13 @@ func applyEnv(cfg *Config) error {
 		}
 		cfg.Ask.SiftKeepAt = f
 	}
+	if v, ok := os.LookupEnv("DTH_SPEND_BUFFER_PCT"); ok {
+		f, err := strconv.ParseFloat(strings.TrimSuffix(strings.TrimSpace(v), "%"), 64)
+		if err != nil {
+			return fmt.Errorf("DTH_SPEND_BUFFER_PCT: want a percentage from 0 to 50, got %q", v)
+		}
+		cfg.Spend.BufferPct = f
+	}
 	if v, ok := os.LookupEnv("DTH_PR_SWEEP_INTERVAL"); ok {
 		d, err := time.ParseDuration(v)
 		if err != nil || d <= 0 {
@@ -480,6 +492,9 @@ func (c Config) Validate() error {
 	}
 	if k := c.Ask.SiftKeepAt; k != 0 && (k < 0.1 || k > 0.95) {
 		add("ask.sift_keep_at: want a probability from 0.1 to 0.95, got %g", k)
+	}
+	if b := c.Spend.BufferPct; b < 0 || b > 50 || math.IsNaN(b) {
+		add("spend.buffer_pct: want a percentage from 0 (off) to 50, got %g", b)
 	}
 	if c.Database.URLEnv == "" {
 		add("database.url_env: required")
