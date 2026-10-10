@@ -204,9 +204,10 @@ func SealKeyAAD(id string) []byte { return []byte("seal_key:" + id) }
 
 // Purposes a sealed value may be bound to.
 const (
-	PurposeProviderKey      = "provider.api_key"
-	PurposeConnectorCreds   = "connector.credentials"
-	PurposeConnectorWebhook = "connector.webhook_secret"
-	PurposeOIDCClientSecret = "auth.oidc_client_secret"
-	PurposeMCPSecret        = "mcp.secret"
+	PurposeProviderKey          = "provider.api_key"
+	PurposeConnectorCreds       = "connector.credentials"
+	PurposeConnectorWebhook     = "connector.webhook_secret"
+	PurposeConnectorOAuthClient = "connector.oauth_client_secret" // a GitHub App's client secret
+	PurposeOIDCClientSecret     = "auth.oidc_client_secret"
+	PurposeMCPSecret            = "mcp.secret"
 )

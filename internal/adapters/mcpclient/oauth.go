@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -196,6 +197,18 @@ func Register(ctx context.Context, hc *http.Client, endpoint string, o *OAuth, r
 	return nil
 }
 
+// GitHubApp is a sign-in with a GitHub App's own OAuth client (GitHub does not let apps register
+// themselves): the web application flow at web (https://github.com or a GitHub Enterprise Server) with
+// PKCE, the client secret in the form (client_secret_post). GitHub Apps take no scopes and no resource
+// indicator: the token carries the App's permissions, limited to what the signed-in user may do in the
+// repositories the App is installed on. With "expire user authorization tokens" on (the default), the
+// token lasts 8 hours and a refresh token (6 months, single use) renews it.
+func GitHubApp(web, clientID, clientSecret string) *OAuth {
+	web = strings.TrimSuffix(web, "/")
+	return &OAuth{Issuer: web, AuthEndpoint: web + "/login/oauth/authorize", TokenEndpoint: web + "/login/oauth/access_token",
+		ClientID: clientID, ClientSecret: clientSecret, TokenAuth: "client_secret_post"}
+}
+
 // Begin starts a sign-in: it returns the address to send the browser to. state must be unguessable.
 func (o *OAuth) Begin(state, redirectURI string) (string, error) {
 	vb := make([]byte, 32)
@@ -210,7 +223,9 @@ func (o *OAuth) Begin(state, redirectURI string) (string, error) {
 	q := url.Values{
 		"response_type": {"code"}, "client_id": {o.ClientID}, "redirect_uri": {redirectURI}, "state": {state},
 		"code_challenge": {base64.RawURLEncoding.EncodeToString(sum[:])}, "code_challenge_method": {"S256"},
-		"resource": {o.Resource},
+	}
+	if o.Resource != "" {
+		q.Set("resource", o.Resource)
 	}
 	if o.Scope != "" {
 		q.Set("scope", o.Scope)
@@ -248,7 +263,8 @@ func (o *OAuth) Refresh(ctx context.Context, hc *http.Client) error {
 	}
 	err := o.token(ctx, hc, url.Values{"grant_type": {"refresh_token"}, "refresh_token": {o.RefreshToken}})
 	var te *tokenError
-	if errors.As(err, &te) && (te.Code == "invalid_grant" || te.Status == http.StatusUnauthorized) {
+	// GitHub answers a spent or expired refresh token with 200 and bad_refresh_token.
+	if errors.As(err, &te) && (te.Code == "invalid_grant" || te.Code == "bad_refresh_token" || te.Status == http.StatusUnauthorized) {
 		return ErrSignInAgain
 	}
 	return err
@@ -268,7 +284,9 @@ func (e *tokenError) Error() string {
 }
 
 func (o *OAuth) token(ctx context.Context, hc *http.Client, form url.Values) error {
-	form.Set("resource", o.Resource)
+	if o.Resource != "" {
+		form.Set("resource", o.Resource)
+	}
 	if o.TokenAuth != "client_secret_basic" {
 		form.Set("client_id", o.ClientID)
 		if o.TokenAuth == "client_secret_post" && o.ClientSecret != "" {
@@ -300,7 +318,8 @@ func (o *OAuth) token(ctx context.Context, hc *http.Client, form url.Values) err
 	if err := json.Unmarshal(b, &out); err != nil {
 		// Some servers answer form-encoded.
 		v, _ := url.ParseQuery(string(b))
-		out.AccessToken, out.RefreshToken, out.Error = v.Get("access_token"), v.Get("refresh_token"), v.Get("error")
+		out.AccessToken, out.RefreshToken, out.Error, out.Description = v.Get("access_token"), v.Get("refresh_token"), v.Get("error"), v.Get("error_description")
+		out.ExpiresIn, _ = strconv.ParseInt(v.Get("expires_in"), 10, 64)
 	}
 	if resp.StatusCode >= 300 || out.AccessToken == "" {
 		return &tokenError{Status: resp.StatusCode, Code: out.Error, Desc: out.Description}

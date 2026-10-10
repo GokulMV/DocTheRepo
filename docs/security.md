@@ -2,7 +2,7 @@
 
 ## Sealed secrets
 
-Provider API keys and connector credentials (git tokens, GitHub App keys, Wiz, Splunk, Confluence and Jira
+Provider API keys and connector credentials (git tokens, GitHub App keys and client secrets, Wiz, Splunk, Confluence and Jira
 credentials, webhook secrets) are **sealed**. Only the Hub can use them, and nobody can read them back:
 not through the UI, the API, `dth`, the settings export, or the audit log.
 

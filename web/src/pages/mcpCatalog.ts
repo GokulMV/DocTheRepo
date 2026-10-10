@@ -151,6 +151,7 @@ export const MCP_CATALOG: McpEntry[] = [
     url: 'https://api.githubcopilot.com/mcp/', auth: 'bearer', keyName: 'fine-grained personal access token (read-only)',
     docs: 'https://github.com/github/github-mcp-server',
   },
+  // When the Hub has a GitHub App with its client ID and secret, this entry signs in with it: see githubSignIn.
   {
     key: 'gitlab', name: 'GitLab', group: 'Code', what: 'Issues, merge requests, pipelines',
     url: 'https://gitlab.com/api/v4/mcp', auth: 'oauth', docs: 'https://docs.gitlab.com/user/gitlab_duo/model_context_protocol/mcp_server',
@@ -181,6 +182,19 @@ export const AUTH_LABEL: Record<McpAuth, string> = {
   aws: 'AWS credentials (IAM role or keys)',
   google: 'Google Cloud service account',
 };
+
+/**
+ * githubSignIn: the GitHub MCP server takes GitHub App user tokens but does not let apps register
+ * themselves, so with the Hub's own GitHub App (client ID and secret stored) the admin signs in on GitHub's
+ * page instead of pasting a token. A token stays available.
+ */
+export function githubSignIn(entry: McpEntry, appReady: boolean): McpEntry {
+  if (entry.key !== 'github' || !appReady) return entry;
+  return {
+    ...entry, auth: 'oauth', alsoAuth: ['bearer'],
+    note: 'Sign in on GitHub’s own page with the Hub’s GitHub App. Ask then looks things up as you, but only in the repositories the App is installed on and only with the App’s permissions (read issues, pull requests, contents and Actions for the lookups). GitHub renews the sign-in every 8 hours by itself; after 6 months unused, or if you revoke the App, sign in again.',
+  };
+}
 
 export function mcpEntry(key: string): McpEntry | undefined {
   return key === 'custom' ? CUSTOM_MCP : MCP_CATALOG.find((e) => e.key === key);

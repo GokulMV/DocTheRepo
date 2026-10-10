@@ -1,17 +1,17 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '@/api/client';
 import { useInvalidating } from '@/api/hooks';
-import type { McpServer } from '@/api/types';
+import type { GitHubAppInfo, McpServer } from '@/api/types';
 import { Badge, Button, Dialog, DialogFooter, ErrorNote, Field, Input, Select, Table, Td, Textarea, Toggle, type Tone } from '@/components/ui';
 import { seal } from '@/lib/seal';
-import { AUTH_LABEL, CUSTOM_MCP, MCP_CATALOG, mcpEntry, type McpAuth, type McpEntry } from './mcpCatalog';
+import { AUTH_LABEL, CUSTOM_MCP, githubSignIn, MCP_CATALOG, mcpEntry, type McpAuth, type McpEntry } from './mcpCatalog';
 
 const mcpKey = ['mcp-servers'] as const;
 
 export function useMcpServers() {
-  return useQuery({ queryKey: mcpKey, queryFn: () => api.get<{ items: McpServer[]; redirect_uri: string }>('/mcp/servers') });
+  return useQuery({ queryKey: mcpKey, queryFn: () => api.get<{ items: McpServer[]; redirect_uri: string; github_apps?: GitHubAppInfo[] }>('/mcp/servers') });
 }
 
 const STATUS: Record<McpServer['status'], { label: string; tone: Tone }> = {
@@ -134,7 +134,13 @@ function uniqueName(base: string, taken: string[]) {
 }
 
 /** ConnectMcp adds one MCP connection: the address, how it signs in, and who may use it. */
-export function ConnectMcp({ entry, taken, onClose }: { entry: McpEntry; taken: string[]; onClose: () => void }) {
+export function ConnectMcp({ entry: base, taken, onClose }: { entry: McpEntry; taken: string[]; onClose: () => void }) {
+  const servers = useMcpServers();
+  const ghApps = base.key === 'github' ? servers.data?.github_apps ?? [] : [];
+  const ghReady = ghApps.filter((a) => a.oauth);
+  const entry = githubSignIn(base, ghReady.length > 0);
+  const [ghApp, setGhApp] = useState('');
+  const [authTouched, setAuthTouched] = useState(false);
   const authChoices: McpAuth[] = [entry.auth, ...(entry.alsoAuth ?? [])];
   const [variant, setVariant] = useState(entry.variants?.[0]?.label ?? '');
   const baseURL = entry.variants?.find((v) => v.label === variant)?.url ?? entry.url;
@@ -154,6 +160,12 @@ export function ConnectMcp({ entry, taken, onClose }: { entry: McpEntry; taken: 
   const [role, setRole] = useState('editor');
   const [more, setMore] = useState(false);
   const shownURL = editedURL ? url : fill(baseURL, parts);
+  // The GitHub App's availability arrives with the connection list: follow it until the admin picks.
+  useEffect(() => {
+    if (!authTouched) setAuth(entry.auth);
+  }, [entry.auth, authTouched]);
+  const withApp = auth === 'oauth' && ghReady.length > 0;
+  const appId = ghApp || ghReady[0]?.connector_id || '';
   useEffect(() => {
     if (entry.variants && entry.key === 'gcp' && !editedURL) {
       setName(uniqueName(`Google Cloud ${variant}`, taken));
@@ -169,9 +181,10 @@ export function ConnectMcp({ entry, taken, onClose }: { entry: McpEntry; taken: 
       if (region.trim()) config.region = region.trim();
       if (service.trim()) config.service = service.trim();
     }
-    if (auth === 'oauth' && clientId.trim()) config.client_id = clientId.trim();
+    if (withApp) config.github_app = appId;
+    else if (auth === 'oauth' && clientId.trim()) config.client_id = clientId.trim();
     let raw = '';
-    if (auth === 'bearer' || auth === 'header' || auth === 'oauth') raw = secret.trim();
+    if (auth === 'bearer' || auth === 'header' || (auth === 'oauth' && !withApp)) raw = secret.trim();
     if (auth === 'aws' && !ambient) raw = JSON.stringify({ access_key_id: accessKey.trim(), secret_access_key: secret.trim() });
     if (auth === 'google' && !ambient) raw = secret.trim();
     const s = await api.post<McpServer>('/mcp/servers', {
@@ -219,12 +232,27 @@ export function ConnectMcp({ entry, taken, onClose }: { entry: McpEntry; taken: 
         )}
         {authChoices.length > 1 && (
           <Field label="How it signs in">
-            <Select aria-label="How it signs in" value={auth} onChange={(e) => setAuth(e.target.value as McpAuth)}>
-              {authChoices.map((a) => <option key={a} value={a}>{AUTH_LABEL[a]}</option>)}
+            <Select aria-label="How it signs in" value={auth} onChange={(e) => { setAuthTouched(true); setAuth(e.target.value as McpAuth); }}>
+              {authChoices.map((a) => <option key={a} value={a}>{withGitHubLabel(a, ghReady.length > 0)}</option>)}
             </Select>
           </Field>
         )}
-        {auth === 'oauth' && <p className="text-sm text-slate-600 dark:text-slate-400">After you click Connect, {entry.key === 'custom' ? 'the product' : entry.name} opens so you can sign in and approve access. You come back here when it is done.</p>}
+        {withApp && ghReady.length > 1 && (
+          <Field label="GitHub App">
+            <Select aria-label="GitHub App" value={appId} onChange={(e) => setGhApp(e.target.value)}>
+              {ghReady.map((a) => <option key={a.connector_id} value={a.connector_id}>{a.name}{a.app_slug ? ` (${a.app_slug})` : ''}</option>)}
+            </Select>
+          </Field>
+        )}
+        {withApp && <p className="text-sm text-slate-600 dark:text-slate-400">After you click Sign in with GitHub, GitHub opens so you can approve the Hub’s app{ghReady.length === 1 ? ` “${ghReady[0].app_slug || ghReady[0].name}”` : ''}. You come back here connected.</p>}
+        {auth === 'oauth' && !withApp && <p className="text-sm text-slate-600 dark:text-slate-400">After you click Connect, {entry.key === 'custom' ? 'the product' : entry.name} opens so you can sign in and approve access. You come back here when it is done.</p>}
+        {entry.key === 'github' && ghReady.length === 0 && servers.data && (
+          ghApps.length === 0 ? (
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:bg-white/5 dark:text-slate-300">
+              <Link to="/connectors#code" className="text-brand-600 underline dark:text-brand-300" onClick={onClose}>Connect a GitHub App first</Link> to sign in with GitHub instead of pasting a token.
+            </p>
+          ) : <GitHubAppClient app={ghApps[0]} redirectURI={servers.data.redirect_uri} />
+        )}
         {auth === 'bearer' && (
           <Field label={capital(entry.keyName ?? 'token')} hint="Stored sealed. Use one that can only read.">
             <Input aria-label="Token" type="password" autoComplete="off" value={secret} onChange={(e) => setSecret(e.target.value)} />
@@ -264,7 +292,7 @@ export function ConnectMcp({ entry, taken, onClose }: { entry: McpEntry; taken: 
             <Field label="Server address" hint={entry.check ? 'Compare this with the vendor’s page; it may have changed.' : undefined}>
               <Input aria-label="Server address" value={shownURL} placeholder="https://example.com/mcp" onChange={(e) => { setEditedURL(true); setUrl(e.target.value); }} />
             </Field>
-            {auth === 'oauth' && (
+            {auth === 'oauth' && !withApp && (
               <>
                 <Field label="OAuth client ID (optional)" hint="Only when the product does not let apps register themselves (Google Cloud, Slack). Its redirect address must be the one below.">
                   <Input aria-label="OAuth client ID" value={clientId} onChange={(e) => setClientId(e.target.value)} />
@@ -286,9 +314,42 @@ export function ConnectMcp({ entry, taken, onClose }: { entry: McpEntry; taken: 
       </div>
       <DialogFooter>
         <Button variant="secondary" onClick={onClose}>Cancel</Button>
-        <Button disabled={!valid || create.isPending} onClick={() => create.mutate(undefined)}>{create.isPending ? 'Connecting…' : auth === 'oauth' ? 'Connect and sign in' : 'Connect'}</Button>
+        <Button disabled={!valid || create.isPending} onClick={() => create.mutate(undefined)}>{create.isPending ? 'Connecting…' : withApp ? 'Sign in with GitHub' : auth === 'oauth' ? 'Connect and sign in' : 'Connect'}</Button>
       </DialogFooter>
     </Dialog>
+  );
+}
+
+function withGitHubLabel(a: McpAuth, app: boolean) {
+  return app && a === 'oauth' ? 'Sign in with GitHub (the Hub’s GitHub App)' : AUTH_LABEL[a];
+}
+
+/**
+ * GitHubAppClient adds the OAuth client of a GitHub App the Hub already uses (connected before the Hub kept
+ * it): then the GitHub connection can sign in on GitHub's page instead of using a token.
+ */
+function GitHubAppClient({ app, redirectURI }: { app: GitHubAppInfo; redirectURI: string }) {
+  const [id, setId] = useState('');
+  const [secret, setSecret] = useState('');
+  const save = useInvalidating(async () => api.put(`/github/connect/${app.connector_id}/oauth-client`, {
+    client_id: id.trim(), client_secret: await seal(secret.trim(), 'connector.oauth_client_secret'),
+  }), mcpKey);
+  const settings = `${app.web}/settings/apps${app.app_slug ? `/${app.app_slug}` : ''}`;
+  return (
+    <details className="rounded-lg border border-slate-200 px-3 py-2 text-sm dark:border-white/10">
+      <summary className="cursor-pointer font-medium">Sign in with GitHub instead: use the Hub’s app {app.app_slug || app.name}</summary>
+      <ol className="mt-2 list-decimal space-y-1 pl-5 text-xs text-slate-600 dark:text-slate-400">
+        <li>Open the <a className="text-brand-600 underline dark:text-brand-300" href={settings} target="_blank" rel="noreferrer">app’s settings on GitHub</a> (for an organization’s app: the org’s Settings → GitHub Apps).</li>
+        <li>Under <b>Callback URL</b>, add <code className="break-all">{redirectURI}</code> and save.</li>
+        <li>Copy the <b>Client ID</b> and click <b>Generate a new client secret</b>.</li>
+      </ol>
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        <Field label="Client ID"><Input aria-label="Client ID" autoComplete="off" value={id} onChange={(e) => setId(e.target.value)} placeholder="Iv23li…" /></Field>
+        <Field label="Client secret" hint="Sealed in your browser before it is sent."><Input aria-label="Client secret" type="password" autoComplete="off" value={secret} onChange={(e) => setSecret(e.target.value)} /></Field>
+      </div>
+      <ErrorNote error={save.error} />
+      <Button size="sm" className="mt-2" disabled={!id.trim() || !secret.trim() || save.isPending} onClick={() => save.mutate(undefined)}>{save.isPending ? 'Saving…' : 'Save and use GitHub sign-in'}</Button>
+    </details>
   );
 }
 

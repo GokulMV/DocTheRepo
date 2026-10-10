@@ -27,7 +27,8 @@ Set them up under **Settings → Connections → Look things up live (MCP)**.
 | Method | When | What you do |
 |---|---|---|
 | **Sign in with the product (OAuth)** | Most hosted servers | Click **Connect and sign in**, approve in the product, and you come back. The Hub registers itself with the product and refreshes the sign-in on its own. If the sign-in lapses, the connection shows **Needs sign-in**. |
-| **A token** | GitHub, Splunk, Dynatrace, Elastic, Stripe | Paste a read-only token. Values that already name a scheme (`ApiKey …`) are sent as they are. |
+| **Sign in with GitHub (the Hub's GitHub App)** | GitHub, when the Hub has a GitHub App with its client ID and secret | Click **Sign in with GitHub**, approve on GitHub's page, and you come back connected. See [GitHub](#github). |
+| **A token** | GitHub (without a GitHub App), Splunk, Dynatrace, Elastic, Stripe | Paste a read-only token. Values that already name a scheme (`ApiKey …`) are sent as they are. |
 | **A key in a header** | New Relic (`api-key`) | Paste the key. The header name is filled in. |
 | **AWS credentials** | AWS-hosted MCP servers | Requests are signed with SigV4. On AWS, leave **Use the IAM role the Hub runs with** on and attach read-only policies to that role. Otherwise enter an access key. The region and signing service are read from the address (`aws-mcp.us-east-1.api.aws` → `us-east-1`, `aws-mcp`) and can be changed under More options. |
 | **Google Cloud service account** | Google Cloud MCP servers | On GKE, Cloud Run or Compute Engine, leave **Use the service account the Hub runs with** on and give it viewer roles. Otherwise paste a service account key. If your organization requires user sign-in instead, choose OAuth and enter your own OAuth client ID. |
@@ -59,10 +60,43 @@ Addresses come from each vendor's documentation, checked in October 2026. Entrie
 | Notion | `https://mcp.notion.com/mcp` | OAuth | |
 | Linear | `https://mcp.linear.app/mcp/readonly` | OAuth or API key | Read-only address by default |
 | Slack | `https://mcp.slack.com/mcp` | OAuth with your Slack app | |
-| GitHub | `https://api.githubcopilot.com/mcp/` | Token | |
+| GitHub | `https://api.githubcopilot.com/mcp/` | Sign in with GitHub (the Hub's GitHub App) or token | See [GitHub](#github) |
 | GitLab | `https://gitlab.com/api/v4/mcp` | OAuth | Beta, Premium and Ultimate |
 | Supabase | `https://mcp.supabase.com/mcp?read_only=true` | OAuth | |
 | Stripe | `https://mcp.stripe.com` | Token or OAuth | Preview |
+
+### GitHub
+
+GitHub's MCP server (`https://api.githubcopilot.com/mcp/`) takes GitHub OAuth tokens, including a GitHub
+App's user access tokens. It does not let apps register themselves, so the Hub signs in with **its own
+GitHub App**: the one **Connect with GitHub** created (see [Connecting GitHub](github.md)).
+
+**With a GitHub App that has a client ID and secret,** the GitHub tile offers **Sign in with GitHub**:
+
+1. GitHub's sign-in page opens (`github.com/login/oauth/authorize`, with the App's client ID, a one-time
+   state and PKCE).
+2. You approve the App and GitHub sends you back to the Hub's MCP sign-in address, `/api/v1/mcp/oauth/callback`.
+   That address must be one of the App's **Callback URLs**. Apps created by **Connect with GitHub** have
+   it already. For other Apps the Hub shows the exact address to add.
+3. The Hub exchanges the code with the App's client secret and stores the tokens sealed.
+
+**What the connection can see.** The token acts as **the admin who signed in**, limited twice: to the
+repositories **the App is installed on**, and to **the App's permissions**. Ask cannot see a repository
+the App can't, even when the admin can, and it can't do anything the App's permissions don't allow, even
+when the admin could. For the read-only lookups (issues, pull requests, code, Actions runs) the App needs
+**Contents, Issues, Pull requests, Actions and Metadata: read**. New Apps ask for these. On an older App,
+add Issues and Actions (read) under **Permissions & events**.
+
+**Staying signed in.** With **user-to-server token expiration** on (GitHub's default for new Apps, under
+the App's **Optional features**), a token lasts 8 hours and the Hub renews it with the refresh token. Each
+refresh token works once and lasts 6 months, and the Hub keeps the new one each time. If GitHub refuses
+the refresh token (it expired, or the admin revoked the App under **Settings → Applications**), the
+connection shows **Needs sign-in** until someone signs in again. If the App's client secret changes, the
+next renewal uses the one stored with the App.
+
+**Without a GitHub App,** the tile shows the token form and a link: **Connect a GitHub App first** to sign
+in with GitHub. If the Hub has an App without a client ID and secret, the tile can add them. On the App's
+settings page, add the callback URL, copy the **Client ID** and generate a client secret.
 
 **Not in the list, and why:**
 
@@ -78,5 +112,8 @@ Addresses come from each vendor's documentation, checked in October 2026. Entrie
 | "the server refused the key (401)" | The token is wrong, expired or lacks read access | Replace the token. **Check** reconnects. |
 | "this server does not let apps register themselves" | The product does not support dynamic client registration | Create an OAuth app in the product and enter its client ID under More options |
 | "sign-in providers only return to https addresses" | The Hub was opened over plain http | Open the Hub over https, or set `server.public_url` |
+| GitHub "redirect_uri_mismatch" | The Hub's MCP sign-in address is not a Callback URL of the GitHub App | Add the address shown in the GitHub tile under the App's **Callback URL** |
+| GitHub "incorrect_client_credentials" | The App's client secret was deleted or replaced on GitHub | Enter the new client ID and secret in the GitHub tile |
+| GitHub connected, but repositories are missing | The App isn't installed on them, or lacks a permission | Change the installation's repositories, or add the permission on the App |
 | AWS "refused the signature" | Wrong region or service, or no credentials | Set them under More options. Check that the Hub's role exists. |
 | Connected, but Ask never uses it | No tools are on, or the asker's role is below the connection's minimum | Open **Tools**, or change **Who can use it** |

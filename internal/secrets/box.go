@@ -120,6 +120,11 @@ func ConnectorWebhookAAD(connectorID string) []byte {
 	return []byte("connector:" + connectorID + ":webhook")
 }
 
+// ConnectorOAuthClientAAD binds a connector's OAuth client secret (a GitHub App's) to its row.
+func ConnectorOAuthClientAAD(connectorID string) []byte {
+	return []byte("connector:" + connectorID + ":oauth_client")
+}
+
 // MCPSecretAAD binds an MCP connection's key (token, header value, cloud credentials) to its row.
 func MCPSecretAAD(id string) []byte { return []byte("mcp_server:" + id + ":secret") }
 
