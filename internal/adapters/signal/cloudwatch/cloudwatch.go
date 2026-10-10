@@ -16,12 +16,12 @@ import (
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
 	cw "github.com/aws/aws-sdk-go-v2/service/cloudwatch"
 	cwtypes "github.com/aws/aws-sdk-go-v2/service/cloudwatch/types"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 
+	"github.com/GokulMV/DocTheRepo/internal/adapters/awsrole"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/aws"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/loglines"
 	"github.com/GokulMV/DocTheRepo/internal/adapters/signal/sigutil"
@@ -261,12 +261,7 @@ func LoadConfig(ctx context.Context, cc ports.ConnectorConfig) (awssdk.Config, s
 	}
 	if role := strings.TrimSpace(cc.Config["role_arn"]); role != "" {
 		ext := strings.TrimSpace(cc.Config["external_id"])
-		cfg.Credentials = awssdk.NewCredentialsCache(stscreds.NewAssumeRoleProvider(sts.NewFromConfig(cfg), role, func(o *stscreds.AssumeRoleOptions) {
-			o.RoleSessionName = "doctherepo-hub"
-			if ext != "" {
-				o.ExternalID = awssdk.String(ext)
-			}
-		}))
+		cfg.Credentials = awsrole.Credentials(sts.NewFromConfig(cfg), role, ext)
 	}
 	id, err := sts.NewFromConfig(cfg).GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
 	if err != nil {

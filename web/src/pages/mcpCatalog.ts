@@ -41,7 +41,7 @@ export const MCP_CATALOG: McpEntry[] = [
     key: 'aws', name: 'AWS', group: 'Cloud', what: 'Your AWS resources, CloudWatch, CloudTrail, costs and docs',
     url: 'https://aws-mcp.us-east-1.api.aws/mcp', auth: 'oauth', alsoAuth: ['aws'],
     docs: 'https://docs.aws.amazon.com/agent-toolkit/latest/userguide/oauth-authentication.html',
-    note: 'Sign in on AWS’s own page and approve: Ask can then see what your AWS identity allows (it needs the AWSMCPSignInOAuthAccessPolicy managed policy). AWS keeps a sign-in for up to 12 hours, then asks again. For an always-on connection, sign requests with the Hub’s IAM role instead.',
+    note: 'Sign in on AWS’s own page and approve: Ask can then see what your AWS identity allows (it needs the AWSMCPSignInOAuthAccessPolicy managed policy). AWS keeps a sign-in for up to 12 hours, then asks again. For an always-on connection, choose AWS credentials and let AWS create a read-only role for the Hub instead.',
   },
   {
     key: 'aws-knowledge', name: 'AWS documentation', group: 'Cloud', what: 'AWS docs, regional availability',
@@ -178,7 +178,7 @@ export const AUTH_LABEL: Record<McpAuth, string> = {
   oauth: 'Sign in with the product (OAuth)',
   bearer: 'A token',
   header: 'A key in a header',
-  aws: 'AWS credentials (IAM role or keys)',
+  aws: 'AWS credentials (a read-only role, the Hub’s IAM role, or keys)',
   google: 'Google Cloud service account',
 };
 

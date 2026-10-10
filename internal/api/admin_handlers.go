@@ -381,6 +381,10 @@ func (h *adminHandlers) createConnector(w http.ResponseWriter, r *http.Request) 
 		fail(w, r, errBadParam("Atlassian sign-in connectors are made with Connect with Atlassian (POST /atlassian/connect)"))
 		return
 	}
+	if err := validAWSRole(in.Config); err != nil {
+		fail(w, r, err)
+		return
+	}
 	if err := h.openSecret(r, &in.Credentials, secrets.PurposeConnectorCreds); err != nil {
 		fail(w, r, err)
 		return
@@ -428,6 +432,12 @@ func (h *adminHandlers) patchConnector(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			in.Config = &cfg
+		}
+	}
+	if in.Config != nil {
+		if err := validAWSRole(*in.Config); err != nil {
+			fail(w, r, err)
+			return
 		}
 	}
 	if err := h.openSecret(r, in.Credentials, secrets.PurposeConnectorCreds); err != nil {

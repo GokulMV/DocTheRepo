@@ -13,7 +13,12 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/credentials/stscreds"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
+	ststypes "github.com/aws/aws-sdk-go-v2/service/sts/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -230,7 +235,7 @@ func TestDiscover_FallsBackToDefaultEndpoints(t *testing.T) {
 }
 
 func TestSigV4_SignsTheRequest(t *testing.T) {
-	s, err := NewSigV4(context.Background(), "us-east-1", "aws-mcp", `{"access_key_id":"AKIDEXAMPLE","secret_access_key":"secret"}`)
+	s, err := NewSigV4(context.Background(), "us-east-1", "aws-mcp", `{"access_key_id":"AKIDEXAMPLE","secret_access_key":"secret"}`, "", "")
 	require.NoError(t, err)
 	req := httptest.NewRequest(http.MethodPost, "https://aws-mcp.us-east-1.api.aws/mcp", strings.NewReader("{}"))
 	require.NoError(t, s.Authorize(context.Background(), req, []byte("{}")))
@@ -238,4 +243,31 @@ func TestSigV4_SignsTheRequest(t *testing.T) {
 	require.True(t, strings.HasPrefix(h, "AWS4-HMAC-SHA256 Credential=AKIDEXAMPLE/"), h)
 	require.Contains(t, h, "/us-east-1/aws-mcp/aws4_request")
 	require.NotEmpty(t, req.Header.Get("X-Amz-Date"))
+}
+
+type fakeAssume struct{ in *sts.AssumeRoleInput }
+
+func (f *fakeAssume) AssumeRole(_ context.Context, in *sts.AssumeRoleInput, _ ...func(*sts.Options)) (*sts.AssumeRoleOutput, error) {
+	f.in = in
+	return &sts.AssumeRoleOutput{Credentials: &ststypes.Credentials{AccessKeyId: aws.String("ASIAROLE"), SecretAccessKey: aws.String("s"),
+		SessionToken: aws.String("tok"), Expiration: aws.Time(time.Now().Add(time.Hour))}}, nil
+}
+
+func TestSigV4_AssumesTheReadOnlyRole(t *testing.T) {
+	f := &fakeAssume{}
+	old := newSTS
+	newSTS = func(aws.Config) stscreds.AssumeRoleAPIClient { return f }
+	defer func() { newSTS = old }()
+	s, err := NewSigV4(context.Background(), "us-east-1", "aws-mcp", `{"access_key_id":"AKIDBASE","secret_access_key":"secret"}`,
+		"arn:aws:iam::222222222222:role/DocTheRepoHubReadOnly-abc", "dth-ext")
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost, "https://aws-mcp.us-east-1.api.aws/mcp", strings.NewReader("{}"))
+	require.NoError(t, s.Authorize(context.Background(), req, []byte("{}")))
+	require.True(t, strings.HasPrefix(req.Header.Get("Authorization"), "AWS4-HMAC-SHA256 Credential=ASIAROLE/"), "signed with the role's credentials")
+	require.Equal(t, "tok", req.Header.Get("X-Amz-Security-Token"))
+	require.Equal(t, "dth-ext", aws.ToString(f.in.ExternalId))
+	require.Equal(t, "arn:aws:iam::222222222222:role/DocTheRepoHubReadOnly-abc", aws.ToString(f.in.RoleArn))
+
+	_, err = NewSigV4(context.Background(), "us-east-1", "aws-mcp", "", "not-an-arn", "")
+	require.Error(t, err)
 }

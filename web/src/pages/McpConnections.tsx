@@ -5,6 +5,7 @@ import { api } from '@/api/client';
 import { useInvalidating } from '@/api/hooks';
 import type { McpServer } from '@/api/types';
 import { Badge, Button, Dialog, DialogFooter, ErrorNote, Field, Input, Select, Table, Td, Textarea, Toggle, type Tone } from '@/components/ui';
+import { AwsRoleSetup } from '@/components/AwsRole';
 import { seal } from '@/lib/seal';
 import { AUTH_LABEL, CUSTOM_MCP, MCP_CATALOG, mcpEntry, type McpAuth, type McpEntry } from './mcpCatalog';
 
@@ -146,7 +147,11 @@ export function ConnectMcp({ entry, taken, onClose }: { entry: McpEntry; taken: 
   const [secret, setSecret] = useState('');
   const [headerName, setHeaderName] = useState(entry.headerName ?? '');
   const [extra, setExtra] = useState('');
-  const [ambient, setAmbient] = useState(true); // use the Hub's own cloud identity
+  const [ambient, setAmbient] = useState(true); // Google: use the Hub's own service account
+  // AWS: a read-only role in the user's account (assumed with an External ID), the Hub's own IAM role, or keys.
+  const [awsCreds, setAwsCreds] = useState<'role' | 'hub' | 'keys'>('role');
+  const [roleArn, setRoleArn] = useState('');
+  const [externalId, setExternalId] = useState('');
   const [accessKey, setAccessKey] = useState('');
   const [region, setRegion] = useState('');
   const [service, setService] = useState('');
@@ -160,7 +165,7 @@ export function ConnectMcp({ entry, taken, onClose }: { entry: McpEntry; taken: 
     }
   }, [variant, entry, editedURL, taken]);
   const unfilled = /\{\w+\}/.test(shownURL) || !shownURL.trim();
-  const needsSecret = (auth === 'bearer' || auth === 'header') || ((auth === 'aws' || auth === 'google') && !ambient);
+  const needsSecret = (auth === 'bearer' || auth === 'header') || (auth === 'aws' && awsCreds === 'keys') || (auth === 'google' && !ambient);
   const create = useInvalidating(async () => {
     const config: Record<string, string> = {};
     if (auth === 'header') config.header_name = headerName.trim();
@@ -168,11 +173,15 @@ export function ConnectMcp({ entry, taken, onClose }: { entry: McpEntry; taken: 
     if (auth === 'aws') {
       if (region.trim()) config.region = region.trim();
       if (service.trim()) config.service = service.trim();
+      if (awsCreds === 'role') {
+        config.role_arn = roleArn.trim();
+        if (externalId.trim()) config.external_id = externalId.trim();
+      }
     }
     if (auth === 'oauth' && clientId.trim()) config.client_id = clientId.trim();
     let raw = '';
     if (auth === 'bearer' || auth === 'header' || auth === 'oauth') raw = secret.trim();
-    if (auth === 'aws' && !ambient) raw = JSON.stringify({ access_key_id: accessKey.trim(), secret_access_key: secret.trim() });
+    if (auth === 'aws' && awsCreds === 'keys') raw = JSON.stringify({ access_key_id: accessKey.trim(), secret_access_key: secret.trim() });
     if (auth === 'google' && !ambient) raw = secret.trim();
     const s = await api.post<McpServer>('/mcp/servers', {
       name: name.trim(), url: shownURL.trim(), catalog_key: entry.key, auth, config, min_role: role,
@@ -198,7 +207,7 @@ export function ConnectMcp({ entry, taken, onClose }: { entry: McpEntry; taken: 
       </Dialog>
     );
   }
-  const valid = name.trim() && !unfilled && (!needsSecret || secret.trim()) && (auth !== 'header' || headerName.trim()) && (auth !== 'aws' || ambient || accessKey.trim());
+  const valid = name.trim() && !unfilled && (!needsSecret || secret.trim()) && (auth !== 'header' || headerName.trim()) && (auth !== 'aws' || (awsCreds === 'role' ? !!roleArn.trim() : awsCreds === 'hub' || !!accessKey.trim()));
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()} title={entry.key === 'custom' ? 'Connect an MCP server' : `Live lookups in ${entry.name}`}
       description={`Ask will be able to look things up in ${entry.key === 'custom' ? 'it' : entry.name} while answering. Only read-only tools are on at first.`}>
@@ -238,10 +247,25 @@ export function ConnectMcp({ entry, taken, onClose }: { entry: McpEntry; taken: 
             </Field>
           </>
         )}
-        {(auth === 'aws' || auth === 'google') && (
-          <Toggle checked={ambient} onChange={setAmbient} label={auth === 'aws' ? 'Use the IAM role the Hub runs with (recommended on AWS)' : 'Use the service account the Hub runs with (recommended on Google Cloud)'} />
+        {auth === 'google' && (
+          <Toggle checked={ambient} onChange={setAmbient} label="Use the service account the Hub runs with (recommended on Google Cloud)" />
         )}
-        {auth === 'aws' && !ambient && (
+        {auth === 'aws' && (
+          <Field label="AWS credentials">
+            <Select aria-label="AWS credentials" value={awsCreds} onChange={(e) => setAwsCreds(e.target.value as 'role' | 'hub' | 'keys')}>
+              <option value="role">A read-only role in your AWS account (recommended)</option>
+              <option value="hub">The IAM role the Hub runs with</option>
+              <option value="keys">Access keys</option>
+            </Select>
+          </Field>
+        )}
+        {auth === 'aws' && awsCreds === 'role' && (
+          roleArn
+            ? <p className="text-sm text-emerald-700 dark:text-emerald-300">The Hub will assume <code className="break-all">{roleArn}</code>. Click Connect.</p>
+            : <AwsRoleSetup uses="mcp" defaultAccess="readonly" onReady={(arn, ext) => { setRoleArn(arn); setExternalId(ext); }}
+                fallback={authChoices.includes('oauth') && <button type="button" className="text-brand-600 underline dark:text-brand-300" onClick={() => setAuth('oauth')}>Sign in with AWS in the browser instead</button>} />
+        )}
+        {auth === 'aws' && awsCreds === 'keys' && (
           <>
             <Field label="Access key ID"><Input aria-label="Access key ID" autoComplete="off" value={accessKey} onChange={(e) => setAccessKey(e.target.value)} /></Field>
             <Field label="Secret access key" hint="Stored sealed. Give this user read-only policies."><Input aria-label="Secret access key" type="password" autoComplete="off" value={secret} onChange={(e) => setSecret(e.target.value)} /></Field>
@@ -272,6 +296,12 @@ export function ConnectMcp({ entry, taken, onClose }: { entry: McpEntry; taken: 
                 {clientId && <Field label="OAuth client secret"><Input aria-label="OAuth client secret" type="password" autoComplete="off" value={secret} onChange={(e) => setSecret(e.target.value)} /></Field>}
                 <RedirectHint />
               </>
+            )}
+            {auth === 'aws' && awsCreds === 'role' && (
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Role ARN" hint="Or a read-only role of your own."><Input aria-label="Role ARN" placeholder="arn:aws:iam::123456789012:role/Name" value={roleArn} onChange={(e) => setRoleArn(e.target.value)} /></Field>
+                <Field label="External ID"><Input aria-label="External ID" value={externalId} onChange={(e) => setExternalId(e.target.value)} /></Field>
+              </div>
             )}
             {auth === 'aws' && (
               <div className="grid grid-cols-2 gap-3">

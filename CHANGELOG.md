@@ -28,6 +28,10 @@ The first public version. Everything below is new.
 - Scrubbing and PII removal, fingerprint grouping, known-issue rules, decoding with code context, and a
   decision gate (Jev optional).
 - Per-source never-send-to-a-model.
+- AWS access without keys: **Create a read-only role in AWS** opens a CloudFormation quick-create page
+  (or gives the template and `aws cloudformation deploy` command). The role trusts only the Hub, with a
+  per-connection External ID. **Check access** assumes it and says what is wrong. Works for every AWS
+  signal source and the AWS MCP connection.
 
 ### Operations and security
 - Bring your own model: Claude (Anthropic API, Bedrock, Vertex), OpenAI, Azure OpenAI, Ollama, any

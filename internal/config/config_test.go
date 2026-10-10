@@ -106,6 +106,19 @@ func TestValidate_KMSProvidersNeedKeyID(t *testing.T) {
 	}
 }
 
+func TestValidate_AWSRoleSettings(t *testing.T) {
+	t.Setenv("DTH_AWS_ROLE_TEMPLATE_URL", "https://example.com/t.yaml")
+	t.Setenv("DTH_AWS_HUB_PRINCIPAL_ARN", "hub")
+	_, err := Load("")
+	require.ErrorContains(t, err, "aws.role_template_url")
+	require.ErrorContains(t, err, "aws.hub_principal_arn")
+	t.Setenv("DTH_AWS_ROLE_TEMPLATE_URL", "https://bucket.s3.eu-west-1.amazonaws.com/doctherepo-hub-readonly.yaml")
+	t.Setenv("DTH_AWS_HUB_PRINCIPAL_ARN", "arn:aws:iam::111111111111:role/ops/dth-hub")
+	c, err := Load("")
+	require.NoError(t, err)
+	assert.Equal(t, "arn:aws:iam::111111111111:role/ops/dth-hub", c.AWS.HubPrincipalARN)
+}
+
 func TestValidate_OIDCComplete_Passes(t *testing.T) {
 	c := Default()
 	c.Auth.Mode = "oidc"
