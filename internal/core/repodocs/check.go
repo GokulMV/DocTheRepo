@@ -10,11 +10,14 @@ import (
 
 // DocSection is a written section.
 type DocSection struct {
-	Key      string   `json:"key"`
-	Title    string   `json:"title"`
-	Markdown string   `json:"markdown"`
-	Score    float64  `json:"score"`
-	Why      []string `json:"why,omitempty"`
+	Key      string `json:"key"`
+	Title    string `json:"title"`
+	Markdown string `json:"markdown"`
+	// Target is the word target it was written to (0: a table or list); it can differ from the
+	// catalogue's when the target follows the module (see moduleSpec).
+	Target int      `json:"target,omitempty"`
+	Score  float64  `json:"score"`
+	Why    []string `json:"why,omitempty"`
 }
 
 // Doc is one written document.

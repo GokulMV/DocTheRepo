@@ -502,6 +502,8 @@ func (e *env) inputs(ctx context.Context, spec Spec, mod *Module, budget int) st
 			add("Owners", factLines(e.factsOf("owner"), 100), 1)
 		case "module":
 			e.moduleInputs(ctx, mod, add)
+		case "docset":
+			e.docSetInputs(ctx, mod, add)
 		case "commits":
 			add("Recent commits (newest first)", commitLines(e.facts.Commits, 120, false), 1)
 		case "decisions":
@@ -600,6 +602,7 @@ func (e *env) moduleInputs(ctx context.Context, m *Module, add func(string, stri
 		}
 	}
 	add("What this module declares (endpoints, env vars, stores, topics)", factLines(facts, 150), 3)
+	add("Data this module owns", e.moduleData(m).text(), 3)
 	sort.SliceStable(syms, func(i, j int) bool {
 		if syms[i].In != syms[j].In {
 			return syms[i].In > syms[j].In

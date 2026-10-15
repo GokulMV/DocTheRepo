@@ -170,7 +170,8 @@ func (g *Generator) Run(ctx context.Context, f *Facts, o RunOptions) (Result, er
 		if spec.PerModule {
 			for i := range mods {
 				m := &mods[i]
-				modJobs = append(modJobs, job{spec: spec, mod: m, key: m.Key, hash: g.moduleHash(e, spec, m), sources: m.Files})
+				ms := e.moduleSpec(spec, m)
+				modJobs = append(modJobs, job{spec: ms, mod: m, key: m.Key, hash: g.moduleHash(e, ms, m), sources: moduleSources(ms, m)})
 				keep = append(keep, [2]string{spec.Type, m.Key})
 			}
 			continue
@@ -356,11 +357,29 @@ func changedShare(e *env, d *Doc, sources []string) float64 {
 	return float64(changed) / float64(total)
 }
 
-// moduleHash covers a module guide's structural inputs: its files' shapes, what it declares, its tests
-// and its neighbours. Edits inside function bodies do not change it.
+// moduleSources are the files a module guide is written from; a documentation set leaves out generated
+// docs, which a tool rewrites and which are not its material.
+func moduleSources(spec Spec, m *Module) []string {
+	if !spec.Prose {
+		return m.Files
+	}
+	var out []string
+	for _, p := range m.Files {
+		if !IsGeneratedDoc(p) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// moduleHash covers a module guide's structural inputs: its sections and their targets, its files'
+// shapes, what it declares, its tests and its neighbours. Edits inside function bodies do not change it.
 func (g *Generator) moduleHash(e *env, spec Spec, m *Module) string {
 	parts := []string{SpecVersion, spec.Type, m.Dir}
-	for _, p := range m.Files {
+	for _, sec := range spec.Sections {
+		parts = append(parts, sec.Key, fmt.Sprint(sec.Words))
+	}
+	for _, p := range moduleSources(spec, m) {
 		if fl := e.files[p]; fl != nil {
 			parts = append(parts, p, fl.Shape)
 		}
@@ -500,7 +519,7 @@ func (g *Generator) write(ctx context.Context, e *env, j job, prev *Doc, route l
 			md = "```mermaid\n" + diagram + "```\n\n" + md
 		}
 		md = DropDeadRefs(md, e.facts)
-		d.Sections = append(d.Sections, DocSection{Key: sec.Key, Title: sec.Title, Markdown: md})
+		d.Sections = append(d.Sections, DocSection{Key: sec.Key, Title: sec.Title, Markdown: md, Target: sec.Words})
 	}
 	g.score(ctx, e, j, &d, res, o)
 	d.Status = "ok"
@@ -594,7 +613,7 @@ func (g *Generator) score(ctx context.Context, e *env, j job, d *Doc, r checkRes
 		lowest = 0.5
 	}
 	conf := lowest
-	if j.mod != nil {
+	if j.mod != nil && !j.spec.Prose {
 		if c, missing := coverage(e, j.mod, d); c < 1 {
 			conf *= 0.85 + 0.15*c
 			if len(missing) > 0 {

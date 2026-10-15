@@ -120,7 +120,7 @@ func BuildReport(repo string, docs []Doc, text bool) Report {
 			}
 			kinds[k].N++
 		}
-		spec, _ := SpecFor(d.Type)
+		spec, _ := specForDoc(d)
 		for _, sec := range spec.Sections {
 			ds := d.Section(sec.Key)
 			if ds == nil {
@@ -129,12 +129,16 @@ func BuildReport(repo string, docs []Doc, text bool) Report {
 				}
 				continue
 			}
-			rs := ReportSection{Key: sec.Key, Title: sec.Title, Words: Words(ds.Markdown), Target: sec.Words, Score: ds.Score, Why: ds.Why}
-			if sec.Words > 0 {
+			target := sec.Words
+			if ds.Target > 0 {
+				target = ds.Target // the target it was written to, when that followed the module
+			}
+			rs := ReportSection{Key: sec.Key, Title: sec.Title, Words: Words(ds.Markdown), Target: target, Score: ds.Score, Why: ds.Why}
+			if target > 0 {
 				switch {
-				case float64(rs.Words) > float64(sec.Words)*1.6:
+				case float64(rs.Words) > float64(target)*1.6:
 					rs.Length = "long"
-				case float64(rs.Words) < float64(sec.Words)*0.4 && !tableRowRE.MatchString(ds.Markdown):
+				case float64(rs.Words) < float64(target)*0.4 && !tableRowRE.MatchString(ds.Markdown):
 					rs.Length = "short" // a section written as a table has few prose words by design
 				default:
 					rs.Length = "ok"
