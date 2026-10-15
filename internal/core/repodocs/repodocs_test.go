@@ -300,6 +300,53 @@ func TestRun_ChecksCatchInventedNamesAndBadCitations(t *testing.T) {
 	assert.NotContains(t, d.Section("what").Markdown, "GhostService")
 }
 
+func TestRun_DocsFolderGetsTheDocumentationSetGuide(t *testing.T) {
+	env := fakegw.New(fakegw.Options{})
+	var calls []string
+	var mu sync.Mutex
+	fakeDocs(t, env, &calls, &mu)
+	var prompts []string
+	inner := env.Model.Handler
+	env.Model.Handler = func(r ports.ChatRequest) (ports.ChatResponse, error) {
+		mu.Lock()
+		prompts = append(prompts, r.Messages[len(r.Messages)-1].Content)
+		mu.Unlock()
+		return inner(r)
+	}
+	st := &memStore{cards: map[string]repodocs.Card{}, docs: map[string]repodocs.Doc{}}
+	g := &repodocs.Generator{GW: env.GW, Store: st, Types: []string{"module"}}
+	f := facts()
+	heading := func(name string, line int) repodocs.Symbol {
+		return repodocs.Symbol{Name: name, Line: line, Body: "## " + name + "\nText."}
+	}
+	// Large enough that docs/ is a module of its own under the default split.
+	f.Files = append(f.Files, file("docs/install.md", 7000, heading("Installing", 1), heading("Upgrading", 40)),
+		file("docs/operations.md", 7000, heading("Backups", 1)), file("docs/generated/internal/orders/orders.go.md", 400, heading("Place", 1)))
+
+	res, err := g.Run(context.Background(), f, repodocs.RunOptions{})
+	require.NoError(t, err)
+	require.Empty(t, res.Failed)
+	d, ok := st.docs["module/docs"]
+	require.True(t, ok, "the docs folder is still a module: %v", res.Written)
+	assert.NotNil(t, d.Section("contents"))
+	assert.Nil(t, d.Section("interface"), "no code sections for prose")
+	assert.Equal(t, 120, d.Section("layout").Target)
+	for _, why := range d.Why {
+		assert.NotContains(t, why, "does not mention", "headings are not declarations a documentation guide must cover")
+	}
+	assert.Greater(t, d.Confidence, 0.8)
+	var docPrompt string
+	for _, p := range prompts {
+		if strings.Contains(p, "for the module docs\n") {
+			docPrompt = p
+		}
+	}
+	require.NotEmpty(t, docPrompt)
+	assert.Contains(t, docPrompt, "- contents: \"Documents\"")
+	assert.Contains(t, docPrompt, "1 files under docs/generated/ are generated")
+	assert.NotContains(t, docPrompt, "### docs/generated/")
+}
+
 func TestDryRunEstimatesWithoutCalls(t *testing.T) {
 	env := fakegw.New(fakegw.Options{})
 	called := false

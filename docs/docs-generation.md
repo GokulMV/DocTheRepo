@@ -19,7 +19,7 @@ Each document is written only when the repository has what it describes. For exa
 |---|---|---|
 | Basics | **Overview** | What it does and for whom, key concepts, module map, entry points, how to run it, where to go next |
 | Basics | **Architecture** | See the outline below this table |
-| Modules | **Module guide** (one per module) | Purpose, responsibilities, how it works, public interface, data it owns, errors and edge cases, configuration, depends on / used by, files, where to change things, do's and don'ts, tests |
+| Modules | **Module guide** (one per module) | Purpose, responsibilities, how it works, public interface, data it owns, errors and edge cases, configuration, depends on / used by, files, where to change things, do's and don'ts, tests (a documentation folder gets a different guide; see below) |
 | Interfaces | **Flows** | The key paths step by step, with sequence diagrams and failure paths |
 | Interfaces | **API reference** | Every endpoint: auth, request, response, errors, handler |
 | Interfaces | **Events and messages** | Topics and queues: producers, consumers, payloads, delivery and retries |
@@ -88,6 +88,25 @@ The write-up is also searchable in **Ask** under the same rule. Each searchable 
 3. Parts under about 300 lines join the module above them.
 
 A repository ends up with roughly 5–25 modules. Each test file is attached to the module whose code it sits next to (or mirrors, as in `tests/orders`).
+
+**The guide follows the module:**
+
+- **Data it owns.** The guide is given the data the module's code shows:
+  - tables its SQL names, with where;
+  - migration and schema files under it;
+  - datastores it uses;
+  - types with storage tags or ORM mappings (`db:"…"`, `__tablename__`, `@Entity`).
+
+  With none of these, the section aims for about 60 words instead of 150. It says the module stores nothing and names the state it does hold (configuration, in-memory values), and the run report does not flag it as short.
+- **Documentation folders.** A module whose files are at least 90% Markdown, reStructuredText, text or images (such as `docs/`) is not documented like code. It gets a **documentation set** guide:
+  - purpose;
+  - the documents and who each is for;
+  - how they are organised;
+  - what is generated and what is hand-written;
+  - how to keep them current;
+  - gaps.
+
+  Generated docs, such as the Hub's own `docs/generated/`, are counted in one line rather than read. They do not trigger a rewrite of the guide. A guide for prose is not marked down for leaving out the module's "declarations" (its headings), and citing a whole document as `[docs/x.md:0]` is valid.
 
 ## How a document is written
 
@@ -173,7 +192,7 @@ The tests use a stub model, so a run on your own provider is the first real chec
 - **Totals:** documents written and failed, tokens, cost, and this month's spend against the cap.
 - **What first drafts got wrong:** every check failure that forced a repair call, grouped by kind (for example, citations not in the material, sections too long, unknown names). This is the main input for tuning the prompts: each repair is a second paid call.
 - **Weak sections:** scores below 0.6, with the reasons.
-- **Sections off length:** more than 1.6× or under 0.4× the target words.
+- **Sections off length:** more than 1.6× or under 0.4× the target words (the target the section was written to, which for a module guide can follow the module).
 - **Every document:** status, confidence, tokens, cost, and whether it was repaired.
 
 **Or run it in GitHub Actions** with the manual **docs-real-run** workflow (Actions → docs-real-run → Run workflow):

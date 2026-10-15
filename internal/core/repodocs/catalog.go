@@ -68,11 +68,14 @@ type Spec struct {
 	Applies func(f *Facts) bool `json:"-"`
 	// Order sorts documents in the navigation.
 	Order int `json:"order"`
+	// Prose: the document describes prose, not code, so it is not marked down for leaving out declarations.
+	Prose bool `json:"prose,omitempty"`
 }
 
 // SpecVersion changes when the catalogue changes in a way that should rewrite documents.
 // v2.3: module guides are given their tests' names and excerpts.
-const SpecVersion = "v2.3"
+// v2.4: "Data it owns" is sized by the data the module's code shows; documentation modules get DocSetSpec.
+const SpecVersion = "v2.4"
 
 func s(key, title string, words int, required, cite bool, guide string) Section {
 	return Section{Key: key, Title: title, Words: words, Required: required, Cite: cite, Guide: guide}
@@ -169,7 +172,7 @@ var Catalog = []Spec{
 			s("responsibilities", "Responsibilities", 150, true, true, "What it is responsible for, as bullets, and what it deliberately does not do (and which module does)."),
 			s("how", "How it works", 400, true, true, "The internal design: the main types and functions and how they work together, the order things happen in, and why. Use a mermaid diagram only if it helps."),
 			s("interface", "Public interface", 0, true, true, "A table: Name | What it does | Notes. The functions, types, endpoints or commands other modules use."),
-			s("data", "Data it owns", 150, false, true, "State, tables, caches or files this module owns, and their shape."),
+			s("data", "Data it owns", 150, false, true, "State, tables, caches or files this module owns, and their shape, starting from the data the material lists for it (tables its SQL names, migrations, stores, persisted types)."),
 			s("errors", "Errors and edge cases", 200, true, true, "What can go wrong, how it is reported or retried, and edge cases handled (or not)."),
 			s("config", "Configuration", 0, false, true, "A table: Setting / env var | Effect | Default, for settings this module reads."),
 			s("deps", "Depends on and used by", 0, true, false, "A table: Module | Direction (uses / used by) | For what."),
@@ -314,6 +317,23 @@ var Catalog = []Spec{
 			s("conventions", "Conventions", 200, true, true, "Code style, naming, branching and review conventions the repository follows."),
 			s("feature", "Adding a feature", 200, true, true, "The usual steps and files to touch to add a typical feature."),
 		},
+	},
+}
+
+// DocSetSpec is the guide for a module that is documentation itself (IsDocsModule) instead of the code
+// guide: which documents there are, for whom, how they are organised and kept current. Its section keys
+// differ from the code guide's, which is how a written guide is matched back to it (specForDoc).
+var DocSetSpec = Spec{
+	Type: "module", Title: "Module guide", Group: "Modules", Order: 30, PerModule: true, Applies: always, Prose: true,
+	Audience: "anyone looking for or maintaining the repository's written documentation", Purpose: "What documentation this folder holds, who each document is for, and how to keep it current.",
+	Needs: []string{"docset"},
+	Sections: []Section{
+		s("purpose", "Purpose", 60, true, false, "What this documentation set is for and who reads it, in two or three sentences."),
+		s("contents", "Documents", 0, true, true, "A table: Document ([path:0]) | What it covers | Written for (new users, operators, contributors…). Every hand-written document in the material; group by folder when there are many."),
+		s("layout", "How it is organised", 120, true, true, "Folders and naming, any index or README that links the rest, and where a reader should start. Cite the files as [path:0], or a heading as [path:line]."),
+		s("generated", "Generated and hand-written", 80, false, true, "Which parts a tool produces rather than people (the material says which), that they are not edited by hand, and how they are refreshed. One line if nothing is generated."),
+		s("updating", "Keeping it current", 120, true, true, "How to add or change a document: the conventions the documents follow (headings, links, images), and which documents describe code or settings that change often and so need updating with them."),
+		s("gaps", "Gaps", 80, false, false, "Parts of the code (from the module list) that no document covers, and documents that overlap or look out of date. Only what the material shows."),
 	},
 }
 
